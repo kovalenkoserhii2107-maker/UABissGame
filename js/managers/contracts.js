@@ -17,9 +17,13 @@ const CONTRACTS = {
         const items = Object.keys(RECIPES.RESOURCES).filter(k => !RECIPES.RESOURCES[k].isRaw);
         const item = items[Math.floor(Math.random() * items.length)];
         
-        let basePrice = MARKET.BASE_PRICES[item];
+        // ИСПРАВЛЕНИЕ: Берем базовую цену из рецептов или текущую с биржи
+        let basePrice = RECIPES.RESOURCES[item].basePrice || 10;
+        if (typeof MARKET !== 'undefined' && MARKET.getCurrentPrice) {
+            basePrice = MARKET.getCurrentPrice(item);
+        }
         
-        // Балансировка количества (чипов нужно много, дронов мало)
+        // Балансировка количества
         let qty = Math.floor(Math.random() * 50) + 10; 
         if(item === 'drones') qty = Math.floor(Math.random() * 15) + 5;
         if(item === 'chips') qty = Math.floor(Math.random() * 100) + 50;
@@ -56,7 +60,11 @@ const CONTRACTS = {
             let c = STATE.contracts.available.splice(idx, 1)[0];
             STATE.contracts.active.push(c);
             UI_DASHBOARD.update();
-            alert(`✅ Контракт подписан! У вас есть ${c.deadline} дн. на производство ${c.qty} шт. "${RECIPES.RESOURCES[c.item].name}".`);
+            
+            // ИСПРАВЛЕНИЕ: Красивое уведомление вместо alert
+            if (typeof NOTIFY !== 'undefined') {
+                NOTIFY.success('Тендер взят!', `У вас есть ${c.deadline} дн. на производство ${c.qty} шт. "${RECIPES.RESOURCES[c.item].name}".`);
+            }
         }
     },
 
@@ -72,17 +80,27 @@ const CONTRACTS = {
                 inv.qty -= c.qty;
                 if (inv.qty === 0) inv.avgCost = 0;
                 
-                // Начисляем деньги и репутацию
+                // Начисляем деньги
                 STATE.finances.balance += c.totalReward;
-                if (typeof LEDGER !== 'undefined') LEDGER.record('rev_b2g', c.totalReward);
+                
+                // Улучшенная запись в финансовый лог
+                if (typeof LEDGER !== 'undefined' && LEDGER.record) {
+                    LEDGER.record('rev_b2g', c.totalReward);
+                } else if (STATE.ledger && STATE.ledger.yesterday) {
+                    STATE.ledger.yesterday.rev_b2g = (STATE.ledger.yesterday.rev_b2g || 0) + c.totalReward;
+                }
+                
+                // Начисляем репутацию
                 STATE.finances.creditScore += 15;
                 if (STATE.finances.creditScore > 1000) STATE.finances.creditScore = 1000;
                 
                 STATE.contracts.active.splice(idx, 1); // Удаляем выполненный
                 UI_DASHBOARD.update();
-                alert(`🎉 Поставка выполнена успешно! Вы заработали $${formatMoney(c.totalReward)}.`);
+                
+                // ИСПРАВЛЕНИЕ: Красивое уведомление
+                if (typeof NOTIFY !== 'undefined') NOTIFY.success('Поставка выполнена!', `Вы заработали $${formatMoney(c.totalReward)}.`);
             } else {
-                alert(`❌ Не хватает товара! Произведите еще.`);
+                if (typeof NOTIFY !== 'undefined') NOTIFY.error('Ошибка логистики', `Не хватает товара для отгрузки!`);
             }
         }
     },
@@ -99,9 +117,19 @@ const CONTRACTS = {
             if (c.deadline <= 0) {
                 // ПРОВАЛ КОНТРАКТА
                 STATE.finances.balance -= c.penalty;
-                if (typeof LEDGER !== 'undefined') LEDGER.record('exp_fines', c.penalty);
+                
+                if (typeof LEDGER !== 'undefined' && LEDGER.record) {
+                    LEDGER.record('exp_fines', c.penalty);
+                } else if (STATE.ledger && STATE.ledger.yesterday) {
+                    STATE.ledger.yesterday.exp_fines = (STATE.ledger.yesterday.exp_fines || 0) + c.penalty;
+                }
+                
                 STATE.finances.creditScore -= 50; // Сильный удар по скорингу
-                alert(`🚨 КОНТРАКТ ПРОВАЛЕН! Сорваны сроки поставки товара "${RECIPES.RESOURCES[c.item].name}".\n\nШтраф: $${formatMoney(c.penalty)} и падение репутации.`);
+                
+                if (typeof NOTIFY !== 'undefined') {
+                    NOTIFY.error('Срыв сроков поставки!', `Контракт провален. Выписан штраф: $${formatMoney(c.penalty)}.`);
+                }
+                
                 STATE.contracts.active.splice(i, 1);
             }
         }
