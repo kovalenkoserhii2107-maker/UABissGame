@@ -926,7 +926,16 @@ const UI_DASHBOARD = {
         let marketBody = document.getElementById('ui-market-businesses');
         if (!marketBody) return;
         
-        let retailAccepts = RECIPES.BUSINESSES.retail_store.accepts;
+        // ЗАЩИТА 1: Если переменные фильтров потерялись, создаем их на лету
+        if (!this.marketFilter) this.marketFilter = 'all';
+        if (!this.marketOptions) this.marketOptions = { hideEmpty: false, onlyMyStock: false };
+        if (this.isMarketOptOpen === undefined) this.isMarketOptOpen = false;
+
+        // ЗАЩИТА 2: Проверяем, существует ли список розничных товаров (от крашей recipes.js)
+        let retailAccepts = [];
+        if (RECIPES.BUSINESSES.retail_store && RECIPES.BUSINESSES.retail_store.accepts) {
+            retailAccepts = RECIPES.BUSINESSES.retail_store.accepts;
+        }
 
         // Генерация кнопок-фильтров
         let filtersHtml = `
@@ -972,11 +981,11 @@ const UI_DASHBOARD = {
             let res = RECIPES.RESOURCES[key];
             let inv = STATE.company.inventory[key] || { qty: 0, avgCost: 0, quality: 1.0 };
             
-            // 1. ЛОГИКА ФИЛЬТРАЦИИ ПО КАТЕГОРИЯМ
+            // ЛОГИКА ФИЛЬТРАЦИИ ПО КАТЕГОРИЯМ
             let isRaw = !!res.isRaw;
             let isEq = !!res.isEquipment;
             let isRet = retailAccepts.includes(key);
-            let isComp = !isRaw && !isEq && !isRet; // Все остальное - компоненты
+            let isComp = !isRaw && !isEq && !isRet;
 
             let matchCategory = false;
             if (this.marketFilter === 'all') matchCategory = true;
@@ -985,15 +994,15 @@ const UI_DASHBOARD = {
             else if (this.marketFilter === 'retail' && isRet) matchCategory = true;
             else if (this.marketFilter === 'components' && isComp) matchCategory = true;
 
-            if (!matchCategory) return; // Пропускаем
+            if (!matchCategory) return; 
 
-            // 2. ЛОГИКА РУЧНЫХ ФИЛЬТРОВ (Галочки)
+            // ЛОГИКА РУЧНЫХ ФИЛЬТРОВ (Галочки)
             let availablePool = typeof MARKET !== 'undefined' ? MARKET.getAvailablePool(key) : 0;
             if (this.marketOptions.hideEmpty && availablePool <= 0) return;
             if (this.marketOptions.onlyMyStock && inv.qty <= 0) return;
 
             itemsCount++;
-            let basePrice = MARKET.getCurrentPrice(key);
+            let basePrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(key) : res.basePrice;
             
             rowsHtml += `
             <tr style="background: #fdfefe; border-bottom: 1px dashed var(--border);">
@@ -1015,87 +1024,6 @@ const UI_DASHBOARD = {
         }
 
         marketBody.innerHTML = filtersHtml + tableHeader + rowsHtml + '</table>';
-    },
-    // --- 7. HR И КАДРЫ ---
-    updateHRTab() {
-        if (typeof HR === 'undefined' || !document.getElementById('ui-staff-total')) return;
-        HR.init();
-        
-        document.getElementById('ui-staff-total').innerText = HR.getTotalStaff();
-        if(document.getElementById('ui-staff-salary')) document.getElementById('ui-staff-salary').innerText = formatMoney(HR.getDailySalaryFund());
-        
-        let breakdownDiv = document.getElementById('ui-hr-breakdown');
-        if (breakdownDiv) {
-            let html = '<strong>В штате числятся:</strong> ';
-            let parts = [];
-            Object.keys(HR.GRADES).forEach(grade => {
-                let total = STATE.hr && STATE.hr.staff ? (STATE.hr.staff[grade] || 0) : 0;
-                if (total > 0) parts.push(`<strong>${HR.GRADES[grade].name.split(' ')[0]}:</strong> ${total} чел.`);
-            });
-            
-            let trainingCount = STATE.hr.trainingQueue.length;
-            if (trainingCount > 0) parts.push(`<strong>На учебе:</strong> ${trainingCount} чел.`);
-            
-            breakdownDiv.innerHTML = html + (parts.length > 0 ? parts.join(' | ') : '<small style="color:#7f8c8d;">Нет сотрудников</small>');
-        }
-
-        let hireFactory = document.getElementById('ui-hire-factory');
-        let hireRnd = document.getElementById('ui-hire-rnd');
-        if (hireFactory && hireRnd) {
-            hireFactory.innerHTML = '';
-            hireRnd.innerHTML = '';
-            
-            Object.keys(HR.GRADES).forEach(grade => {
-                let info = HR.GRADES[grade];
-                let btnHtml = `<button onclick="HR.hire('${grade}')" style="width: 100%; margin-bottom: 8px; padding: 10px; background: ${info.role === 'rnd' ? '#1abc9c' : '#2ecc71'}; text-align: left; display: flex; justify-content: space-between; border-radius: 4px;">
-                    <span><strong>Найм: ${info.name.split(' ')[0]}</strong> ($${formatMoney(info.hireCost)})</span>
-                    <span style="opacity: 0.9;">ЗП: $${formatMoney(info.salary)}/дн</span>
-                </button>`;
-                
-                if (info.role === 'factory') hireFactory.innerHTML += btnHtml;
-                else hireRnd.innerHTML += btnHtml;
-            });
-        }
-        
-        let trainingDiv = document.getElementById('ui-hr-training-list');
-        if (trainingDiv) {
-            if (STATE.hr.trainingQueue.length === 0) {
-                trainingDiv.innerHTML = '<small style="color:#7f8c8d;">В данный момент никто не проходит обучение.</small>';
-            } else {
-                let tHtml = '<ul style="padding-left: 20px;">';
-                STATE.hr.trainingQueue.forEach(t => {
-                    let nextName = HR.GRADES[t.toGrade].name.split(' ')[0];
-                    tHtml += `<li style="margin-bottom: 5px;">Повышение до <strong>${nextName}</strong>. Осталось учиться: <strong class="danger">${t.daysLeft} дн.</strong> <small style="color:#7f8c8d;">(Сотрудник получает ЗП $${t.salary}/дн)</small></li>`;
-                });
-                tHtml += '</ul>';
-                trainingDiv.innerHTML = tHtml;
-            }
-        }
-
-        let reserveContainer = document.getElementById('ui-hr-reserve-table');
-        if (reserveContainer) {
-            let html = `<table style="width: 100%; border-collapse: collapse;">`;
-            Object.keys(HR.GRADES).forEach(grade => {
-                let free = HR.getUnassigned(grade);
-                let info = HR.GRADES[grade];
-                
-                let trainCost = grade === 'junior' ? 250 : (grade === 'middle' ? 800 : (grade === 'scientist' ? 1500 : null));
-                let trainDays = grade === 'junior' ? 3 : (grade === 'middle' ? 7 : (grade === 'scientist' ? 10 : null));
-                let nextGradeName = grade === 'junior' ? 'Middle' : (grade === 'middle' ? 'Senior' : (grade === 'scientist' ? 'Ст. Научного' : ''));
-                
-                let trainBtn = '';
-                if (trainCost) {
-                    trainBtn = `<button onclick="HR.train('${grade}')" ${free===0?'disabled style="opacity:0.5;"':'style="background:#3498db;"'}>Начать обучение до ${nextGradeName} ($${trainCost} / ${trainDays} дн.)</button>`;
-                }
-
-                html += `<tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 10px 0;"><strong>${info.name}</strong> <span style="color:#7f8c8d;">(Свободно: ${free})</span></td>
-                    <td style="text-align: right;">${trainBtn} <button onclick="HR.fire('${grade}')" ${free===0?'disabled style="opacity:0.5;"':'style="background:#e74c3c;"'}>Уволить</button></td>
-                </tr>`;
-            });
-            html += `</table>`;
-            reserveContainer.innerHTML = html;
-        }
     },
 
     // --- 8. БАНК И КРЕДИТЫ ---
