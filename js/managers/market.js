@@ -1,23 +1,23 @@
-// Модуль внешнего рынка B2B с ограничением пулов и дефицитом
+// Модуль внешнего рынка B2B с макроэкономикой, волатильностью и ИНФЛЯЦИЕЙ
 const MARKET = {
     trends: {},
-    
-    // Мост совместимости
+
+    // Мост совместимости для контрактов
     get prices() {
         let dynamicPrices = {};
         if (typeof RECIPES !== 'undefined' && RECIPES.RESOURCES) {
             Object.keys(RECIPES.RESOURCES).forEach(k => {
-                // Перенаправляем старые запросы на новую функцию
                 dynamicPrices[k] = this.getCurrentPrice(k);
             });
         }
         return dynamicPrices;
     },
-    
-    // Инициализация рыночных пулов и трендов
+
     init() {
-        if (!STATE.market) STATE.market = { pools: {} };
-        
+        if (!STATE.market) STATE.market = { pools: {}, inflationIndex: 1.0 };
+        // Инициализируем индекс инфляции, если это старое сохранение
+        if (STATE.market.inflationIndex === undefined) STATE.market.inflationIndex = 1.0; 
+
         Object.keys(RECIPES.RESOURCES).forEach(key => {
             let res = RECIPES.RESOURCES[key];
             if (this.trends[key] === undefined) this.trends[key] = 1.0; 
@@ -27,7 +27,6 @@ const MARKET = {
         });
     },
 
-    // Получить текущую цену с учетом рыночного тренда
     getCurrentPrice(itemKey) {
         this.init();
         let res = RECIPES.RESOURCES[itemKey];
@@ -37,13 +36,11 @@ const MARKET = {
         return basePrice * trend;
     },
     
-    // Получить доступное количество товара на бирже сегодня
     getAvailablePool(itemKey) {
         this.init();
         return STATE.market.pools[itemKey] !== undefined ? STATE.market.pools[itemKey] : 0;
     },
 
-    // Покупка ресурсов с проверкой лимитов
     buy(itemKey, qty) {
         this.init();
         let res = RECIPES.RESOURCES[itemKey];
@@ -61,7 +58,7 @@ const MARKET = {
         
         if (STATE.finances.balance >= cost) {
             STATE.finances.balance -= cost; 
-            STATE.market.pools[itemKey] -= qty; // Списываем с биржи
+            STATE.market.pools[itemKey] -= qty;
             
             if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
             STATE.logistics.deliveries.push({ item: itemKey, qty: qty, cost: cost, daysLeft: 1 });
@@ -94,26 +91,57 @@ const MARKET = {
     // Симуляция живого рынка (вызывается каждый день в gameLoop)
     simulate() {
         this.init();
+        
+        // Макроэкономическая инфляция: +0.05% в день (около +20% в год)
+        STATE.market.inflationIndex += 0.0005; 
+        let targetIndex = STATE.market.inflationIndex;
+
         Object.keys(RECIPES.RESOURCES).forEach(key => {
             let res = RECIPES.RESOURCES[key];
-            let maxPool = res.dailyMarketPool || 1000;
+            let maxPool = res.dailyMarketPool || 1000; 
             let currentPool = STATE.market.pools[key] || 0;
 
-            // Если выкупили более 70% пула, возникает давление дефицита (цена растет)
-            let remainingRatio = currentPool / maxPool;
-            let deficitPressure = 0;
-            if (remainingRatio < 0.3) {
-                deficitPressure = 0.05 + (0.3 - remainingRatio) * 0.2; 
+            let remainingRatio = maxPool > 0 ? (currentPool / maxPool) : 1; 
+            let priceChange = 0;
+
+            if (remainingRatio < 0.25) {
+                priceChange = 0.04 + Math.random() * 0.08; 
+            } else if (remainingRatio < 0.6) {
+                priceChange = 0.01 + Math.random() * 0.04;
+            } else if (remainingRatio > 0.9) {
+                priceChange = -0.03 - Math.random() * 0.05; 
+            } else {
+                priceChange = (Math.random() * 0.06) - 0.03; 
             }
 
-            let change = (Math.random() * 0.1) - 0.04 + deficitPressure; 
-            this.trends[key] += change;
-            
-            if (this.trends[key] < 0.5) this.trends[key] = 0.5;
-            if (this.trends[key] > 3.0) this.trends[key] = 3.0;
+            // РЫНОЧНАЯ ГРАВИТАЦИЯ (теперь тянет к уровню ИНФЛЯЦИИ, а не к 1.0)
+            if (remainingRatio >= 0.6 && remainingRatio <= 0.9) {
+                if (this.trends[key] > targetIndex + 0.2) priceChange -= 0.02; // Пузырь сдувается
+                if (this.trends[key] < targetIndex - 0.2) priceChange += 0.02; // Недооцененный актив дорожает
+            }
 
-            // Восполнение рынка на следующий день
-            STATE.market.pools[key] = maxPool;
+            // Добавляем базовое инфляционное давление к каждому ресурсу
+            priceChange += 0.0005;
+
+            this.trends[key] += priceChange;
+            
+            // Динамические ограничители относительно инфляции
+            if (this.trends[key] < targetIndex * 0.5) this.trends[key] = targetIndex * 0.5;
+            if (this.trends[key] > targetIndex * 3.0) this.trends[key] = targetIndex * 3.0;
+
+            let supplyShock = 0.75 + Math.random() * 0.50; 
+
+            if (Math.random() < 0.04) {
+                supplyShock = 0.15 + Math.random() * 0.25; 
+                if (res.isRaw && typeof NOTIFY !== 'undefined') {
+                    if (Math.random() < 0.3) NOTIFY.error('Сбой поставок', `Резкое сокращение квот на ${res.name}. Ожидается дефицит.`);
+                }
+            }
+            else if (Math.random() < 0.04) {
+                supplyShock = 1.5 + Math.random() * 0.8; 
+            }
+
+            STATE.market.pools[key] = Math.floor(maxPool * supplyShock);
         });
     }
 };
