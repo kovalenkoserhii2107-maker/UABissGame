@@ -70,20 +70,17 @@ const UI_DASHBOARD = {
         let cash = Math.max(0, STATE.finances.balance);
         let inventoryValue = 0;
         
-        // Инвентарь общий + локальные магазины
         Object.keys(STATE.company.inventory).forEach(k => inventoryValue += STATE.company.inventory[k].qty * STATE.company.inventory[k].avgCost);
         STATE.company.businesses.forEach(b => {
             if (b.localInventory) Object.keys(b.localInventory).forEach(k => inventoryValue += b.localInventory[k].qty * b.localInventory[k].avgCost);
         });
         
-        // Логистика (в пути)
         let logisticsValue = 0;
         if (STATE.logistics) {
             if (STATE.logistics.deliveries) STATE.logistics.deliveries.forEach(d => logisticsValue += d.cost);
             if (STATE.logistics.receivables) STATE.logistics.receivables.forEach(r => logisticsValue += r.amount);
         }
 
-        // Инфраструктура
         let realEstateValue = 0;
         let equipmentValue = 0;
         STATE.company.businesses.forEach(b => {
@@ -96,10 +93,14 @@ const UI_DASHBOARD = {
                 equipmentValue += (b.equipment.count * eqPrice) * ((b.equipment.condition || 0) / 100);
             }
         });
-        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouse) {
+        
+        // ЗАЩИТА: Проверяем существование склада
+        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouse && STATE.company.warehouse.level) {
             for (let i = 1; i < STATE.company.warehouse.level; i++) realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
         }
-        if (STATE.rnd && STATE.rnd.facility) {
+        
+        // ЗАЩИТА: Проверяем существование лаборатории
+        if (STATE.rnd && STATE.rnd.facility && STATE.rnd.facility.level) {
             let rndLvl = STATE.rnd.facility.level || 0;
             for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
             if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
@@ -109,14 +110,12 @@ const UI_DASHBOARD = {
         }
         let fixedAssets = realEstateValue + equipmentValue;
 
-        // Долги
         let totalLiabilities = 0;
         if (STATE.finances.loans) STATE.finances.loans.forEach(l => totalLiabilities += l.remainingPrincipal);
         if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
 
         let netWorth = cash + inventoryValue + logisticsValue + fixedAssets - totalLiabilities;
 
-        // ОБНОВЛЕНИЕ KPI
         document.getElementById('dash-kpi-cash').innerText = formatMoney(STATE.finances.balance);
         document.getElementById('dash-kpi-networth').innerText = formatMoney(netWorth);
         document.getElementById('dash-kpi-brand').innerText = (STATE.retail && STATE.retail.brand) ? STATE.retail.brand.toFixed(1) : '10.0';
@@ -124,7 +123,6 @@ const UI_DASHBOARD = {
 
         // 2. ОТРИСОВКА ГРАФИКОВ
         if (typeof Chart !== 'undefined') {
-            // График 1: Структура Активов
             let ctxAssets = document.getElementById('chart-assets').getContext('2d');
             let assetsData = [cash, inventoryValue, fixedAssets, logisticsValue];
             if (!this.charts.assets) {
@@ -141,7 +139,6 @@ const UI_DASHBOARD = {
                 this.charts.assets.update();
             }
 
-            // График 2: Cash Flow (7 дней)
             let ctxFlow = document.getElementById('chart-cashflow').getContext('2d');
             let labels = [];
             let incomeData = [];
@@ -189,12 +186,14 @@ const UI_DASHBOARD = {
                 this.charts.cashflow.update();
             }
         }
+
         // 2.5. СТРАТЕГИЧЕСКИЕ СВОДКИ (R&D, HR, Финансы)
         
         // Сводка R&D
         let rndDiv = document.getElementById('dash-rnd-summary');
         if (rndDiv && STATE.rnd) {
-            if (!STATE.rnd.facility || STATE.rnd.facility.level === 0) {
+            // ЗАЩИТА: Проверяем, существует ли facility вообще, перед тем как читать level
+            if (!STATE.rnd.facility || !STATE.rnd.facility.level) {
                 rndDiv.innerHTML = '<span style="color:var(--text-dim); font-size:0.9em;">Лаборатория еще не построена.</span>';
             } else if (!STATE.rnd.activeProject) {
                 rndDiv.innerHTML = '<div style="display:flex; align-items:center; gap:8px; color:var(--orange); font-weight:500; font-size:0.95em;">⏸️ Лаборатория простаивает!</div><div style="font-size:0.8em; color:var(--text-dim); margin-top:4px;">Назначьте проект, чтобы не терять время.</div>';
@@ -268,11 +267,11 @@ const UI_DASHBOARD = {
             
             finDiv.innerHTML = `
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85em;">
-                    <span style="color:var(--text-dim);">Виручка (Доходи)</span>
+                    <span style="color:var(--text-dim);">Выручка (Доходы)</span>
                     <strong style="color:var(--text);">$${formatMoney(yRev)}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85em;">
-                    <span style="color:var(--text-dim);">Собівартість + OPEX</span>
+                    <span style="color:var(--text-dim);">Себестоимость + OPEX</span>
                     <strong style="color:var(--text);">$${formatMoney(yMaterials + yOpex)}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-top:1px dashed var(--border); padding-top:6px; font-size:0.95em;">
@@ -280,12 +279,12 @@ const UI_DASHBOARD = {
                     <strong style="color:${ebitdaColor};">$${formatMoney(yEbitda)}</strong>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:0; font-size:1.05em; border-top:1px solid var(--border); padding-top:8px;">
-                    <span style="font-weight:600; color:var(--text);">Чистий прибуток</span>
+                    <span style="font-weight:600; color:var(--text);">Чистая прибыль</span>
                     <strong style="color:${netColor};">$${formatMoney(yNet)}</strong>
                 </div>
             `;
         }
-        
+
         // 3. ОПЕРАЦИОННЫЙ РАДАР (СВЕТОФОР)
         let radarList = document.getElementById('dash-radar-list');
         if (radarList) {
@@ -296,7 +295,7 @@ const UI_DASHBOARD = {
                 STATE.company.businesses.forEach(biz => {
                     let tpl = RECIPES.BUSINESSES[biz.type];
                     let level = biz.level || 1;
-                    let statusColor = '#34C759'; // Green
+                    let statusColor = '#34C759'; 
                     let statusText = 'В норме';
                     let icon = '🏭';
                     
@@ -342,7 +341,7 @@ const UI_DASHBOARD = {
                     }
 
                     radarList.innerHTML += `
-                        <li style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
+                        <li style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
                             <div>
                                 <strong>${icon} ${biz.name || tpl.name}</strong><br>
                                 <small style="color:var(--text-dim);">${tpl.name}</small>
@@ -357,7 +356,6 @@ const UI_DASHBOARD = {
             }
         }
 
-        // Обновление старых списков контрактов и финансов
         let dashContracts = document.getElementById('dash-active-contracts');
         if (dashContracts && typeof CONTRACTS !== 'undefined') {
             dashContracts.innerHTML = '';
