@@ -75,7 +75,7 @@ const RND = {
             return; 
         }
         
-        let eqCost = RECIPES.RESOURCES['pc_workstation'].basePrice || 800;
+        let eqCost = RECIPES.RESOURCES['smart_pc'].basePrice || 800;
         // Стоимость полного ТО = 10% от цены новых ПК
         let repairCost = (STATE.rnd.facility.equipment.count * eqCost) * 0.10 * (damage / 100); 
         
