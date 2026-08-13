@@ -194,7 +194,7 @@ const UI_DASHBOARD = {
         // Сводка R&D
         let rndDiv = document.getElementById('dash-rnd-summary');
         if (rndDiv && STATE.rnd) {
-            if ((STATE.rnd.facility.level || 0) === 0) {
+            if (!STATE.rnd.facility || STATE.rnd.facility.level === 0) {
                 rndDiv.innerHTML = '<span style="color:var(--text-dim); font-size:0.9em;">Лаборатория еще не построена.</span>';
             } else if (!STATE.rnd.activeProject) {
                 rndDiv.innerHTML = '<div style="display:flex; align-items:center; gap:8px; color:var(--orange); font-weight:500; font-size:0.95em;">⏸️ Лаборатория простаивает!</div><div style="font-size:0.8em; color:var(--text-dim); margin-top:4px;">Назначьте проект, чтобы не терять время.</div>';
