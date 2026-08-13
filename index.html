@@ -97,6 +97,15 @@
         letter-spacing: -0.005em;
         transition: filter .15s ease, transform .08s ease, opacity .15s ease;
     }
+    button.btn-secondary {
+        background: var(--surface-3);
+        color: var(--text);
+        border: 1px solid var(--border);
+    }
+    button.btn-secondary:hover {
+        background: var(--surface-2);
+        filter: brightness(0.96);
+    }
     button:hover { filter: brightness(1.08); }
     button:active { transform: scale(0.97); }
     button:disabled { opacity: 0.35; cursor: not-allowed; filter: none; }
@@ -278,11 +287,11 @@
        ========================================================= */
     #notify-stack {
         position: fixed;
-        top: 24px;
+        top: 85px; /* Смещено вниз, чтобы не перекрывать кнопку Закрытия дня */
         right: 24px;
         z-index: 99999;
         display: flex;
-        flex-direction: column-reverse;
+        flex-direction: column;
         gap: 12px;
         max-width: 380px;
         width: calc(100vw - 48px);
@@ -538,7 +547,6 @@
 <div class="app-shell">
 
     <!-- ============ ГЛАВНЫЙ ЗАГОЛОВОК (glass, sticky) ============ -->
-    <!-- Класс "topbar" сохранён для совместимости с TUTORIAL (шаг 0 подсвечивает '.topbar') -->
     <header class="app-header topbar">
         <div class="header-inner">
             <div class="brand-mark"><span class="dot"></span> UABiz</div>
@@ -560,7 +568,11 @@
 
             <div class="header-spacer"></div>
 
-            <button class="btn-primary-lg" onclick="GAME.nextDay()">Закрыть операционный день ➔</button>
+            <!-- Группа основных действий -->
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="btn-secondary" onclick="UI_DASHBOARD.showEventLog()">📜 Журнал</button>
+                <button class="btn-primary-lg" onclick="GAME.nextDay()">Закрыть операционный день ➔</button>
+            </div>
         </div>
 
         <div class="ticker-strip">
