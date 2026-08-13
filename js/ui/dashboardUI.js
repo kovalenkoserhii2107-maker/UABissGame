@@ -24,6 +24,7 @@ const UI_DASHBOARD = {
             this.updateWarehouseUI();
             this.updateProductionTab();
             this.updateRetailTab();
+            this.updateMarketingTab();
             this.updateMarketTab();
             this.updateHRTab();
             this.updateBankTab();
@@ -1424,6 +1425,19 @@ const UI_DASHBOARD = {
         NOTIFY.success('Успех', 'Квоты отгрузки (в шт.) успешно обновлены!');
         this.update();
     },
+
+    // Сохранение цели рекламной кампании (Бренд, Магазин или Товар)
+    setMarketingTarget(bizUid) {
+        let select = document.getElementById(`marketing-target-${bizUid}`);
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (biz && select) {
+            let parts = select.value.split('_'); // 'brand_global', 'store_12345', 'product_drones'
+            biz.targetType = parts[0];
+            biz.targetId = parts.slice(1).join('_');
+            this.update();
+        }
+    },
+    
     // Красивое окно выбора локации магазина
     showLocationModal(bizType) {
         // Удаляем старое окно, если оно зависло
@@ -1460,7 +1474,7 @@ const UI_DASHBOARD = {
         document.body.appendChild(modal);
     },
 
-    // --- НОВАЯ ВКЛАДКА: РОЗНИЦА И МАРКЕТИНГ ---
+    // --- 10. РОЗНИЦА ---
     updateRetailTab() {
         let retailBody = document.getElementById('ui-retail-businesses');
         if (!retailBody) return;
@@ -1470,7 +1484,6 @@ const UI_DASHBOARD = {
         if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
         let currentBrand = STATE.retail.brand || 10;
         
-        // ПАНЕЛЬ УПРАВЛЕНИЯ: Кнопки открытия магазинов теперь живут здесь
         retailBody.innerHTML += `
         <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #dcdde1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div>
@@ -1478,250 +1491,274 @@ const UI_DASHBOARD = {
                 <small style="color: #7f8c8d;">Стройте магазины, нанимайте персонал и выходите на B2C рынок.</small>
             </div>
             <div>
-                <button onclick="PRODUCTION.buyBusiness('retail_store')" style="background: #27ae60; color: white; font-weight: bold; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">+ Открыть Фирменный магазин</button>
-                <button onclick="PRODUCTION.buyBusiness('marketing_agency')" style="background: #8e44ad; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer;">+ Отдел Маркетинга</button>
+                <button onclick="PRODUCTION.buyBusiness('retail_store')" style="background: #27ae60; color: white; font-weight: bold; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer;">+ Открыть Фирменный магазин</button>
             </div>
         </div>
 
         <div style="background: #fdfefe; padding: 20px; border-radius: 8px; border-left: 5px solid #2ecc71; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
             <h3 style="margin-top:0; color:#27ae60;">🌟 Глобальная сила Бренда: ${currentBrand.toFixed(1)}%</h3>
-            <p style="margin:0; color:#2c3e50; font-size:1.05em;">Сила бренда увеличивает ежедневный поток покупателей (трафик) <strong>во всех ваших магазинах</strong>. Нанимайте PR-менеджеров и Маркетологов в Отделы маркетинга, чтобы раскручивать бренд.</p>
+            <p style="margin:0; color:#2c3e50; font-size:1.05em;">Узнаваемость бренда увеличивает ежедневный поток покупателей. Управлять брендом можно на вкладке <strong>"Маркетинг"</strong>.</p>
         </div>`;
 
         let hasRetail = false;
 
         STATE.company.businesses.forEach(biz => {
             let tpl = RECIPES.BUSINESSES[biz.type];
-            if (!tpl.isRetail && !tpl.isMarketing) return; 
+            if (!tpl.isRetail) return; // ПРОПУСКАЕМ МАРКЕТИНГ
             hasRetail = true;
             
             let level = biz.level || 1;
             let locMult = biz.locMult || 1.0;
             let adminCost = tpl.area * 2 * level * locMult;
             
-            // --- ФИКС ОШИБКИ UNDEFINED ---
             if (!biz.assigned) biz.assigned = {};
             if (biz.assigned.salesman === undefined) biz.assigned.salesman = 0;
             if (biz.assigned.store_manager === undefined) biz.assigned.store_manager = 0;
+            
+            let freeSales = typeof HR !== 'undefined' ? HR.getUnassigned('salesman') : 0;
+            let freeMgr = typeof HR !== 'undefined' ? HR.getUnassigned('store_manager') : 0;
+            let assignedTotal = biz.assigned.salesman + biz.assigned.store_manager;
+            let maxStaff = tpl.staffReq * level;
+            let isFull = assignedTotal >= maxStaff;
+
+            let maxVol = tpl.area * level * locMult * 2;
+            let currentVol = 0;
+            let invHtml = '';
+            
+            if (biz.localInventory) {
+                Object.keys(biz.localInventory).forEach(k => {
+                    let inv = biz.localInventory[k];
+                    if (inv.qty > 0) {
+                        let rTpl = RECIPES.RESOURCES[k];
+                        currentVol += inv.qty * (rTpl.volume || 0);
+                        let b2bPrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(k) : 0;
+                        if (!biz.prices) biz.prices = {};
+                        let retailPrice = biz.prices[k] || (b2bPrice * 2.5);
+                        let margin = b2bPrice > 0 ? (retailPrice / b2bPrice) : 1;
+                        let marginColor = margin >= 4 ? '#e74c3c' : (margin >= 2.5 ? '#f39c12' : '#27ae60');
+                        let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
+                        let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
+
+                        invHtml += `<tr>
+                            <td style="padding:10px 0; border-bottom:1px solid #f1f2f6;"><strong>${rTpl.name}</strong><br><small style="color:#8e44ad;">★ ${(inv.quality||1.0).toFixed(2)}</small></td>
+                            <td style="border-bottom:1px solid #f1f2f6;"><strong style="color:#2980b9;">${inv.qty} шт.</strong><br><small style="color:#7f8c8d;">Закуп: $${formatMoney(inv.avgCost)}</small></td>
+                            <td style="border-bottom:1px solid #f1f2f6;"><small style="color:#7f8c8d;">Опт: $${formatMoney(b2bPrice)}</small><br>
+                                <div style="display:flex; align-items:center; gap:3px; margin-top:2px;">
+                                    $ <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:70px; padding:3px 4px; font-size:0.9em; border:1px solid #ccc; border-radius:3px;">
+                                    <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:#3498db; color:white; border:none; padding:4px 6px; font-size:0.85em; border-radius:3px; cursor:pointer;">OK</button>
+                                </div>
+                                <small style="color:${marginColor};">Наценка: x${margin.toFixed(2)}</small>
+                            </td>
+                            <td style="border-bottom:1px solid #f1f2f6; text-align:right;">
+                                <strong style="color:#27ae60;">${soldYesterday} шт.</strong><br>
+                                <small style="color:#7f8c8d;">+$${formatMoney(revYesterday)}</small>
+                            </td>
+                        </tr>`;
+                    }
+                });
+            }
+            if (invHtml === '') invHtml = '<tr><td colspan="4" style="text-align:center; color:#7f8c8d; padding:15px;">Товара на полках нет</td></tr>';
+            
+            let volPercent = Math.min(100, (currentVol/maxVol)*100).toFixed(1);
+            let eqCount = biz.equipment.count || 0;
+            let maxSlots = level * (tpl.slotsPerLevel || 5);
+
+            retailBody.innerHTML += `
+            <li style="margin-bottom: 25px; background: #fff; padding: 25px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
+                <h3 style="margin-top:0; border-bottom: 2px solid #3498db; padding-bottom: 12px; color:#2c3e50; font-size:1.4em;">🏪 ${biz.name}</h3>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <div style="background:#fffcf2; padding:15px; border-radius:6px; border:1px solid #f1c40f;">
+                            <strong style="color:#d35400; font-size:1.1em;">📦 Склад магазина (Занято ${volPercent}%)</strong><br>
+                            <small style="color:#7f8c8d;">Вместимость: ${currentVol.toFixed(1)} / ${maxVol.toFixed(1)} м³</small>
+                            <table style="width:100%; margin-top:12px; font-size:0.95em; border-collapse: collapse;">
+                                <tr style="border-bottom:2px solid #bdc3c7;">
+                                    <th style="text-align:left; padding-bottom:5px;">Товар</th><th style="text-align:left; padding-bottom:5px;">Сток</th><th style="text-align:left; padding-bottom:5px;">Цена</th><th style="text-align:right; padding-bottom:5px;">Продано</th>
+                                </tr>
+                                ${invHtml}
+                            </table>
+                        </div>
+                        <div style="background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 6px; margin-top: 15px;">
+                            <strong style="color:#2c3e50;">МЕБЕЛЬ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
+                            Установлено витрин: <strong>${eqCount} / ${maxSlots}</strong>
+                            <div style="margin-top: 12px; display: flex; gap: 5px;">
+                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:6px; border: 1px solid #ccc; border-radius: 3px;">
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#2980b9; flex-grow: 1; border: none; color: white; cursor: pointer; border-radius: 3px;">Докупить витрину</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 250px;">
+                        <p style="margin: 0 0 15px 0; font-size:1.1em;">🏢 Аренда: <strong style="color:#c0392b;">$${formatMoney(adminCost)}</strong>/дн</p>
+                        <div style="background: #fff; padding: 15px; border-radius: 6px; border: 1px dashed #bdc3c7;">
+                            <strong style="font-size: 1.1em; color: #2c3e50;">КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong><br>
+                            <small style="color:#7f8c8d; display:block; margin-bottom:12px;">Обязателен 1 директор. Остальные — продавцы.</small>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                                <span>Продавец <small style="color:#7f8c8d;">(Резерв: ${freeSales})</small></span>
+                                <div>
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
+                                    <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.salesman}</strong> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                                <span>Директор <small style="color:#7f8c8d;">(Резерв: ${freeMgr})</small></span>
+                                <div>
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
+                                    <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.store_manager}</strong> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; text-align: right;">
+                            <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 10px 15px; border-radius: 4px;">Расширить площадь ($${formatMoney(tpl.area * 50 * level)})</button>
+                        </div>
+                    </div>
+                </div>
+            </li>`;
+        });
+        
+        if (!hasRetail) retailBody.innerHTML += '<div style="text-align:center; padding: 40px; color:#7f8c8d; font-size:1.2em;">У вас пока нет розничных магазинов.</div>';
+    },
+
+    // --- 11. НОВАЯ ВКЛАДКА: МАРКЕТИНГ ---
+    updateMarketingTab() {
+        let marketingBody = document.getElementById('ui-marketing-businesses');
+        if (!marketingBody) return;
+        
+        marketingBody.innerHTML = '';
+        
+        marketingBody.innerHTML += `
+        <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #dcdde1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div>
+                <h3 style="margin: 0 0 5px 0; color: #2c3e50;">Управление маркетингом и PR</h3>
+                <small style="color: #7f8c8d;">Создавайте креативные агентства для продвижения бренда, точек продаж или товаров.</small>
+            </div>
+            <div>
+                <button onclick="PRODUCTION.buyBusiness('marketing_agency')" style="background: #8e44ad; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">+ Открыть Маркетинговое Агентство</button>
+            </div>
+        </div>`;
+
+        let hasMarketing = false;
+
+        STATE.company.businesses.forEach(biz => {
+            let tpl = RECIPES.BUSINESSES[biz.type];
+            if (!tpl.isMarketing) return; 
+            hasMarketing = true;
+            
+            let level = biz.level || 1;
+            let adminCost = tpl.area * 2 * level;
+            
+            if (!biz.assigned) biz.assigned = {};
             if (biz.assigned.marketer === undefined) biz.assigned.marketer = 0;
             if (biz.assigned.pr_manager === undefined) biz.assigned.pr_manager = 0;
             
-            // ЕСЛИ ЭТО МАГАЗИН
-            if (tpl.isRetail) {
-                let freeSales = typeof HR !== 'undefined' ? HR.getUnassigned('salesman') : 0;
-                let freeMgr = typeof HR !== 'undefined' ? HR.getUnassigned('store_manager') : 0;
-                let assignedTotal = biz.assigned.salesman + biz.assigned.store_manager;
-                let maxStaff = tpl.staffReq * level;
-                let isFull = assignedTotal >= maxStaff;
+            let freeMarketer = typeof HR !== 'undefined' ? HR.getUnassigned('marketer') : 0;
+            let freePR = typeof HR !== 'undefined' ? HR.getUnassigned('pr_manager') : 0;
+            let assignedTotal = biz.assigned.marketer + biz.assigned.pr_manager;
+            let maxStaff = tpl.staffReq * level;
+            let isFull = assignedTotal >= maxStaff;
 
-                let maxVol = tpl.area * level * locMult * 2;
-                let currentVol = 0;
-                let invHtml = '';
-                
-                if (biz.localInventory) {
-                    Object.keys(biz.localInventory).forEach(k => {
-                        let inv = biz.localInventory[k];
-                        if (inv.qty > 0) {
-                            let rTpl = RECIPES.RESOURCES[k];
-                            currentVol += inv.qty * (rTpl.volume || 0);
-                            
-                            let b2bPrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(k) : 0;
-                            if (!biz.prices) biz.prices = {};
-                            let retailPrice = biz.prices[k] || (b2bPrice * 2.5);
-                            let margin = b2bPrice > 0 ? (retailPrice / b2bPrice) : 1;
-                            
-                            let marginColor = margin >= 4 ? '#e74c3c' : (margin >= 2.5 ? '#f39c12' : '#27ae60');
-                            
-                            let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
-                            let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
+            let eqCount = biz.equipment.count || 0;
+            let maxSlots = level * (tpl.slotsPerLevel || 5);
+            
+            let currentCampaign = biz.campaign || 0;
+            let targetType = biz.targetType || 'brand';
+            let targetId = biz.targetId || '';
 
-                            invHtml += `<tr>
-                                <td style="padding:10px 0; border-bottom:1px solid #f1f2f6;"><strong>${rTpl.name}</strong><br><small style="color:#8e44ad;">★ ${(inv.quality||1.0).toFixed(2)}</small></td>
-                                <td style="border-bottom:1px solid #f1f2f6;"><strong style="color:#2980b9;">${inv.qty} шт.</strong><br><small style="color:#7f8c8d;">Закуп: $${formatMoney(inv.avgCost)}</small></td>
-                                <td style="border-bottom:1px solid #f1f2f6;"><small style="color:#7f8c8d;">Опт (Рынок): $${formatMoney(b2bPrice)}</small><br>
-                                    <div style="display:flex; align-items:center; gap:3px; margin-top:2px;">
-                                        $ <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:70px; padding:3px 4px; font-size:0.9em; border:1px solid #ccc; border-radius:3px;">
-                                        <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:#3498db; color:white; border:none; padding:4px 6px; font-size:0.85em; border-radius:3px; cursor:pointer;">OK</button>
-                                    </div>
-                                    <small style="color:${marginColor};">Наценка: x${margin.toFixed(2)}</small>
-                                </td>
-                                <td style="border-bottom:1px solid #f1f2f6; text-align:right;">
-                                    <strong style="color:#27ae60;">${soldYesterday} шт.</strong><br>
-                                    <small style="color:#7f8c8d;">+$${formatMoney(revYesterday)}</small>
-                                </td>
-                            </tr>`;
-                        }
-                    });
+            // Генерируем опции для выбора цели кампании
+            let targetOptions = `<option value="brand_global" ${targetType==='brand' ? 'selected' : ''}>🌍 Глобальный бренд компании</option>`;
+            
+            targetOptions += `<optgroup label="🏪 Продвижение конкретного магазина">`;
+            STATE.company.businesses.forEach(store => {
+                if (RECIPES.BUSINESSES[store.type].isRetail) {
+                    let isSelected = (targetType === 'store' && targetId == store.uid) ? 'selected' : '';
+                    targetOptions += `<option value="store_${store.uid}" ${isSelected}>Магазин: ${store.name}</option>`;
                 }
-                if (invHtml === '') invHtml = '<tr><td colspan="4" style="text-align:center; color:#7f8c8d; padding:15px;">Товара на полках нет</td></tr>';
-                if (invHtml === '') invHtml = '<tr><td colspan="3" style="text-align:center; color:#7f8c8d; padding:15px;">Товара на полках нет</td></tr>';
-                
-                let volPercent = Math.min(100, (currentVol/maxVol)*100).toFixed(1);
-                let eqCount = biz.equipment.count || 0;
-                let maxSlots = level * (tpl.slotsPerLevel || 5);
+            });
+            targetOptions += `</optgroup>`;
 
-                retailBody.innerHTML += `
-                <li style="margin-bottom: 25px; background: #fff; padding: 25px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
-                    <h3 style="margin-top:0; border-bottom: 2px solid #3498db; padding-bottom: 12px; color:#2c3e50; font-size:1.4em;">
-                        🏪 ${biz.name}
-                    </h3>
-                    
-                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 250px;">
-                            <div style="background:#fffcf2; padding:15px; border-radius:6px; border:1px solid #f1c40f;">
-                                <strong style="color:#d35400; font-size:1.1em;">📦 Склад магазина (Занято ${volPercent}%)</strong><br>
-                                <small style="color:#7f8c8d;">Вместимость: ${currentVol.toFixed(1)} / ${maxVol.toFixed(1)} м³ (Зависит от аренды)</small>
-                                <table style="width:100%; margin-top:12px; font-size:0.95em; border-collapse: collapse;">
-                                    <tr style="border-bottom:2px solid #bdc3c7;">
-                                        <th style="text-align:left; padding-bottom:5px;">Товар</th>
-                                        <th style="text-align:left; padding-bottom:5px;">Сток</th>
-                                        <th style="text-align:left; padding-bottom:5px;">Ваша Цена</th>
-                                        <th style="text-align:right; padding-bottom:5px;">Продано (вчера)</th>
-                                    </tr>
-                                    ${invHtml}
-                                </table>
-                            </div>
+            targetOptions += `<optgroup label="📦 Продвижение конкретного товара">`;
+            Object.keys(RECIPES.RESOURCES).forEach(k => {
+                let res = RECIPES.RESOURCES[k];
+                if (!res.isRaw && !res.isEquipment) {
+                    let isSelected = (targetType === 'product' && targetId === k) ? 'selected' : '';
+                    targetOptions += `<option value="product_${k}" ${isSelected}>Товар: ${res.name}</option>`;
+                }
+            });
+            targetOptions += `</optgroup>`;
+
+            marketingBody.innerHTML += `
+            <li style="margin-bottom: 25px; background: #fff; padding: 25px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
+                <h3 style="margin-top:0; border-bottom: 2px solid #9b59b6; padding-bottom: 12px; color:#2c3e50; font-size:1.4em;">📢 ${biz.name}</h3>
+                
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <div style="background:#f4ecf7; padding:15px; border-radius:6px; border:1px solid #d2b4de;">
+                            <strong style="color:#8e44ad; font-size:1.1em;">🎯 Управление кампанией</strong><br>
                             
-                            <div style="background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 6px; margin-top: 15px;">
-                                <strong style="color:#2c3e50;">МЕБЕЛЬ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
-                                Установлено витрин: <strong>${eqCount} / ${maxSlots}</strong>
-                                <div style="margin-top: 12px; display: flex; gap: 5px;">
-                                    <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:6px; border: 1px solid #ccc; border-radius: 3px;">
-                                    <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#2980b9; flex-grow: 1; border: none; color: white; cursor: pointer; border-radius: 3px;">Докупить витрину</button>
-                                </div>
+                            <div style="margin-top:10px;">
+                                <strong style="color:#8e44ad; font-size:0.9em;">Цель продвижения (Таргет):</strong><br>
+                                <select id="marketing-target-${biz.uid}" onchange="UI_DASHBOARD.setMarketingTarget(${biz.uid})" style="width:100%; padding:6px; margin-top:5px; border-radius:4px; border:1px solid #bdc3c7; cursor:pointer;">
+                                    ${targetOptions}
+                                </select>
+                            </div>
+
+                            <div style="margin-top:15px; border-top: 1px solid #d2b4de; padding-top: 10px;">
+                                <strong style="color:#8e44ad; font-size:0.9em;">Рекламный бюджет (Каналы):</strong><br>
+                                <select id="campaign-${biz.uid}" onchange="UI_DASHBOARD.setCampaign(${biz.uid})" style="width:100%; padding:6px; margin-top:5px; border-radius:4px; border:1px solid #bdc3c7; cursor:pointer;">
+                                    <option value="0" ${currentCampaign==0?'selected':''}>Партизанский маркетинг — $0/дн</option>
+                                    <option value="1" ${currentCampaign==1?'selected':''}>Контекстная реклама — $100/дн (Эффект x1.5)</option>
+                                    <option value="2" ${currentCampaign==2?'selected':''}>Блогеры и СМИ — $500/дн (Эффект x2.5)</option>
+                                    <option value="3" ${currentCampaign==3?'selected':''}>Национальное ТВ — $2000/дн (Эффект x5.0)</option>
+                                </select>
                             </div>
                         </div>
-
-                        <div style="flex: 1; min-width: 250px;">
-                            <p style="margin: 0 0 15px 0; font-size:1.1em;">🏢 Аренда: <strong style="color:#c0392b;">$${formatMoney(adminCost)}</strong>/дн</p>
-                            
-                            <div style="background: #fff; padding: 15px; border-radius: 6px; border: 1px dashed #bdc3c7;">
-                                <strong style="font-size: 1.1em; color: #2c3e50;">КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong><br>
-                                <small style="color:#7f8c8d; display:block; margin-bottom:12px;">Обязателен 1 директор. Остальные — продавцы.</small>
-                                
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                                    <span>Продавец <small style="color:#7f8c8d;">(Резерв: ${freeSales})</small></span>
-                                    <div>
-                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
-                                        <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.salesman}</strong> 
-                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
-                                    </div>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                                    <span>Директор <small style="color:#7f8c8d;">(Резерв: ${freeMgr})</small></span>
-                                    <div>
-                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
-                                        <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.store_manager}</strong> 
-                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div style="margin-top: 20px; text-align: right;">
-                                <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 10px 15px; border-radius: 4px;">Расширить площадь ($${formatMoney(tpl.area * 50 * level)})</button>
+                        
+                        <div style="background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 6px; margin-top: 15px;">
+                            <strong style="color:#2c3e50;">ОБОРУДОВАНИЕ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
+                            Рабочих мест (ПК): <strong>${eqCount} / ${maxSlots}</strong>
+                            <div style="margin-top: 12px; display: flex; gap: 5px;">
+                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:6px; border: 1px solid #ccc; border-radius: 3px;">
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#8e44ad; flex-grow: 1; border: none; color: white; cursor: pointer; border-radius: 3px;">Купить ПК</button>
                             </div>
                         </div>
                     </div>
-                </li>`;
-            }
 
-            // --- ЕСЛИ ЭТО ОФИС МАРКЕТИНГА ---
-            else if (tpl.isMarketing) {
-                let freeMarketer = typeof HR !== 'undefined' ? HR.getUnassigned('marketer') : 0;
-                let freePR = typeof HR !== 'undefined' ? HR.getUnassigned('pr_manager') : 0;
-                let assignedTotal = biz.assigned.marketer + biz.assigned.pr_manager;
-                let maxStaff = tpl.staffReq * level;
-                let isFull = assignedTotal >= maxStaff;
-
-                let eqCount = biz.equipment.count || 0;
-                let maxSlots = level * (tpl.slotsPerLevel || 5);
-                
-                let workingStaffRatio = assignedTotal > 0 ? Math.min(1, eqCount / assignedTotal) : 0;
-                let effMarketers = biz.assigned.marketer * workingStaffRatio;
-                let effPR = biz.assigned.pr_manager * workingStaffRatio;
-                
-                // Считаем влияние бюджета для красивого вывода в UI
-                let currentCampaign = biz.campaign || 0;
-                let campaignMult = 1.0;
-                let campaignCost = 0;
-                if (currentCampaign == 1) { campaignCost = 100; campaignMult = 1.5; }
-                else if (currentCampaign == 2) { campaignCost = 500; campaignMult = 2.5; }
-                else if (currentCampaign == 3) { campaignCost = 2000; campaignMult = 5.0; }
-                
-                let brandGain = ((effMarketers * 0.2) + (effPR * 0.5)) * campaignMult;
-
-                retailBody.innerHTML += `
-                <li style="margin-bottom: 25px; background: #fff; padding: 25px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
-                    <h3 style="margin-top:0; border-bottom: 2px solid #9b59b6; padding-bottom: 12px; color:#2c3e50; font-size:1.4em;">
-                        📢 ${biz.name}
-                    </h3>
-                    
-                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 250px;">
-                            <div style="background:#f4ecf7; padding:15px; border-radius:6px; border:1px solid #d2b4de;">
-                                <strong style="color:#8e44ad; font-size:1.1em;">📈 Эффективность кампаний</strong><br>
-                                <small style="color:#7f8c8d;">Ежедневный прирост Силы Бренда.</small>
-                                <div style="margin-top: 10px; font-size: 1.1em; color: #2c3e50;">
-                                    Прогноз прироста: <strong style="color: ${brandGain > 0 ? '#27ae60' : '#7f8c8d'};">+${brandGain.toFixed(2)}% / день</strong>
-                                </div>
-                                
-                                <div style="margin-top:15px; border-top: 1px solid #d2b4de; padding-top: 10px;">
-                                    <strong style="color:#8e44ad; font-size:0.9em;">Рекламный бюджет (Выбор кампании):</strong><br>
-                                    <select id="campaign-${biz.uid}" onchange="UI_DASHBOARD.setCampaign(${biz.uid})" style="width:100%; padding:6px; margin-top:5px; border-radius:4px; border:1px solid #bdc3c7; cursor:pointer;">
-                                        <option value="0" ${currentCampaign==0?'selected':''}>Органика (Без бюджета) — $0/дн</option>
-                                        <option value="1" ${currentCampaign==1?'selected':''}>Листовки и Флаеры — $100/дн (Эффект x1.5)</option>
-                                        <option value="2" ${currentCampaign==2?'selected':''}>Таргет и Радио — $500/дн (Эффект x2.5)</option>
-                                        <option value="3" ${currentCampaign==3?'selected':''}>ТВ и Билборды — $2000/дн (Эффект x5.0)</option>
-                                    </select>
+                    <div style="flex: 1; min-width: 250px;">
+                        <p style="margin: 0 0 15px 0; font-size:1.1em;">🏢 Аренда офиса: <strong style="color:#c0392b;">$${formatMoney(adminCost)}</strong>/дн</p>
+                        
+                        <div style="background: #f4f6f7; padding: 15px; border-radius: 6px; border: 1px solid #eee;">
+                            <strong style="font-size: 1.1em; color: #2c3e50;">КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong><br>
+                            <small style="color:${assignedTotal > eqCount ? '#e74c3c' : '#7f8c8d'}; display:block; margin-bottom:12px;">${assignedTotal > eqCount ? '⚠️ Не хватает ПК! Часть команды простаивает.' : 'Каждому сотруднику нужен ПК.'}</small>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                                <span>Маркетолог <small style="color:#7f8c8d;">(Резерв: ${freeMarketer})</small></span>
+                                <div>
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'marketer')" ${biz.assigned.marketer===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
+                                    <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.marketer}</strong> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'marketer')" ${isFull||freeMarketer===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
                                 </div>
                             </div>
-                            
-                            <div style="background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 6px; margin-top: 15px;">
-                                <strong style="color:#2c3e50;">ОБОРУДОВАНИЕ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
-                                Рабочих мест (ПК): <strong>${eqCount} / ${maxSlots}</strong>
-                                <div style="margin-top: 12px; display: flex; gap: 5px;">
-                                    <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:6px; border: 1px solid #ccc; border-radius: 3px;">
-                                    <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#8e44ad; flex-grow: 1; border: none; color: white; cursor: pointer; border-radius: 3px;">Купить ПК</button>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                                <span>PR-Менеджер <small style="color:#7f8c8d;">(Резерв: ${freePR})</small></span>
+                                <div>
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'pr_manager')" ${biz.assigned.pr_manager===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
+                                    <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.pr_manager}</strong> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'pr_manager')" ${isFull||freePR===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
                                 </div>
                             </div>
                         </div>
-
-                        <div style="flex: 1; min-width: 250px;">
-                            <p style="margin: 0 0 15px 0; font-size:1.1em;">🏢 Аренда офиса: <strong style="color:#c0392b;">$${formatMoney(adminCost)}</strong>/дн</p>
-                            
-                            <div style="background: #f4f6f7; padding: 15px; border-radius: 6px; border: 1px solid #eee;">
-                                <strong style="font-size: 1.1em; color: #2c3e50;">КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong><br>
-                                <small style="color:${assignedTotal > eqCount ? '#e74c3c' : '#7f8c8d'}; display:block; margin-bottom:12px;">${assignedTotal > eqCount ? '⚠️ Не хватает ПК! Часть людей простаивает.' : 'Каждому сотруднику нужен ПК.'}</small>
-                                
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                                    <span>Маркетолог <small style="color:#7f8c8d;">(Резерв: ${freeMarketer})</small></span>
-                                    <div>
-                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'marketer')" ${biz.assigned.marketer===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
-                                        <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.marketer}</strong> 
-                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'marketer')" ${isFull||freeMarketer===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
-                                    </div>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                                    <span>PR-Менеджер <small style="color:#7f8c8d;">(Резерв: ${freePR})</small></span>
-                                    <div>
-                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'pr_manager')" ${biz.assigned.pr_manager===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
-                                        <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.pr_manager}</strong> 
-                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'pr_manager')" ${isFull||freePR===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div style="margin-top: 20px; text-align: right;">
-                                <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 10px 15px; border-radius: 4px;">Расширить офис ($${formatMoney(tpl.area * 50 * level)})</button>
-                            </div>
+                        
+                        <div style="margin-top: 20px; text-align: right;">
+                            <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 10px 15px; border-radius: 4px;">Расширить офис ($${formatMoney(tpl.area * 50 * level)})</button>
                         </div>
                     </div>
-                </li>`;
-            }
+                </div>
+            </li>`;
         });
         
-        if (!hasRetail) {
-            retailBody.innerHTML += '<div style="text-align:center; padding: 40px; color:#7f8c8d; font-size:1.2em;">У вас пока нет розничных магазинов.<br>Нажмите кнопку «Открыть Фирменный магазин» выше.</div>';
+        if (!hasMarketing) {
+            marketingBody.innerHTML += '<div style="text-align:center; padding: 40px; color:#7f8c8d; font-size:1.2em;">У вас пока нет маркетинговых агентств.</div>';
         }
     },
 
