@@ -40,13 +40,38 @@ const PRODUCTION = {
             STATE.finances.balance -= cost;
             
             const UKR_NAMES = ['Мрія', 'Сокіл', 'Скіф', 'Булава', 'Грім', 'Січ', 'Воля'];
-            const RETAIL_NAMES = ['Розетка', 'Цитрус', 'АЛЛО', 'Епіцентр', 'Таврія В', 'Сільпо', 'Фокстрот', 'Аврора', 'Comfy', 'MOYO'];
+            const RETAIL_NAMES = ['Сільпо', 'АТБ', 'Аврора', 'Епіцентр', 'ФОРА', 'VARUS', 'КОСМО', 'Fozzy', 'EVA'];
+            const MARKETING_NAMES = [
+                'Banda Agency', 
+                'Fedoriv Group', 
+                'Gres Todorchuk', 
+                'Republik', 
+                'Katsman Communications', 
+                'IAMIDEA', 
+                'Sushka', 
+                'Postmen', 
+                'Arriba!'
+            ];
             
-            let randomName = tpl.isRetail ? RETAIL_NAMES[Math.floor(Math.random() * RETAIL_NAMES.length)] : UKR_NAMES[Math.floor(Math.random() * UKR_NAMES.length)];
+            let randomName = '';
+            if (tpl.isRetail) {
+                randomName = RETAIL_NAMES[Math.floor(Math.random() * RETAIL_NAMES.length)];
+            } else if (tpl.isMarketing) {
+                randomName = MARKETING_NAMES[Math.floor(Math.random() * MARKETING_NAMES.length)];
+            } else {
+                randomName = UKR_NAMES[Math.floor(Math.random() * UKR_NAMES.length)];
+            }
+
             let countOfThisType = STATE.company.businesses.filter(b => b.type === type).length + 1;
             
-            // Магазины теперь имеют названия брендов
-            let customName = tpl.isRetail ? `Магазин "${randomName}"${locationName}` : `${tpl.name} "${randomName}-${countOfThisType}"`;
+            let customName = '';
+            if (tpl.isRetail) {
+                customName = `Магазин "${randomName}"${locationName}`;
+            } else if (tpl.isMarketing) {
+                customName = `Агентство "${randomName}"`;
+            } else {
+                customName = `${tpl.name} "${randomName}-${countOfThisType}"`;
+            }
             
             STATE.company.businesses.push({
                 uid: Date.now(), 
