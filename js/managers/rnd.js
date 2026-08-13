@@ -47,7 +47,7 @@ const RND = {
         let freeSlots = maxSlots - (STATE.rnd.facility.equipment.count || 0);
         if (qty > freeSlots) { NOTIFY.error('Ошибка', 'Не хватает мест!'); return; }
 
-        let inv = STATE.company.inventory['pc_workstation'];
+        let inv = STATE.company.inventory['smart_pc'];
         if (!inv || inv.qty < qty) { NOTIFY.error('Ошибка', 'Нет ПК на складе.'); return; }
 
         inv.qty -= qty;
