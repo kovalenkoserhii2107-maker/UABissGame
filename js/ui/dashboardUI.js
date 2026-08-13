@@ -1228,7 +1228,7 @@ const UI_DASHBOARD = {
         let amount = parseFloat(amountInput.value);
         let term = parseInt(termInput.value);
         if (isNaN(amount) || amount <= 0) {
-            alert("❌ Пожалуйста, введите корректную сумму кредита.");
+            NOTIFY.error('Ошибка', 'Пожалуйста, введите корректную сумму кредита.');
             return;
         }
         FINANCE.takeLoan(amount, term);
@@ -1243,7 +1243,7 @@ const UI_DASHBOARD = {
         let term = parseInt(termInput.value);
         let payoutType = typeInput.value;
         if (isNaN(amount) || amount <= 0) {
-            alert("❌ Пожалуйста, введите корректную сумму депозита.");
+            NOTIFY.error('Ошибка', 'Пожалуйста, введите корректную сумму депозита.');
             return;
         }
         FINANCE.openDeposit(amount, term, payoutType);
@@ -1256,7 +1256,7 @@ const UI_DASHBOARD = {
         if (input) {
             let qty = parseInt(input.value);
             if (isNaN(qty) || qty <= 0) {
-                alert("❌ Введите корректное количество для покупки.");
+                NOTIFY.error('Ошибка', 'Введите корректное количество для покупки.');
                 return;
             }
             if (typeof MARKET !== 'undefined') {
@@ -1278,7 +1278,7 @@ const UI_DASHBOARD = {
         });
         
         biz.routing = newRoutes;
-        alert("✅ Квоты отгрузки (в шт.) успешно обновлены!");
+        NOTIFY.success('Успех', 'Квоты отгрузки (в шт.) успешно обновлены!');
         this.update();
     },
     // Красивое окно выбора локации магазина
@@ -1593,7 +1593,7 @@ const UI_DASHBOARD = {
         let qty = parseInt(qtyInput.value);
         
         if (isNaN(storeUid) || isNaN(qty) || qty <= 0) {
-            alert("❌ Укажите корректное количество для отгрузки.");
+            NOTIFY.error('Ошибка', 'Укажите корректное количество для отгрузки.');
             return;
         }
         
@@ -1602,7 +1602,7 @@ const UI_DASHBOARD = {
         
         let globalInv = STATE.company.inventory[itemKey];
         if (!globalInv || globalInv.qty < qty) {
-            alert("❌ На глобальном складе нет столько товара.");
+            NOTIFY.error('Ошибка', 'На глобальном складе нет столько товара.');
             return;
         }
         
@@ -1621,7 +1621,7 @@ const UI_DASHBOARD = {
         let maxCanFit = itemVol > 0 ? Math.floor(freeSpace / itemVol) : qty;
         
         if (qty > maxCanFit) {
-            alert(`❌ На складе магазина нет места! Влезет только ${maxCanFit} шт.`);
+            NOTIFY.error('Ошибка', `На складе магазина нет места! Влезет только ${maxCanFit} шт.`);
             qty = maxCanFit;
             if (qty <= 0) return;
         }
@@ -1644,7 +1644,7 @@ const UI_DASHBOARD = {
         globalInv.qty -= qty;
         if (globalInv.qty === 0) globalInv.avgCost = 0;
         
-        alert(`✅ Успешно отгружено ${qty} шт. в "${store.name}".`);
+        NOTIFY.success('Успех', `Успешно отгружено ${qty} шт. в "${store.name}".`);
         this.update();
     },
     // Сохранение выбранной рекламной кампании
@@ -1663,7 +1663,7 @@ const UI_DASHBOARD = {
         if (input && biz) {
             let val = parseFloat(input.value);
             if (isNaN(val) || val <= 0) {
-                alert("❌ Введите корректную цену (больше 0).");
+                NOTIFY.error('Ошибка', 'Введите корректную цену (больше 0).');
                 return;
             }
             if (!biz.prices) biz.prices = {};
