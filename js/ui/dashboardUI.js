@@ -189,7 +189,103 @@ const UI_DASHBOARD = {
                 this.charts.cashflow.update();
             }
         }
+        // 2.5. СТРАТЕГИЧЕСКИЕ СВОДКИ (R&D, HR, Финансы)
+        
+        // Сводка R&D
+        let rndDiv = document.getElementById('dash-rnd-summary');
+        if (rndDiv && STATE.rnd) {
+            if ((STATE.rnd.facility.level || 0) === 0) {
+                rndDiv.innerHTML = '<span style="color:var(--text-dim); font-size:0.9em;">Лаборатория еще не построена.</span>';
+            } else if (!STATE.rnd.activeProject) {
+                rndDiv.innerHTML = '<div style="display:flex; align-items:center; gap:8px; color:var(--orange); font-weight:500; font-size:0.95em;">⏸️ Лаборатория простаивает!</div><div style="font-size:0.8em; color:var(--text-dim); margin-top:4px;">Назначьте проект, чтобы не терять время.</div>';
+            } else {
+                let activeKey = STATE.rnd.activeProject;
+                let tpl = RECIPES.BUSINESSES[activeKey];
+                let isUnlocked = STATE.rnd.unlocked.includes(activeKey);
+                let targetRP = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost;
+                let percent = targetRP > 0 ? Math.min(100, (STATE.rnd.points / targetRP) * 100) : 100;
+                let titleName = isUnlocked ? `Улучшение: ${tpl.name}` : `Изучение: ${tpl.name}`;
+                
+                rndDiv.innerHTML = `
+                    <div style="font-weight:600; margin-bottom:5px; font-size:0.95em; color:var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${titleName}</div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.85em; color:var(--text-dim); margin-bottom:6px;">
+                        <span>Прогресс</span><span style="font-weight:600; color:var(--blue);">${percent.toFixed(1)}%</span>
+                    </div>
+                    <div style="width:100%; background:var(--surface-3); height:8px; border-radius:4px; overflow:hidden;">
+                        <div style="width:${percent}%; background:var(--blue); height:100%; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div style="font-size:0.8em; color:var(--text-dim); margin-top:6px; text-align:right;">Собрано: ${Math.floor(STATE.rnd.points)} / ${targetRP} RP</div>
+                `;
+            }
+        }
 
+        // Сводка HR
+        let hrDiv = document.getElementById('dash-hr-summary');
+        if (hrDiv && typeof HR !== 'undefined') {
+            let total = HR.getTotalStaff();
+            let training = STATE.hr.trainingQueue.length;
+            
+            let counts = { factory: 0, rnd: 0, retail: 0, marketing: 0 };
+            Object.keys(HR.GRADES).forEach(g => {
+                let amt = STATE.hr.staff[g] || 0;
+                let role = HR.GRADES[g].role;
+                if (counts[role] !== undefined) counts[role] += amt;
+            });
+            
+            hrDiv.innerHTML = `
+                <div style="font-size:1.4em; font-weight:700; color:var(--text); margin-bottom:10px;">${total} <span style="font-size:0.6em; color:var(--text-dim); font-weight:500;">сотрудников в штате</span></div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; font-size:0.85em; margin-bottom:12px;">
+                    <div>🏭 Заводы: <strong style="color:var(--text);">${counts.factory}</strong></div>
+                    <div>🏪 Розница: <strong style="color:var(--text);">${counts.retail}</strong></div>
+                    <div>📢 Маркетинг: <strong style="color:var(--text);">${counts.marketing}</strong></div>
+                    <div>🔬 R&D: <strong style="color:var(--text);">${counts.rnd}</strong></div>
+                </div>
+                ${training > 0 
+                    ? `<div style="font-size:0.8em; padding:4px 8px; background:var(--orange-dim); color:var(--orange); border-radius:6px; display:inline-block; font-weight:500;">🎓 В Академии (обучение): ${training} чел.</div>` 
+                    : `<div style="font-size:0.8em; color:var(--text-dim);">Никто не проходит обучение</div>`}
+            `;
+        }
+
+        // Сводка Финансов (Вчерашний P&L)
+        let finDiv = document.getElementById('dash-fin-summary');
+        if (finDiv && STATE.ledger && STATE.ledger.yesterday) {
+            let y = STATE.ledger.yesterday;
+            
+            let yRevB2C = y.rev_b2c || 0;
+            let yRevOther = y.rev_other || 0;
+            let yRev = (y.rev_b2b||0) + (y.rev_b2g||0) + yRevB2C + yRevOther;
+            
+            let yOpex = (y.exp_salary||0) + (y.exp_admin||0) + (y.exp_hr||0) + (y.exp_fines||0) + (y.exp_repair||0) + (y.exp_taxes_payroll||0) + (y.exp_marketing||0);
+            let yMaterials = y.exp_materials || 0;
+            
+            let yEbitda = yRev - yMaterials - yOpex;
+            let yFin = (y.fin_income||0) - (y.fin_expense||0) - (y.fin_fees||0);
+            let yEbt = yEbitda + yFin;
+            let yNet = yEbt - (y.exp_taxes_corp||0);
+            
+            let ebitdaColor = yEbitda > 0 ? 'var(--green)' : (yEbitda < 0 ? 'var(--red)' : 'var(--text-dim)');
+            let netColor = yNet > 0 ? 'var(--green)' : (yNet < 0 ? 'var(--red)' : 'var(--text-dim)');
+            
+            finDiv.innerHTML = `
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85em;">
+                    <span style="color:var(--text-dim);">Виручка (Доходи)</span>
+                    <strong style="color:var(--text);">$${formatMoney(yRev)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85em;">
+                    <span style="color:var(--text-dim);">Собівартість + OPEX</span>
+                    <strong style="color:var(--text);">$${formatMoney(yMaterials + yOpex)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px; border-top:1px dashed var(--border); padding-top:6px; font-size:0.95em;">
+                    <span style="font-weight:600; color:var(--text);">EBITDA</span>
+                    <strong style="color:${ebitdaColor};">$${formatMoney(yEbitda)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:0; font-size:1.05em; border-top:1px solid var(--border); padding-top:8px;">
+                    <span style="font-weight:600; color:var(--text);">Чистий прибуток</span>
+                    <strong style="color:${netColor};">$${formatMoney(yNet)}</strong>
+                </div>
+            `;
+        }
+        
         // 3. ОПЕРАЦИОННЫЙ РАДАР (СВЕТОФОР)
         let radarList = document.getElementById('dash-radar-list');
         if (radarList) {
