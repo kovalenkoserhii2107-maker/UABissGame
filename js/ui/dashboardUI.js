@@ -1482,8 +1482,8 @@ const UI_DASHBOARD = {
         retailBody.innerHTML = '';
         
         if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
-        let currentBrand = STATE.retail.brand || 10;
         
+        // Панель управления магазинами (без блока бренда)
         retailBody.innerHTML += `
         <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #dcdde1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div>
@@ -1493,18 +1493,13 @@ const UI_DASHBOARD = {
             <div>
                 <button onclick="PRODUCTION.buyBusiness('retail_store')" style="background: #27ae60; color: white; font-weight: bold; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer;">+ Открыть Фирменный магазин</button>
             </div>
-        </div>
-
-        <div style="background: #fdfefe; padding: 20px; border-radius: 8px; border-left: 5px solid #2ecc71; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-            <h3 style="margin-top:0; color:#27ae60;">🌟 Глобальная сила Бренда: ${currentBrand.toFixed(1)}%</h3>
-            <p style="margin:0; color:#2c3e50; font-size:1.05em;">Узнаваемость бренда увеличивает ежедневный поток покупателей. Управлять брендом можно на вкладке <strong>"Маркетинг"</strong>.</p>
         </div>`;
 
         let hasRetail = false;
 
         STATE.company.businesses.forEach(biz => {
             let tpl = RECIPES.BUSINESSES[biz.type];
-            if (!tpl.isRetail) return; // ПРОПУСКАЕМ МАРКЕТИНГ
+            if (!tpl.isRetail) return;
             hasRetail = true;
             
             let level = biz.level || 1;
@@ -1519,7 +1514,6 @@ const UI_DASHBOARD = {
             let freeMgr = typeof HR !== 'undefined' ? HR.getUnassigned('store_manager') : 0;
             let assignedTotal = biz.assigned.salesman + biz.assigned.store_manager;
             let maxStaff = tpl.staffReq * level;
-            let isFull = assignedTotal >= maxStaff;
 
             let maxVol = tpl.area * level * locMult * 2;
             let currentVol = 0;
@@ -1627,7 +1621,16 @@ const UI_DASHBOARD = {
         
         marketingBody.innerHTML = '';
         
+        if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
+        let currentBrand = STATE.retail.brand || 10;
+
+        // Блок глобальной силы бренда теперь живет здесь
         marketingBody.innerHTML += `
+        <div style="background: #fdfefe; padding: 20px; border-radius: 8px; border-left: 5px solid #8e44ad; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <h3 style="margin-top:0; color:#8e44ad;">🌟 Глобальная сила Бренда: ${currentBrand.toFixed(1)}%</h3>
+            <p style="margin:0; color:#2c3e50; font-size:1.05em;">Узнаваемость бренда увеличивает ежедневный поток покупателей во всех ваших магазинах. Открывайте маркетинговые агентства ниже, чтобы усиливать бренд и запускать таргетированные кампании.</p>
+        </div>
+
         <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #dcdde1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div>
                 <h3 style="margin: 0 0 5px 0; color: #2c3e50;">Управление маркетингом и PR</h3>
@@ -1665,7 +1668,6 @@ const UI_DASHBOARD = {
             let targetType = biz.targetType || 'brand';
             let targetId = biz.targetId || '';
 
-            // Генерируем опции для выбора цели кампании
             let targetOptions = `<option value="brand_global" ${targetType==='brand' ? 'selected' : ''}>🌍 Глобальный бренд компании</option>`;
             
             targetOptions += `<optgroup label="🏪 Продвижение конкретного магазина">`;
