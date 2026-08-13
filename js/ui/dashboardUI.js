@@ -39,17 +39,6 @@ const UI_DASHBOARD = {
         if (document.getElementById('ui-day')) document.getElementById('ui-day').innerText = STATE.time.day;
         if (document.getElementById('ui-balance')) document.getElementById('ui-balance').innerText = formatMoney(STATE.finances.balance);
         if (document.getElementById('ui-credit')) document.getElementById('ui-credit').innerText = STATE.finances.creditScore;
-
-        // Внедряем кнопку Журнала событий прямо рядом с днем
-        let daySpan = document.getElementById('ui-day');
-        if (daySpan && !document.getElementById('btn-event-log')) {
-            let btn = document.createElement('button');
-            btn.id = 'btn-event-log';
-            btn.innerHTML = '📜 Журнал событий';
-            btn.style.cssText = 'margin-left: 15px; background: #8e44ad; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: 0.2s;';
-            btn.onclick = () => UI_DASHBOARD.showEventLog();
-            daySpan.parentNode.appendChild(btn);
-        }
     },
 
     // --- ИНИЦИАЛИЗАЦИЯ ГРАФИКОВ ---
