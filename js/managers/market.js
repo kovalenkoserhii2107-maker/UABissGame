@@ -1,6 +1,7 @@
-// Модуль внешнего рынка B2B с макроэкономикой, инфляцией и САМОРЕГУЛЯЦИЕЙ ПОСТАВЩИКОВ
+// Модуль внешнего рынка B2B: Инерция, Цепочки поставок и Лимиты складов
 const MARKET = {
     trends: {},
+    recipeMap: null,
 
     get prices() {
         let dynamicPrices = {};
@@ -10,6 +11,20 @@ const MARKET = {
             });
         }
         return dynamicPrices;
+    },
+
+    // Карта зависимостей (кто из чего состоит)
+    buildRecipeMap() {
+        if (this.recipeMap) return;
+        this.recipeMap = {};
+        if (typeof RECIPES === 'undefined' || !RECIPES.BUSINESSES) return;
+
+        Object.keys(RECIPES.BUSINESSES).forEach(bKey => {
+            let biz = RECIPES.BUSINESSES[bKey];
+            if (biz.output && biz.inputs && !biz.isRetail && !biz.isMarketing) {
+                this.recipeMap[biz.output] = biz.inputs;
+            }
+        });
     },
 
     init() {
@@ -24,7 +39,6 @@ const MARKET = {
             if (STATE.market.pools[key] === undefined) {
                 STATE.market.pools[key] = res.dailyMarketPool || 1000;
             } else {
-                // БРОНЕЖИЛЕТ 1: Жестко лечим старые сейвы от дробей прямо при загрузке
                 STATE.market.pools[key] = Math.floor(STATE.market.pools[key]);
             }
             
@@ -32,6 +46,8 @@ const MARKET = {
                 STATE.market.productionModifiers[key] = 1.0;
             }
         });
+        
+        this.buildRecipeMap();
     },
 
     getCurrentPrice(itemKey) {
@@ -45,7 +61,6 @@ const MARKET = {
     
     getAvailablePool(itemKey) {
         this.init();
-        // БРОНЕЖИЛЕТ 2: Даже если в STATE попадет дробь, интерфейс получит только целое число
         return STATE.market.pools[itemKey] !== undefined ? Math.floor(STATE.market.pools[itemKey]) : 0;
     },
 
@@ -54,12 +69,24 @@ const MARKET = {
         let res = RECIPES.RESOURCES[itemKey];
         if (!res) return;
 
-        qty = Math.floor(qty); // Защита от покупки дробного количества
+        qty = Math.floor(qty);
         let availableQty = this.getAvailablePool(itemKey);
 
         if (qty > availableQty) {
-            NOTIFY.error('Дефицит на бирже', `Невозможно купить ${qty} шт. Доступно на рынке: ${availableQty} шт.`);
+            NOTIFY.error('Дефицит на бирже', `Невозможно купить ${qty} шт. Доступно: ${availableQty} шт.`);
             return;
+        }
+
+        // ПРОВЕРКА ЛИМИТА СКЛАДА ИГРОКА
+        if (typeof WAREHOUSE !== 'undefined' && WAREHOUSE.getCurrentVolume) {
+            let itemVol = res.volume || 1.0; 
+            let totalVol = itemVol * qty;
+            let freeSpace = WAREHOUSE.getMaxVolume() - WAREHOUSE.getCurrentVolume();
+            
+            if (totalVol > freeSpace) {
+                NOTIFY.error('Склад переполнен!', `Не хватает места. Свободно: ${freeSpace.toFixed(1)} м³. Требуется: ${totalVol.toFixed(1)} м³.`);
+                return;
+            }
         }
 
         let price = this.getCurrentPrice(itemKey);
@@ -67,13 +94,12 @@ const MARKET = {
         
         if (STATE.finances.balance >= cost) {
             STATE.finances.balance -= cost; 
-            // БРОНЕЖИЛЕТ 3: Округляем после транзакции
             STATE.market.pools[itemKey] = Math.floor(STATE.market.pools[itemKey] - qty);
             
             if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
             STATE.logistics.deliveries.push({ item: itemKey, qty: qty, cost: cost, daysLeft: 1 });
             
-            NOTIFY.success('Успех', `Закупка оформлена. ${qty} шт. прибудут на склад завтра.`);
+            NOTIFY.success('Успех', `Закупка оформлена. ${qty} шт. прибудут завтра.`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {
             NOTIFY.error('Ошибка', `Недостаточно средств. Нужно $${formatMoney(cost)}`);
@@ -97,7 +123,7 @@ const MARKET = {
             if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
             STATE.logistics.receivables.push({ amount: revenue, cogs: cogs, source: 'B2B', daysLeft: 1 });
             
-            NOTIFY.success('Успех', `Партия отгружена. Выручка $${formatMoney(revenue)} поступит завтра.`);
+            NOTIFY.success('Успех', `Отгружено. Выручка $${formatMoney(revenue)} поступит завтра.`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         }
     },
@@ -111,77 +137,96 @@ const MARKET = {
         Object.keys(RECIPES.RESOURCES).forEach(key => {
             let res = RECIPES.RESOURCES[key];
             let equilibriumVolume = res.dailyMarketPool || 1000; 
-            
-            // Сразу приводим к целому числу перед любыми математическими операциями
             let currentPool = Math.floor(STATE.market.pools[key] || 0);
             let currentTrend = this.trends[key];
             let prodMod = STATE.market.productionModifiers[key];
 
-            // 1. АДАПТАЦИЯ ПОСТАВЩИКОВ
+            let yesterdayEquilibrium = equilibriumVolume * prodMod;
+            let yesterdayRatio = yesterdayEquilibrium > 0 ? (currentPool / yesterdayEquilibrium) : 1;
             let profitability = currentTrend / targetIndex; 
 
-            if (profitability > 1.3) {
-                prodMod += (Math.random() * 0.02 + 0.005); 
-            } else if (profitability < 0.85) {
-                prodMod -= (Math.random() * 0.015 + 0.005); 
+            // 1. ИНЕРЦИЯ ПРОИЗВОДСТВА (Растет и падает плавно)
+            let targetChange = 0;
+            if (yesterdayRatio < 0.15) {
+                targetChange = 0.03 + Math.random() * 0.02; // Рост 3-5% в день
+            } else if (profitability > 1.4) {
+                targetChange = 0.01 + Math.random() * 0.02; 
+            } else if (profitability < 0.8 || yesterdayRatio > 1.3) {
+                targetChange = -0.02 - Math.random() * 0.02; // Сворачивание мощностей
             } else {
-                if (prodMod > 1.0) prodMod -= 0.002;
-                if (prodMod < 1.0) prodMod += 0.002;
+                if (prodMod > 1.0) targetChange = -0.005;
+                if (prodMod < 1.0) targetChange = 0.005;
             }
+            prodMod += targetChange;
 
-            if (prodMod < 0.2) prodMod = 0.2;
-            if (prodMod > 5.0) prodMod = 5.0;
-            
+            if (prodMod < 0.1) prodMod = 0.1;
+            if (prodMod > 100.0) prodMod = 100.0;
             STATE.market.productionModifiers[key] = prodMod;
 
-            // 2. ПРИТОК ТОВАРА
-            let dailyInflux = equilibriumVolume * 0.2 * prodMod; 
+            // 2. ЦЕПОЧКИ ПОСТАВОК И ПРИТОК ТОВАРА
+            let dailyInflux = equilibriumVolume * 0.25 * prodMod; 
             let supplyShock = 0.8 + Math.random() * 0.4; 
+            if (Math.random() < 0.04) supplyShock = 0.1 + Math.random() * 0.3; 
+            else if (Math.random() < 0.04) supplyShock = 1.5 + Math.random() * 1.0; 
 
-            if (Math.random() < 0.04) {
-                supplyShock = 0.1 + Math.random() * 0.3; 
-            } else if (Math.random() < 0.04) {
-                supplyShock = 2.0 + Math.random() * 1.5; 
+            let attemptedArrivals = Math.floor(dailyInflux * supplyShock);
+            let bottleneckRatio = 1.0;
+            let inputsNeeded = this.recipeMap ? this.recipeMap[key] : null;
+
+            // Если товар требует сырья — пытаемся забрать его с рынка
+            if (inputsNeeded) {
+                Object.keys(inputsNeeded).forEach(inKey => {
+                    let reqPerItem = inputsNeeded[inKey];
+                    let totalNeeded = attemptedArrivals * reqPerItem;
+                    let availableInMarket = STATE.market.pools[inKey] || 0;
+                    
+                    if (totalNeeded > 0) {
+                        let ratio = availableInMarket / totalNeeded;
+                        if (ratio < bottleneckRatio) bottleneckRatio = ratio; // Упираемся в самое дефицитное сырье
+                    }
+                });
+                
+                // Срезаем выпуск финального товара
+                attemptedArrivals = Math.floor(attemptedArrivals * Math.max(0, bottleneckRatio));
+                
+                // Сжигаем сырье с биржи на производство
+                Object.keys(inputsNeeded).forEach(inKey => {
+                    let consumed = attemptedArrivals * inputsNeeded[inKey];
+                    STATE.market.pools[inKey] = Math.max(0, Math.floor((STATE.market.pools[inKey] || 0) - consumed));
+                });
             }
 
-            let newArrivals = Math.floor(dailyInflux * supplyShock);
-            currentPool += newArrivals;
+            currentPool += attemptedArrivals;
 
-            let maxStorage = Math.floor(equilibriumVolume * 1.5 * Math.max(1, prodMod));
-            if (currentPool > maxStorage) {
-                currentPool = maxStorage;
-            }
+            // Склады рынка
+            let maxStorage = Math.floor(equilibriumVolume * 2.0 * prodMod);
+            if (currentPool > maxStorage) currentPool = maxStorage;
             
-            // БРОНЕЖИЛЕТ 4: Жесткая запись исключительно целого числа обратно в состояние
             STATE.market.pools[key] = Math.floor(currentPool);
 
             // 3. ЦЕНООБРАЗОВАНИЕ
-            let actualEquilibrium = equilibriumVolume * Math.max(1, prodMod * 0.5); 
+            let actualEquilibrium = equilibriumVolume * prodMod; 
             let remainingRatio = actualEquilibrium > 0 ? (currentPool / actualEquilibrium) : 1; 
             let priceChange = 0;
 
-            if (remainingRatio < 0.3) {
-                priceChange = 0.04 + Math.random() * 0.08; 
-            } else if (remainingRatio < 0.7) {
-                priceChange = 0.01 + Math.random() * 0.04;
-            } else if (remainingRatio > 1.2) {
-                priceChange = -0.04 - Math.random() * 0.06; 
-            } else if (remainingRatio > 0.95) {
-                priceChange = -0.02 - Math.random() * 0.04;
-            } else {
-                priceChange = (Math.random() * 0.06) - 0.03; 
-            }
+            if (remainingRatio < 0.2) priceChange = 0.04 + Math.random() * 0.08; 
+            else if (remainingRatio < 0.6) priceChange = 0.01 + Math.random() * 0.05;
+            else if (remainingRatio > 1.3) priceChange = -0.04 - Math.random() * 0.06; 
+            else if (remainingRatio > 0.95) priceChange = -0.02 - Math.random() * 0.04;
+            else priceChange = (Math.random() * 0.06) - 0.03; 
 
-            if (remainingRatio >= 0.7 && remainingRatio <= 0.95) {
-                if (this.trends[key] > targetIndex + 0.2) priceChange -= 0.03; 
-                if (this.trends[key] < targetIndex - 0.2) priceChange += 0.03; 
+            // Гравитация
+            if (remainingRatio >= 0.6 && remainingRatio <= 0.95) {
+                if (this.trends[key] > targetIndex + 0.3) priceChange -= 0.04; 
+                if (this.trends[key] < targetIndex - 0.3) priceChange += 0.04; 
             }
 
             priceChange += 0.0005; 
             this.trends[key] += priceChange;
             
-            if (this.trends[key] < targetIndex * 0.3) this.trends[key] = targetIndex * 0.3;
-            if (this.trends[key] > targetIndex * 5.0) this.trends[key] = targetIndex * 5.0;
+            // Расширенный коридор цен
+            if (this.trends[key] < targetIndex * 0.2) this.trends[key] = targetIndex * 0.2;
+            if (this.trends[key] > targetIndex * 20.0) this.trends[key] = targetIndex * 20.0;
         });
     }
 };
