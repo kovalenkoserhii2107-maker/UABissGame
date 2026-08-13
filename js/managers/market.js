@@ -1,7 +1,19 @@
 // Модуль внешнего рынка B2B с ограничением пулов и дефицитом
 const MARKET = {
     trends: {},
-
+    
+    // Мост совместимости
+    get prices() {
+        let dynamicPrices = {};
+        if (typeof RECIPES !== 'undefined' && RECIPES.RESOURCES) {
+            Object.keys(RECIPES.RESOURCES).forEach(k => {
+                // Перенаправляем старые запросы на новую функцию
+                dynamicPrices[k] = this.getCurrentPrice(k);
+            });
+        }
+        return dynamicPrices;
+    },
+    
     // Инициализация рыночных пулов и трендов
     init() {
         if (!STATE.market) STATE.market = { pools: {} };
