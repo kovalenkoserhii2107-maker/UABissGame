@@ -229,4 +229,4 @@ const MARKET = {
             if (this.trends[key] > targetIndex * 20.0) this.trends[key] = targetIndex * 20.0;
         });
     }
-};
+}; 
