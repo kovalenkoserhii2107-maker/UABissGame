@@ -1,0 +1,1711 @@
+// Глобальные утилиты форматирования
+window.formatMoney = function(amount) {
+    return Number(amount).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+window.formatFinancialResult = function(amount) {
+    if (amount > 0) return '+$' + formatMoney(amount);
+    if (amount < 0) return '-$' + formatMoney(Math.abs(amount));
+    return '$' + formatMoney(0);
+};
+
+// Главный модуль интерфейса (Отрефакторенная версия)
+const UI_DASHBOARD = {
+    
+    // Мастер-метод: обновляет всё (вызывается при закрытии дня)
+    update() {
+        try {
+            this.clearError();
+            
+            this.updateTopPanel();
+            this.updateDashboardTab();
+            this.updateContractsTab();
+            this.updateRnDTab();
+            this.updateWarehouseUI();
+            this.updateProductionTab();
+            this.updateRetailTab();
+            this.updateMarketTab();
+            this.updateHRTab();
+            this.updateBankTab();
+            this.updateFinanceTab();
+            
+        } catch (err) {
+            this.showError(err);
+        }
+    },
+
+    // --- 1. ТОП-ПАНЕЛЬ ---
+    updateTopPanel() {
+        if (document.getElementById('ui-day')) document.getElementById('ui-day').innerText = STATE.time.day;
+        if (document.getElementById('ui-balance')) document.getElementById('ui-balance').innerText = formatMoney(STATE.finances.balance);
+        if (document.getElementById('ui-credit')) document.getElementById('ui-credit').innerText = STATE.finances.creditScore;
+
+        // Внедряем кнопку Журнала событий прямо рядом с днем
+        let daySpan = document.getElementById('ui-day');
+        if (daySpan && !document.getElementById('btn-event-log')) {
+            let btn = document.createElement('button');
+            btn.id = 'btn-event-log';
+            btn.innerHTML = '📜 Журнал событий';
+            btn.style.cssText = 'margin-left: 15px; background: #8e44ad; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: 0.2s;';
+            btn.onclick = () => UI_DASHBOARD.showEventLog();
+            daySpan.parentNode.appendChild(btn);
+        }
+    },
+
+    // --- 2. ГЛАВНЫЙ ДАШБОРД (КОМПАНИЯ) ---
+    updateDashboardTab() {
+        if (!document.getElementById('dash-balance')) return;
+        
+        document.getElementById('dash-balance').innerText = formatMoney(STATE.finances.balance);
+        if (document.getElementById('dash-staff')) {
+            document.getElementById('dash-staff').innerText = typeof HR !== 'undefined' ? HR.getTotalStaff() : 0;
+        }
+        
+        // Складские метрики на главном экране
+        if (typeof WAREHOUSE !== 'undefined' && document.getElementById('dash-warehouse-vol')) {
+            WAREHOUSE.init();
+            let curVol = WAREHOUSE.getCurrentVolume();
+            let maxVol = WAREHOUSE.getMaxVolume();
+            document.getElementById('dash-warehouse-vol').innerText = curVol.toFixed(1);
+            if(document.getElementById('dash-warehouse-max')) document.getElementById('dash-warehouse-max').innerText = maxVol;
+            
+            let percent = Math.min(100, (curVol / maxVol) * 100);
+            if(document.getElementById('dash-warehouse-bar')) {
+                document.getElementById('dash-warehouse-bar').style.width = percent + '%';
+                document.getElementById('dash-warehouse-bar').style.background = percent > 90 ? '#e74c3c' : '#3498db';
+            }
+        }
+
+        // Инвентарь
+        let invValue = 0;
+        if (STATE.company.inventory) {
+            Object.keys(STATE.company.inventory).forEach(k => {
+                invValue += STATE.company.inventory[k].qty * STATE.company.inventory[k].avgCost;
+            });
+        }
+        let dashInv = document.getElementById('dash-inventory');
+        if (dashInv) dashInv.innerText = formatMoney(invValue);
+        
+        // Операционная сводка
+        let dashBiz = document.getElementById('dash-businesses');
+        if (dashBiz) {
+            dashBiz.innerHTML = '';
+            if (STATE.company.businesses.length === 0) {
+                dashBiz.innerHTML = '<li><small style="color:#7f8c8d;">У вас пока нет производственных активов.</small></li>';
+            } else {
+                STATE.company.businesses.forEach(biz => {
+                    if (!biz.assigned) biz.assigned = { junior: 0, middle: 0, senior: 0 };
+                    let tpl = RECIPES.BUSINESSES[biz.type];
+                    let level = biz.level || 1;
+                    
+                    let maxStaff = tpl.staffReq * level;
+                    let maxOut = tpl.maxOut * level;
+                    let assignedTotal = biz.assigned.junior + biz.assigned.middle + biz.assigned.senior;
+                    
+                    let prodPower = (biz.assigned.junior * HR.GRADES.junior.prodMult) + 
+                                    (biz.assigned.middle * HR.GRADES.middle.prodMult) + 
+                                    (biz.assigned.senior * HR.GRADES.senior.prodMult);
+                    let uiEfficiency = maxStaff > 0 ? (prodPower / maxStaff) : 1;
+                    if (assignedTotal === 0) uiEfficiency = 0;
+                    let effPercent = (uiEfficiency * 100).toFixed(0);
+                    let statusColor = uiEfficiency >= 1 ? 'color: #8e44ad; font-weight: bold;' : (uiEfficiency > 0 ? 'color: #27ae60;' : 'color: #c0392b;');
+                    
+                    let salaryCost = (biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary);
+                    let adminCost = tpl.area * 2 * level; 
+
+                    let outRes = RECIPES.RESOURCES[tpl.output] || { name: 'Услуги (Розница)' };
+                    let outInv = STATE.company.inventory[tpl.output] ? STATE.company.inventory[tpl.output].qty : 0;
+                    
+                    let estDailyOutput = Math.floor(maxOut * uiEfficiency);
+                    let daysAvailable = Infinity;
+                    let rawMaterialText = '';
+                    let inputsKeys = Object.keys(tpl.inputs);
+                    
+                    if (inputsKeys.length === 0) {
+                        rawMaterialText = '<span style="color:#7f8c8d;">Не требуется</span>';
+                    } else if (estDailyOutput === 0) {
+                        rawMaterialText = '<span style="color:#7f8c8d;">Производство стоит</span>';
+                    } else {
+                        inputsKeys.forEach(k => {
+                            let reqNum = tpl.inputs[k];
+                            let inQty = STATE.company.inventory[k] ? STATE.company.inventory[k].qty : 0;
+                            let dailyConsumption = reqNum * estDailyOutput;
+                            let daysForThisMat = dailyConsumption > 0 ? Math.floor(inQty / dailyConsumption) : Infinity;
+                            if (daysForThisMat < daysAvailable) daysAvailable = daysForThisMat;
+                        });
+                        let daysColor = daysAvailable <= 1 ? '#e74c3c' : (daysAvailable <= 3 ? '#e67e22' : '#27ae60');
+                        rawMaterialText = `<strong style="color:${daysColor};">${daysAvailable} дн.</strong>`;
+                    }
+
+                    dashBiz.innerHTML += `
+                    <li style="margin-bottom: 15px; border-bottom: 1px solid #dcdde1; padding-bottom: 15px; list-style-type: none;">
+                        <div style="margin-bottom: 8px;">
+                            <strong>${tpl.name} <span style="color:#3498db; font-size: 0.9em;">(Ур. ${level})</span></strong> 
+                            <span style="${statusColor} float: right;">[Мощность: ${effPercent}%]</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85em; background: #fdfefe; padding: 10px; border-radius: 4px; border: 1px dashed #bdc3c7;">
+                            <div>
+                                📦 <strong>Продукт:</strong> ${outRes.name} (На складе: <strong style="color:#2980b9;">${outInv} шт.</strong>)<br>
+                                ⚙️ <strong>Лимит станков:</strong> ${maxOut} шт/день<br>
+                                🔄 <strong>Сырья хватит на:</strong> ${rawMaterialText}
+                            </div>
+                            <div>
+                                👥 <strong>Штат:</strong> ${assignedTotal} / ${maxStaff} мест<br>
+                                💰 <strong>ФОТ (вчера):</strong> $${formatMoney(salaryCost)}<br>
+                                🏢 <strong>Админ. расходы:</strong> $${formatMoney(adminCost)}
+                            </div>
+                        </div>
+                    </li>`;
+                });
+            }
+        }
+
+        // Контракты на дашборде
+        let dashContracts = document.getElementById('dash-active-contracts');
+        if (dashContracts && typeof CONTRACTS !== 'undefined') {
+            dashContracts.innerHTML = '';
+            if (!STATE.contracts || STATE.contracts.active.length === 0) {
+                dashContracts.innerHTML = '<li><small style="color:#7f8c8d;">Нет активных тендеров в работе.</small></li>';
+            } else {
+                STATE.contracts.active.forEach(c => {
+                    let itemName = RECIPES.RESOURCES[c.item].name;
+                    let inv = STATE.company.inventory[c.item] ? STATE.company.inventory[c.item].qty : 0;
+                    let canFulfill = inv >= c.qty;
+                    let bg = canFulfill ? '#e8f8f5' : (c.deadline <= 3 ? '#fdedec' : '#fdfefe');
+                    
+                    dashContracts.innerHTML += `
+                    <li style="background: ${bg}; border: 1px solid #d0d3d4; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+                        <strong>Поставка: ${itemName}</strong><br>
+                        <small>Собрано: <strong>${inv} / ${c.qty}</strong> шт. | Оплата: <span class="success">$${formatMoney(c.totalReward)}</span></small><br>
+                        <small>Срок: <strong class="${c.deadline <= 3 ? 'danger' : ''}">${c.deadline} дн.</strong> | Штраф: <span class="danger">$${formatMoney(c.penalty)}</span></small><br>
+                        <button onclick="CONTRACTS.fulfill(${c.id})" ${!canFulfill ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="background: #27ae60; width: 100%; margin-top: 5px; padding: 5px;">Отгрузить товар</button>
+                    </li>`;
+                });
+            }
+        }
+        
+        // Депозиты и Кредиты на дашборде
+        let depTotal = 0;
+        let dashDep = document.getElementById('dash-deposits');
+        if (dashDep) {
+            dashDep.innerHTML = '';
+            if (!STATE.finances.deposits || STATE.finances.deposits.length === 0) {
+                dashDep.innerHTML = '<li><small style="color:#7f8c8d;">Нет депозитов.</small></li>';
+            } else {
+                STATE.finances.deposits.forEach(d => {
+                    depTotal += d.amount;
+                    dashDep.innerHTML += `<li>$${formatMoney(d.amount)} <span style="color:#7f8c8d;">(${d.daysLeft} дн. / ${(d.rate*100).toFixed(1)}%)</span></li>`;
+                });
+            }
+            if(document.getElementById('dash-dep-total')) document.getElementById('dash-dep-total').innerText = formatMoney(depTotal);
+        }
+        
+        let loanTotal = 0;
+        let dashLoans = document.getElementById('dash-loans');
+        if (dashLoans) {
+            dashLoans.innerHTML = '';
+            if (!STATE.finances.loans || STATE.finances.loans.length === 0) {
+                dashLoans.innerHTML = '<li><small style="color:#7f8c8d;">Нет кредитов.</small></li>';
+            } else {
+                STATE.finances.loans.forEach(l => {
+                    loanTotal += l.remainingPrincipal;
+                    dashLoans.innerHTML += `<li>$${formatMoney(l.remainingPrincipal)} <span style="color:#7f8c8d;">(${l.remainingDays} дн. / ${(l.rate*100).toFixed(1)}%)</span></li>`;
+                });
+            }
+            if(document.getElementById('dash-loan-total')) document.getElementById('dash-loan-total').innerText = formatMoney(loanTotal);
+        }
+    },
+
+    // --- 3. ТЕНДЕРЫ И КОНТРАКТЫ ---
+    updateContractsTab() {
+        if (typeof CONTRACTS === 'undefined') return;
+        CONTRACTS.init();
+        
+        let availList = document.getElementById('ui-contracts-available');
+        if (availList) {
+            availList.innerHTML = '';
+            if (STATE.contracts.available.length === 0) {
+                availList.innerHTML = '<li><small style="color:#7f8c8d;">Пока нет новых тендеров. Вернитесь через пару дней.</small></li>';
+            } else {
+                STATE.contracts.available.forEach(c => {
+                    let itemName = RECIPES.RESOURCES[c.item].name;
+                    availList.innerHTML += `
+                    <li style="background: #fdfefe; border: 1px solid #d0d3d4; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+                        <strong style="color: #2c3e50;">Заказ: ${itemName} (${c.qty} шт.)</strong><br>
+                        <small>Цена поставки: $${formatMoney(c.price)}/шт (Сумма: <span class="success">$${formatMoney(c.totalReward)}</span>)</small><br>
+                        <small>Жесткий срок: <strong>${c.deadline} дн.</strong> | Штраф: <span class="danger">$${formatMoney(c.penalty)}</span></small><br>
+                        <button onclick="CONTRACTS.accept(${c.id})" style="background: #3498db; width: 100%; margin-top: 5px;">Подписать контракт</button>
+                    </li>`;
+                });
+            }
+        }
+
+        let activeList = document.getElementById('ui-contracts-active');
+        if (activeList) {
+            activeList.innerHTML = '';
+            if (STATE.contracts.active.length === 0) {
+                activeList.innerHTML = '<li><small style="color:#7f8c8d;">Нет активных обязательств.</small></li>';
+            } else {
+                STATE.contracts.active.forEach(c => {
+                    let itemName = RECIPES.RESOURCES[c.item].name;
+                    let inv = STATE.company.inventory[c.item] ? STATE.company.inventory[c.item].qty : 0;
+                    let canFulfill = inv >= c.qty;
+                    
+                    let bg = canFulfill ? '#e8f8f5' : (c.deadline <= 3 ? '#fdedec' : '#fdfefe');
+                    
+                    activeList.innerHTML += `
+                    <li style="background: ${bg}; border: 1px solid #d0d3d4; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+                        <strong>Поставка: ${itemName}</strong><br>
+                        <small>На складе: <strong>${inv} / ${c.qty}</strong> шт. | Оплата: <span class="success">$${formatMoney(c.totalReward)}</span></small><br>
+                        <small>Осталось времени: <strong class="${c.deadline <= 3 ? 'danger' : ''}">${c.deadline} дн.</strong> | Неустойка: <span class="danger">$${formatMoney(c.penalty)}</span></small><br>
+                        <button onclick="CONTRACTS.fulfill(${c.id})" ${!canFulfill ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="background: #27ae60; width: 100%; margin-top: 5px;">Отгрузить партию</button>
+                    </li>`;
+                });
+            }
+        }
+    },
+
+    // --- 4. ЛАБОРАТОРИЯ R&D ---
+    updateRnDTab() {
+        if (typeof RND === 'undefined') return;
+        RND.init();
+        
+        let rndStaffPanel = document.getElementById('ui-rnd-staff');
+        let lvl = STATE.rnd.facility.level || 0;
+
+        let buyContainer = document.getElementById('ui-buy-businesses');
+        if (buyContainer) {
+            buyContainer.innerHTML = '';
+            Object.keys(RECIPES.BUSINESSES).forEach(key => {
+                let tpl = RECIPES.BUSINESSES[key];
+                
+                // Исключаем магазины и офисы из вкладки заводов
+                if (tpl.isRetail || tpl.isMarketing) return;
+
+                let isUnlocked = (tpl.researchCost === 0) || (STATE.rnd && STATE.rnd.unlocked && STATE.rnd.unlocked.includes(key));
+                if (isUnlocked) {
+                    buyContainer.innerHTML += `<button onclick="PRODUCTION.buyBusiness('${key}')" style="background: #27ae60; color: white; border: none; cursor: pointer; border-radius: 4px; margin-bottom: 5px; margin-right: 5px; padding: 8px 12px;">Построить ${tpl.name} ($${formatMoney(tpl.area * 50)})</button> `;
+                }
+            });
+        }
+
+        if (lvl === 0) {
+            if (rndStaffPanel) {
+                rndStaffPanel.innerHTML = `
+                    <div style="background: #fdfefe; padding: 25px; border: 1px dashed #e74c3c; border-radius: 5px; text-align: center;">
+                        <h3 style="margin-top:0; color: #c0392b;">🔬 Нет Научно-Исследовательского Центра</h3>
+                        <p style="color: #7f8c8d; font-size: 1.1em;">Для разработки новых технологий необходимо инвестировать в строительство первого корпуса НИИ.</p>
+                        <button onclick="RND.upgradeFacility()" style="background: #e67e22; padding: 12px 25px; font-size: 1.1em; border-radius: 4px; cursor: pointer;">
+                            Построить корпус НИИ ($${formatMoney(RND.getUpgradeCost())})
+                        </button>
+                    </div>
+                `;
+            }
+            if (document.getElementById('ui-rnd-active')) document.getElementById('ui-rnd-active').innerHTML = '';
+            if (document.getElementById('ui-rnd-available')) document.getElementById('ui-rnd-available').innerHTML = '';
+            return; 
+        }
+
+        if (rndStaffPanel) {
+            let rpSpeed = RND.getDailyRP();
+            let eqCount = STATE.rnd.facility.equipment.count || 0;
+            let cond = STATE.rnd.facility.equipment.condition !== undefined ? STATE.rnd.facility.equipment.condition : 100;
+            let condColor = cond >= 70 ? '#27ae60' : (cond >= 30 ? '#f39c12' : '#c0392b');
+            let maxStaff = RND.getMaxStaff();
+            let curStaff = (STATE.rnd.staff.scientist || 0) + (STATE.rnd.staff.lead_scientist || 0);
+            
+            let eqWarning = curStaff > eqCount ? `<br><small style="color:#e74c3c;">Внимание: Учёных больше, чем ПК!</small>` : '';
+
+            rndStaffPanel.innerHTML = `
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                    <div style="flex: 1; min-width: 250px; background: #fff; padding: 15px; border: 1px solid #dcdde1; border-radius: 5px;">
+                        <h4 style="margin:0 0 10px 0;">🏢 Корпус НИИ (Ур. ${lvl})</h4>
+                        <p style="margin:0 0 5px 0;"><strong>Скорость:</strong> <span class="success">+${rpSpeed} RP/день</span></p>
+                        <p style="margin:0 0 10px 0;">Места: ${curStaff} / ${maxStaff}</p>
+                        <button onclick="RND.upgradeFacility()" style="background: #f39c12; width: 100%; padding: 6px;">Расширить НИИ ($${formatMoney(RND.getUpgradeCost())})</button>
+                    </div>
+
+                    <div style="flex: 1; min-width: 250px; background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 5px;">
+                        <h4 style="margin:0 0 10px 0;">💻 Оборудование (ПК)</h4>
+                        Установлено: <strong>${eqCount} / ${maxStaff}</strong> | Износ: <strong style="color:${condColor}">${cond.toFixed(1)}%</strong>${eqWarning}
+                        <div style="margin-top: 10px; display: flex; gap: 5px;">
+                            <input type="number" id="install-pc-qty" value="1" min="1" max="${maxStaff - eqCount}" style="width:60px; padding:4px;">
+                            <button onclick="RND.installEquipment(parseInt(document.getElementById('install-pc-qty').value))" style="background:#2980b9; flex-grow: 1;">Установить</button>
+                            <button onclick="RND.repairEquipment()" style="background:#8e44ad;">ТО</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: #ecf0f1; padding: 15px; border-radius: 4px; border: 1px solid #bdc3c7;">
+                    <strong style="color: #2c3e50; display: block; margin-bottom: 10px;">ПЕРСОНАЛ (${curStaff}/${maxStaff}):</strong>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span>Лаборант (Занято: <strong>${STATE.rnd.staff.scientist}</strong>)</span>
+                        <div>
+                            <button onclick="RND.removeStaff('scientist')" style="padding: 2px 10px; background:#e74c3c;">-</button> 
+                            <button onclick="RND.assignStaff('scientist')" style="padding: 2px 10px; background:#2ecc71;">+</button> 
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Ст. Научный (Занято: <strong>${STATE.rnd.staff.lead_scientist}</strong>)</span>
+                        <div>
+                            <button onclick="RND.removeStaff('lead_scientist')" style="padding: 2px 10px; background:#e74c3c;">-</button> 
+                            <button onclick="RND.assignStaff('lead_scientist')" style="padding: 2px 10px; background:#2ecc71;">+</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ВИЗУАЛЬНО РАЗДЕЛЕННЫЕ БЛОКИ (КАРТОЧКИ)
+        let rndActive = document.getElementById('ui-rnd-active');
+        let rndAvail = document.getElementById('ui-rnd-available');
+        if (rndActive && rndAvail) {
+            let activeHTML = '';
+            
+            // 1. Блок текущего проекта
+            if (STATE.rnd.activeProject) {
+                let tpl = RECIPES.BUSINESSES[STATE.rnd.activeProject];
+                let isUnlocked = STATE.rnd.unlocked && STATE.rnd.unlocked.includes(STATE.rnd.activeProject);
+                let targetCost = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost; 
+                let titleName = isUnlocked ? `Совершенствование: ${tpl.name}` : `Изучение: ${tpl.name}`;
+                let percent = targetCost > 0 ? Math.min(100, (STATE.rnd.points / targetCost) * 100).toFixed(1) : '100.0';
+                
+                activeHTML += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #fdfefe; padding: 12px; border: 1px solid #f39c12; border-radius: 6px; margin-bottom: 10px;">
+                        <div>
+                            <strong>${titleName}</strong> — Собрано: ${STATE.rnd.points} / ${targetCost} RP (${percent}%)
+                        </div>
+                        <button onclick="RND.pauseProject()" style="background: #e67e22; padding: 6px 14px; font-size: 0.9em;">Приостановить</button>
+                    </div>
+                `;
+            } else {
+                activeHTML += `<div style="color:#7f8c8d; margin-bottom: 10px;">Нет активных исследований. Выберите проект ниже.</div>`;
+            }
+
+            // 2. Блок приостановленных проектов (если они есть > 0 очков)
+            if (STATE.rnd.savedProgress && Object.keys(STATE.rnd.savedProgress).length > 0) {
+                activeHTML += `<div style="background: #fcf3cf; padding: 12px; border-radius: 6px; border: 1px solid #f9e79f; margin-top: 10px;">
+                    <strong style="color: #b7950b; display: block; margin-bottom: 8px;">⏸️ Приостановленные проекты:</strong>
+                    <ul style="padding-left: 0; list-style: none; margin-bottom: 0;">`;
+                
+                Object.keys(STATE.rnd.savedProgress).forEach(bizId => {
+                    let pts = STATE.rnd.savedProgress[bizId];
+                    if (pts > 0) {
+                        let tpl = RECIPES.BUSINESSES[bizId];
+                        let isUnlocked = STATE.rnd.unlocked.includes(bizId);
+                        let targetCost = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost;
+                        let titleName = isUnlocked ? `Совершенствование: ${tpl.name}` : `Изучение: ${tpl.name}`;
+                        let percent = targetCost > 0 ? Math.min(100, (pts / targetCost) * 100).toFixed(1) : '100.0';
+
+                        activeHTML += `
+                            <li style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 8px 10px; margin-bottom: 6px; border-radius: 4px; border: 1px solid #f7dc6f;">
+                                <div><strong>${titleName}</strong> <small style="color:#7f8c8d;">(${pts} / ${targetCost} RP - ${percent}%)</small></div>
+                                <button onclick="RND.startProject('${bizId}')" style="background: #27ae60; padding: 4px 10px; font-size: 0.85em;">Продолжить</button>
+                            </li>
+                        `;
+                    }
+                });
+                activeHTML += `</ul></div>`;
+            }
+
+            rndActive.innerHTML = activeHTML;
+
+            let newTechListHTML = '';
+            let upgradeTechListHTML = '';
+            let maxedTechListHTML = ''; // Блок для полностью изученных
+            
+            let hasNew = false;
+            let hasUpgrade = false;
+            let hasMaxed = false;
+
+            if (!STATE.rnd.unlocked) STATE.rnd.unlocked = ['microchips', 'parts3d'];
+            if (!STATE.rnd.unlocked.includes('microchips')) STATE.rnd.unlocked.push('microchips');
+            if (!STATE.rnd.unlocked.includes('parts3d')) STATE.rnd.unlocked.push('parts3d');
+
+            Object.keys(RECIPES.BUSINESSES).forEach(key => {
+                let tpl = RECIPES.BUSINESSES[key];
+                
+                // Проверяем статус проекта (Активен или на Паузе)
+                let isPaused = STATE.rnd.savedProgress && STATE.rnd.savedProgress[key] > 0;
+                let isResearching = STATE.rnd.activeProject === key;
+
+                // ИСКЛЮЧЕНИЕ: Если проект сейчас изучается или на паузе — не выводим его в нижние списки
+                if (isPaused || isResearching) return;
+
+                if (tpl.researchCost >= 0) {
+                    let isUnlocked = STATE.rnd.unlocked.includes(key);
+                    let currentLevel = (STATE.rnd.techLevels && STATE.rnd.techLevels[key]) ? STATE.rnd.techLevels[key] : 1.0;
+
+                    // ЕСЛИ УЖЕ ОТКРЫТО (Идет в Апгрейд или в Максимум)
+                    if (isUnlocked) {
+                        if (currentLevel >= 2.0) {
+                            hasMaxed = true;
+                            maxedTechListHTML += `<li style="margin-bottom: 10px; padding: 10px; background: #fdfefe; border: 1px solid #dcdde1; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; opacity: 0.8;">
+                                <div><strong>${tpl.name}</strong> <span style="color:#27ae60; font-size: 0.9em; margin-left: 10px;">🏆 Максимальный уровень: v2.00</span></div> 
+                                <span style="color:#27ae60; font-weight: bold;">[Завершено]</span>
+                            </li>`;
+                        } else {
+                            hasUpgrade = true;
+                            let upgradeCost = tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000;
+                            upgradeTechListHTML += `<li style="margin-bottom: 10px; padding: 10px; background: #fff; border: 1px solid #dcdde1; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                                <div><strong>${tpl.name}</strong> <span style="color:#3498db; font-size: 0.9em; margin-left: 10px;">Уровень качества: v${currentLevel.toFixed(2)} / 2.0</span></div> 
+                                <button onclick="RND.startProject('${key}')" style="padding: 6px 14px; background:#2980b9;">Улучшить качество (${upgradeCost} RP)</button>
+                            </li>`;
+                        }
+                    } 
+                    // ЕСЛИ ЕЩЕ НЕ ОТКРЫТО (Идет в Новые технологии)
+                    else if (tpl.researchCost > 0) {
+                        hasNew = true;
+                        newTechListHTML += `<li style="margin-bottom: 10px; padding: 10px; background: #fff; border: 1px solid #dcdde1; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                            <div><strong>${tpl.name}</strong> <span style="color:#e67e22; font-size: 0.9em; margin-left: 10px;">[Требует изучения: ${tpl.researchCost} RP]</span></div> 
+                            <button onclick="RND.startProject('${key}')" style="padding: 6px 14px; background:#8e44ad;">Изучить (${tpl.researchCost} RP)</button>
+                        </li>`;
+                    }
+                }
+            });
+
+            if (!hasNew) newTechListHTML = '<p style="color:#7f8c8d; font-style: italic; padding: 5px;">Все доступные чертежи изучены.</p>';
+            if (!hasUpgrade) upgradeTechListHTML = '<p style="color:#7f8c8d; font-style: italic; padding: 5px;">Нет доступных для улучшения технологий.</p>';
+            if (!hasMaxed) maxedTechListHTML = '<p style="color:#7f8c8d; font-style: italic; padding: 5px;">Пока нет полностью усовершенствованных технологий.</p>';
+
+            // Рендерим все три блока
+            rndAvail.innerHTML = `
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; margin-bottom: 20px;">
+                    <h4 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #bdc3c7; padding-bottom: 8px;">📜 Новые технологии (Открытие чертежей)</h4>
+                    <ul style="padding-left: 0; list-style: none; margin-bottom: 0;">${newTechListHTML}</ul>
+                </div>
+
+                <div style="background: #f1f8fc; padding: 15px; border-radius: 8px; border: 1px solid #d4e6f1; margin-bottom: 20px;">
+                    <h4 style="margin-top: 0; color: #2980b9; border-bottom: 2px solid #85c1e9; padding-bottom: 8px;">⚙️ Совершенствование производства (Рост качества до v2.0)</h4>
+                    <ul style="padding-left: 0; list-style: none; margin-bottom: 0;">${upgradeTechListHTML}</ul>
+                </div>
+
+                <div style="background: #eafaf1; padding: 15px; border-radius: 8px; border: 1px solid #abebc6;">
+                    <h4 style="margin-top: 0; color: #1e8449; border-bottom: 2px solid #58d68d; padding-bottom: 8px;">🏆 Полностью усовершенствованные (Максимум)</h4>
+                    <ul style="padding-left: 0; list-style: none; margin-bottom: 0;">${maxedTechListHTML}</ul>
+                </div>
+            `;
+        }
+    },
+
+    // --- 5. СКЛАДСКАЯ ИНФРАСТРУКТУРА ---
+    updateWarehouseUI() {
+        if (typeof WAREHOUSE === 'undefined') return;
+        WAREHOUSE.init();
+        
+        let curVol = WAREHOUSE.getCurrentVolume();
+        let maxVol = WAREHOUSE.getMaxVolume();
+        let whRent = WAREHOUSE.getDailyRent();
+
+        if (document.getElementById('ui-wh-lvl')) {
+            let lvl = STATE.company.warehouse.level;
+            document.getElementById('ui-wh-lvl').innerText = lvl;
+            if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = formatMoney(whRent);
+            if(document.getElementById('ui-wh-current')) document.getElementById('ui-wh-current').innerText = curVol.toFixed(1);
+            if(document.getElementById('ui-wh-max')) document.getElementById('ui-wh-max').innerText = maxVol;
+            
+            let bar = document.getElementById('ui-wh-bar');
+            if (bar) {
+                let percent = Math.min(100, (curVol / maxVol) * 100);
+                bar.style.width = percent + '%';
+                bar.style.background = percent > 90 ? '#e74c3c' : (percent > 75 ? '#f39c12' : '#3498db');
+            }
+            
+            let btn = document.getElementById('ui-wh-upgrade-btn');
+            if (btn) {
+                if (lvl >= WAREHOUSE.LEVELS.length) {
+                    btn.style.display = 'none';
+                } else {
+                    btn.style.display = 'inline-block';
+                    let nextLvl = WAREHOUSE.LEVELS[lvl];
+                    btn.innerText = `Расширить до ${nextLvl.maxVol} м³ ($${formatMoney(nextLvl.upgradeCost)})`;
+                }
+            }
+        }
+    },
+
+    // --- 6. ПРОИЗВОДСТВО И СКЛАД ---
+    updateProductionTab() {
+        let warehouseBody = document.getElementById('ui-warehouse-body');
+        if (warehouseBody) {
+            warehouseBody.innerHTML = '';
+            let isEmpty = true;
+            Object.keys(RECIPES.RESOURCES).forEach(key => {
+                let inv = STATE.company.inventory[key];
+                if (inv && inv.qty > 0) {
+                    isEmpty = false;
+                    let res = RECIPES.RESOURCES[key];
+                    let volStr = res.volume > 0 ? res.volume + ' м³/шт' : 'Цифровой товар';
+                    let totalVal = inv.qty * inv.avgCost;
+                    
+                    // Формируем выпадающий список магазинов для ручной отгрузки
+                    let storeOptions = '';
+                    STATE.company.businesses.forEach(b => {
+                        let bTpl = RECIPES.BUSINESSES[b.type];
+                        if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key)) {
+                            storeOptions += `<option value="${b.uid}">${b.name}</option>`;
+                        }
+                    });
+                    
+                    let transferHtml = '';
+                    if (storeOptions !== '') {
+                        transferHtml = `<div style="margin-top: 8px; display: flex; gap: 5px; align-items:center;">
+                            <select id="trans-store-${key}" style="font-size:0.85em; padding:4px; max-width:130px; border-radius:3px; border:1px solid #bdc3c7;">
+                                <option value="">В магазин...</option>${storeOptions}
+                            </select>
+                            <input type="number" id="trans-qty-${key}" value="${inv.qty}" max="${inv.qty}" style="width:60px; font-size:0.85em; padding:4px; border-radius:3px; border:1px solid #bdc3c7;">
+                            <button onclick="UI_DASHBOARD.transferToStore('${key}')" style="background:#e67e22; color:white; border:none; padding: 4px 10px; border-radius:3px; cursor:pointer;">Отгрузить</button>
+                        </div>`;
+                    }
+
+                    warehouseBody.innerHTML += `<tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 10px 0;">
+                            <strong style="font-size:1.1em; color:#2c3e50;">${res.name}</strong><br>
+                            <small style="color: #7f8c8d;">${volStr}</small>
+                            ${transferHtml}
+                        </td>
+                        <td><strong style="color: #2980b9; font-size:1.1em;">${inv.qty} шт.</strong></td>
+                        <td><span style="color: #8e44ad; font-weight: bold;">★ ${(inv.quality || 1.0).toFixed(2)}</span></td>
+                        <td>$${formatMoney(inv.avgCost)}</td>
+                        <td><strong>$${formatMoney(totalVal)}</strong></td>
+                    </tr>`;
+                }
+            });
+            if (isEmpty) {
+                warehouseBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#7f8c8d;">Ваш склад абсолютно пуст.</td></tr>';
+            }
+        }
+
+        let bizList = document.getElementById('ui-active-businesses');
+        if (bizList) {
+            bizList.innerHTML = '';
+            
+            let hasFactories = false;
+            STATE.company.businesses.forEach(biz => {
+                let tpl = RECIPES.BUSINESSES[biz.type];
+                
+                // ИГНОРИРУЕМ МАГАЗИНЫ И ОФИСЫ В ЭТОЙ ВКЛАДКЕ
+                if (tpl.isRetail || tpl.isMarketing) return; 
+                hasFactories = true;
+
+                if (!biz.assigned) biz.assigned = { junior: 0, middle: 0, senior: 0 };
+                if (!biz.stats) biz.stats = { daily: 0, monthly: [], total: 0, lastOutput: 0 };
+                
+                let level = biz.level || 1;
+                let eqCount = biz.equipment.count || 0;
+                let maxSlots = level * (tpl.slotsPerLevel || 10);
+                let cond = biz.equipment.condition !== undefined ? biz.equipment.condition : 100;
+                let condColor = cond >= 70 ? '#27ae60' : (cond >= 30 ? '#f39c12' : '#c0392b');
+
+                let maxStaff = tpl.staffReq * level;
+                let maxOutByEquip = eqCount * (tpl.outputPerMachine || 10);
+                let assignedTotal = biz.assigned.junior + biz.assigned.middle + biz.assigned.senior;
+                let isFull = assignedTotal >= maxStaff;
+                
+                let prodPower = (biz.assigned.junior * HR.GRADES.junior.prodMult) + (biz.assigned.middle * HR.GRADES.middle.prodMult) + (biz.assigned.senior * HR.GRADES.senior.prodMult);
+                let uiEfficiency = maxStaff > 0 ? (prodPower / maxStaff) : 1;
+                if (assignedTotal === 0) uiEfficiency = 0;
+
+                let conditionMult = cond < 70 ? Math.max(0.0, cond/70) : 1.0;
+                let effPercent = (uiEfficiency * conditionMult * 100).toFixed(0);
+                let statusColor = (uiEfficiency * conditionMult) >= 1 ? 'color: #8e44ad; font-weight: bold;' : ((uiEfficiency * conditionMult) > 0 ? 'color: #27ae60;' : 'color: #c0392b;');
+                
+                let salaryCost = (biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary);
+                let adminCost = tpl.area * 2 * level; 
+                let upgradeCost = tpl.area * 50 * level;
+
+                let outRes = RECIPES.RESOURCES[tpl.output] || { name: 'Услуги' };
+                let outInvData = STATE.company.inventory[tpl.output] || { qty: 0, quality: 1.0 };
+                let outInv = outInvData.qty;
+                
+                let capacityOutput = Math.floor(maxOutByEquip * uiEfficiency * conditionMult);
+                
+                let eqQuality = biz.equipment.quality || 1.0;
+                let q_tech = (STATE.rnd && STATE.rnd.techLevels && STATE.rnd.techLevels[biz.type]) ? STATE.rnd.techLevels[biz.type] : 1.0;
+                let q_hr = 1.0;
+                if (assignedTotal > 0) q_hr = ((biz.assigned.junior * 1.0) + (biz.assigned.middle * 1.2) + (biz.assigned.senior * 1.5)) / assignedTotal;
+                
+                let inputsHtml = '';
+                let sumMatQuality = 0;
+                let totalInputsCount = 0;
+                let inputsKeys = Object.keys(tpl.inputs);
+                
+                if (inputsKeys.length === 0) {
+                    inputsHtml = '<span style="color:#7f8c8d;">Не требует сырья</span>';
+                } else {
+                    let inArr = [];
+                    inputsKeys.forEach(k => {
+                        let reqNum = tpl.inputs[k];
+                        let inName = RECIPES.RESOURCES[k].name;
+                        let invMat = STATE.company.inventory[k];
+                        let inQty = invMat ? invMat.qty : 0;
+                        let matQ = (invMat && invMat.qty > 0) ? (invMat.quality || 1.0) : 1.0;
+                        
+                        sumMatQuality += (matQ * reqNum);
+                        totalInputsCount += reqNum;
+                        
+                        let totalReqPerDay = reqNum * capacityOutput;
+                        let color = inQty < totalReqPerDay ? 'color: #e74c3c; font-weight:bold;' : 'color: #27ae60;';
+                        inArr.push(`&bull; ${inName}: <span style="${color}">${inQty} шт.</span> (Расход: ${totalReqPerDay}/дн)`);
+                    });
+                    inputsHtml = inArr.join('<br>');
+                }
+                
+                let q_mat = totalInputsCount > 0 ? (sumMatQuality / totalInputsCount) : 1.0;
+                let expectedQuality = (eqQuality * 0.1) + (q_mat * 0.3) + (q_hr * 0.2) + (q_tech * 0.4);
+
+                let freeJun = typeof HR !== 'undefined' ? HR.getUnassigned('junior') : 0;
+                let freeMid = typeof HR !== 'undefined' ? HR.getUnassigned('middle') : 0;
+                let freeSen = typeof HR !== 'undefined' ? HR.getUnassigned('senior') : 0;
+
+                // --- ЛОГИКА МАРШРУТИЗАЦИИ (ЗАВОД -> ЗАВОД ИЛИ МАГАЗИН) ---
+                if (!biz.routing) biz.routing = {};
+                let viableRoutes = [];
+                
+                STATE.company.businesses.forEach(other => {
+                    if (other.uid === biz.uid) return;
+                    let otherTpl = RECIPES.BUSINESSES[other.type];
+                    
+                    // Если это Завод и ему нужно наше сырье
+                    if (otherTpl.inputs && otherTpl.inputs[tpl.output] !== undefined) {
+                        viableRoutes.push({ id: other.uid, name: `🏭 ${other.name || otherTpl.name}` });
+                    }
+                    // Если это Магазин и он продает наш товар
+                    else if (otherTpl.isRetail && otherTpl.accepts && otherTpl.accepts.includes(tpl.output)) {
+                        viableRoutes.push({ id: other.uid, name: `🏪 ${other.name}` });
+                    }
+                });
+
+                let routingHtml = `<div style="background: #fff3cd; padding: 10px; border-radius: 4px; border: 1px solid #f1c40f; margin-top: 10px;">
+                    <strong style="font-size: 0.9em; color: #b9770e;">АВТО-ПОСТАВКИ (ШТУК В ДЕНЬ):</strong><br>`;
+                
+                if (viableRoutes.length === 0) {
+                    routingHtml += `<div style="font-size:0.85em; color:#7f8c8d;">Нет потребителей. 100% уходит на Общий склад.</div>`;
+                } else {
+                    viableRoutes.forEach(route => {
+                        let val = biz.routing[route.id] || 0;
+                        routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; font-size:0.85em;">
+                            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%;">${route.name}</span>
+                            <span style="white-space: nowrap;"><input type="number" id="route-${biz.uid}-${route.id}" value="${val}" min="0" style="width:65px; padding:2px; text-align:right;"> шт.</span>
+                        </div>`;
+                    });
+                }
+                let destsStr = viableRoutes.map(r => r.id).join(',');
+                if (viableRoutes.length > 0) {
+                    routingHtml += `<button onclick="UI_DASHBOARD.saveRoutes(${biz.uid}, '${destsStr}')" style="margin-top:8px; background:#d4ac0d; padding:4px 10px; font-size:0.85em; width:100%; color:#fff; border:none; cursor:pointer;">Сохранить квоты отгрузки</button>`;
+                }
+                routingHtml += `</div>`;
+
+                let displayName = biz.name || tpl.name;
+
+                bizList.innerHTML += `
+                <li style="margin-bottom: 20px; background: #fff; padding: 15px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
+                        <strong style="font-size: 1.1em; color: #2c3e50;">${displayName} <span style="color:#3498db; font-size: 0.9em; font-weight: normal;">(Ур. ${level} | Технология v${q_tech.toFixed(2)})</span></strong>
+                        <span style="${statusColor}">[КПД: ${effPercent}%]</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <p style="margin: 0 0 5px 0;"><strong>📦 Выпуск:</strong> ${outRes.name} <span style="color:#2980b9; margin-left:10px;">(Общий Склад: <strong>${outInv} шт.</strong>)</span></p>
+                            <p style="margin: 0 0 5px 0;"><small>План (Мощность) на сегодня: <strong style="color:#27ae60; font-size: 1.2em;">${capacityOutput} шт.</strong> / Лимит станков: ${maxOutByEquip}</small></p>
+                            <p style="margin: 0 0 10px 0;"><small>✨ Ожидаемое качество: <strong style="color:#8e44ad; font-size: 1.1em;">★ ${expectedQuality.toFixed(2)}</strong></small></p>
+                            
+                            <div style="background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.85em; border: 1px dashed #ccc;">
+                                <strong style="color:#7f8c8d;">ПОТРЕБНОСТЬ В СЫРЬЕ:</strong><br>
+                                ${inputsHtml}
+                            </div>
+                            ${routingHtml}
+                            <div style="background: #fdfefe; padding: 10px; border: 1px dashed #bdc3c7; border-radius: 4px; margin-top: 10px; font-size: 0.9em;">
+                                <strong style="color:#2c3e50;">ОБОРУДОВАНИЕ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
+                                Слотов: <strong>${eqCount} / ${maxSlots}</strong> | Состояние: <strong style="color:${condColor}">${cond.toFixed(1)}%</strong>
+                                <div style="margin-top: 8px; display: flex; gap: 5px;">
+                                    <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:50px; padding:3px;">
+                                    <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#2980b9; flex-grow: 1; border: none; color: white; cursor: pointer;">Установить</button>
+                                    <button onclick="PRODUCTION.repairEquipment(${biz.uid})" style="background:#8e44ad; padding: 4px 12px; border: none; color: white; cursor: pointer;">ТО</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="flex: 1; min-width: 250px;">
+                            <p style="margin: 0 0 5px 0;"><small>💰 ФОТ: <strong>$${formatMoney(salaryCost)}</strong>/дн | 🏢 Админ: <strong>$${formatMoney(adminCost)}</strong>/дн</small></p>
+                            <p style="margin: 0 0 10px 0;"><small>🏭 Текущая Себестоимость: <strong>$${formatMoney(biz.lastCogs)}</strong>/шт</small></p>
+                            
+                            <div style="background: #ecf0f1; padding: 10px; border-radius: 4px;">
+                                <strong style="font-size: 0.85em; color: #7f8c8d;">СМЕНА (${assignedTotal} / ${maxStaff} мест):</strong><br>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.9em;">
+                                    <span>Jun <small style="color:#7f8c8d;">(Резерв: ${freeJun})</small></span>
+                                    <div>
+                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'junior')" ${biz.assigned.junior===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#e74c3c; border:none; color:white; cursor:pointer;">-</button> 
+                                        <strong style="display:inline-block; width:20px; text-align:center;">${biz.assigned.junior}</strong> 
+                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'junior')" ${isFull||freeJun===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#2ecc71; border:none; color:white; cursor:pointer;">+</button>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.9em;">
+                                    <span>Mid <small style="color:#7f8c8d;">(Резерв: ${freeMid})</small></span>
+                                    <div>
+                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'middle')" ${biz.assigned.middle===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#e74c3c; border:none; color:white; cursor:pointer;">-</button> 
+                                        <strong style="display:inline-block; width:20px; text-align:center;">${biz.assigned.middle}</strong> 
+                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'middle')" ${isFull||freeMid===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#2ecc71; border:none; color:white; cursor:pointer;">+</button>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.9em;">
+                                    <span>Sen <small style="color:#7f8c8d;">(Резерв: ${freeSen})</small></span>
+                                    <div>
+                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'senior')" ${biz.assigned.senior===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#e74c3c; border:none; color:white; cursor:pointer;">-</button> 
+                                        <strong style="display:inline-block; width:20px; text-align:center;">${biz.assigned.senior}</strong> 
+                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'senior')" ${isFull||freeSen===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#2ecc71; border:none; color:white; cursor:pointer;">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px; text-align: right; border-top: 1px solid #eee; padding-top: 10px;">
+                        <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; font-size: 0.85em; padding: 6px 12px; border-radius: 4px;">Расширить завод ($${formatMoney(upgradeCost)})</button>
+                    </div>
+                </li>`;
+            });
+            if (!hasFactories) bizList.innerHTML = '<li>У вас пока нет заводов.</li>';
+        }
+    },
+
+    // --- НОВАЯ ВКЛАДКА: B2B БИРЖА ---
+    updateMarketTab() {
+        let marketBody = document.getElementById('ui-market-body');
+        if (!marketBody || typeof MARKET === 'undefined') return;
+        
+        // --- БЛОК ЛОГИСТИКИ (Товары и деньги в пути) ---
+        let logisticsHtml = '';
+        if (STATE.logistics) {
+            if (STATE.logistics.deliveries.length > 0) {
+                logisticsHtml += `<div style="background: #e8f8f5; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #1abc9c;">
+                    <strong style="color: #16a085;">🚚 Ожидается поставка закупленного сырья:</strong>
+                    <ul style="margin: 5px 0 0 0; padding-left: 20px;">`;
+                STATE.logistics.deliveries.forEach(d => {
+                    logisticsHtml += `<li>${RECIPES.RESOURCES[d.item].name}: <strong>${d.qty} шт.</strong> <small style="color:#7f8c8d;">(Прибудет через ${d.daysLeft} дн.)</small></li>`;
+                });
+                logisticsHtml += `</ul></div>`;
+            }
+            if (STATE.logistics.receivables.length > 0) {
+                logisticsHtml += `<div style="background: #fef9e7; padding: 10px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #f1c40f;">
+                    <strong style="color: #d35400;">💰 Ожидается поступление средств за отгрузку:</strong>
+                    <ul style="margin: 5px 0 0 0; padding-left: 20px;">`;
+                STATE.logistics.receivables.forEach(r => {
+                    logisticsHtml += `<li>Выручка (B2B): <strong style="color:#27ae60;">$${formatMoney(r.amount)}</strong> <small style="color:#7f8c8d;">(Поступит через ${r.daysLeft} дн.)</small></li>`;
+                });
+                logisticsHtml += `</ul></div>`;
+            }
+        }
+
+        marketBody.innerHTML = `<tr><td colspan="5" style="padding:0; border:none;">${logisticsHtml}</td></tr>`;
+        
+        Object.keys(RECIPES.RESOURCES).forEach(key => {
+            let res = RECIPES.RESOURCES[key];
+            let inv = STATE.company.inventory[key] || { qty: 0, avgCost: 0, quality: 1.0 };
+            let basePrice = MARKET.getCurrentPrice(key);
+            
+            marketBody.innerHTML += `
+            <tr style="background: #fdfefe; border-bottom: 1px dashed #eee;">
+                <td style="padding: 12px 0;"><strong>${res.name}</strong><br><small style="color:#7f8c8d;">(Рынок B2B)</small></td>                 <td style="color:#7f8c8d; font-size: 1.5em;">∞</td>                 <td style="color:#7f8c8d;">★ 1.00</td>                 <td><strong>$${formatMoney(basePrice)}</strong></td>
+                <td style="white-space: nowrap;">
+                    <input type="number" id="buy-qty-${key}" value="10" min="1" style="width: 60px; padding: 4px;">
+                    <button onclick="UI_DASHBOARD.submitBuy('${key}')" style="background:#3498db; padding: 5px 12px; color: white; border: none; cursor: pointer;">Купить</button>
+                </td>
+            </tr>`;
+
+            if (inv.qty > 0) {
+                let itemQ = inv.quality || 1.0;
+                let finalPrice = basePrice * itemQ;
+                marketBody.innerHTML += `
+                <tr style="background: #f4f6f7; border-bottom: 2px solid #bdc3c7;">
+                    <td style="padding: 12px 0; padding-left: 15px; border-left: 4px solid #2980b9;">
+                        <strong>${res.name}</strong><br><small style="color:#2980b9; font-weight: bold;">(Ваш склад)</small>
+                    </td>
+                    <td><strong style="color: #2c3e50;">${inv.qty} шт.</strong></td>
+                    <td><strong style="color:#8e44ad;">★ ${itemQ.toFixed(2)}</strong></td>                     <td><strong style="color:#2c3e50; font-size: 1.1em;">$${formatMoney(finalPrice)}</strong></td>
+                    <td>
+                        <button onclick="MARKET.sell('${key}', ${inv.qty})" style="background:#e67e22; width: 100\%; padding: 6px 12px; color: white; border: none; cursor: pointer;">Продать ($${formatMoney(finalPrice * inv.qty)})</button>
+                    </td>
+                </tr>`;
+            }
+        });
+    },
+
+    // --- 7. HR И КАДРЫ ---
+    updateHRTab() {
+        if (typeof HR === 'undefined' || !document.getElementById('ui-staff-total')) return;
+        HR.init();
+        
+        document.getElementById('ui-staff-total').innerText = HR.getTotalStaff();
+        if(document.getElementById('ui-staff-salary')) document.getElementById('ui-staff-salary').innerText = formatMoney(HR.getDailySalaryFund());
+        
+        let breakdownDiv = document.getElementById('ui-hr-breakdown');
+        if (breakdownDiv) {
+            let html = '<strong>В штате числятся:</strong> ';
+            let parts = [];
+            Object.keys(HR.GRADES).forEach(grade => {
+                let total = STATE.hr && STATE.hr.staff ? (STATE.hr.staff[grade] || 0) : 0;
+                if (total > 0) parts.push(`<strong>${HR.GRADES[grade].name.split(' ')[0]}:</strong> ${total} чел.`);
+            });
+            
+            let trainingCount = STATE.hr.trainingQueue.length;
+            if (trainingCount > 0) parts.push(`<strong>На учебе:</strong> ${trainingCount} чел.`);
+            
+            breakdownDiv.innerHTML = html + (parts.length > 0 ? parts.join(' | ') : '<small style="color:#7f8c8d;">Нет сотрудников</small>');
+        }
+
+        let hireFactory = document.getElementById('ui-hire-factory');
+        let hireRnd = document.getElementById('ui-hire-rnd');
+        if (hireFactory && hireRnd) {
+            hireFactory.innerHTML = '';
+            hireRnd.innerHTML = '';
+            
+            Object.keys(HR.GRADES).forEach(grade => {
+                let info = HR.GRADES[grade];
+                let btnHtml = `<button onclick="HR.hire('${grade}')" style="width: 100%; margin-bottom: 8px; padding: 10px; background: ${info.role === 'rnd' ? '#1abc9c' : '#2ecc71'}; text-align: left; display: flex; justify-content: space-between; border-radius: 4px;">
+                    <span><strong>Найм: ${info.name.split(' ')[0]}</strong> ($${formatMoney(info.hireCost)})</span>
+                    <span style="opacity: 0.9;">ЗП: $${formatMoney(info.salary)}/дн</span>
+                </button>`;
+                
+                if (info.role === 'factory') hireFactory.innerHTML += btnHtml;
+                else hireRnd.innerHTML += btnHtml;
+            });
+        }
+        
+        let trainingDiv = document.getElementById('ui-hr-training-list');
+        if (trainingDiv) {
+            if (STATE.hr.trainingQueue.length === 0) {
+                trainingDiv.innerHTML = '<small style="color:#7f8c8d;">В данный момент никто не проходит обучение.</small>';
+            } else {
+                let tHtml = '<ul style="padding-left: 20px;">';
+                STATE.hr.trainingQueue.forEach(t => {
+                    let nextName = HR.GRADES[t.toGrade].name.split(' ')[0];
+                    tHtml += `<li style="margin-bottom: 5px;">Повышение до <strong>${nextName}</strong>. Осталось учиться: <strong class="danger">${t.daysLeft} дн.</strong> <small style="color:#7f8c8d;">(Сотрудник получает ЗП $${t.salary}/дн)</small></li>`;
+                });
+                tHtml += '</ul>';
+                trainingDiv.innerHTML = tHtml;
+            }
+        }
+
+        let reserveContainer = document.getElementById('ui-hr-reserve-table');
+        if (reserveContainer) {
+            let html = `<table style="width: 100%; border-collapse: collapse;">`;
+            Object.keys(HR.GRADES).forEach(grade => {
+                let free = HR.getUnassigned(grade);
+                let info = HR.GRADES[grade];
+                
+                let trainCost = grade === 'junior' ? 250 : (grade === 'middle' ? 800 : (grade === 'scientist' ? 1500 : null));
+                let trainDays = grade === 'junior' ? 3 : (grade === 'middle' ? 7 : (grade === 'scientist' ? 10 : null));
+                let nextGradeName = grade === 'junior' ? 'Middle' : (grade === 'middle' ? 'Senior' : (grade === 'scientist' ? 'Ст. Научного' : ''));
+                
+                let trainBtn = '';
+                if (trainCost) {
+                    trainBtn = `<button onclick="HR.train('${grade}')" ${free===0?'disabled style="opacity:0.5;"':'style="background:#3498db;"'}>Начать обучение до ${nextGradeName} ($${trainCost} / ${trainDays} дн.)</button>`;
+                }
+
+                html += `<tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px 0;"><strong>${info.name}</strong> <span style="color:#7f8c8d;">(Свободно: ${free})</span></td>
+                    <td style="text-align: right;">${trainBtn} <button onclick="HR.fire('${grade}')" ${free===0?'disabled style="opacity:0.5;"':'style="background:#e74c3c;"'}>Уволить</button></td>
+                </tr>`;
+            });
+            html += `</table>`;
+            reserveContainer.innerHTML = html;
+        }
+    },
+
+    // --- 8. БАНК И КРЕДИТЫ ---
+    updateBankTab() {
+        if (typeof FINANCE === 'undefined') return;
+        
+        if (document.getElementById('ui-rate')) document.getElementById('ui-rate').innerText = (FINANCE.getCurrentRate() * 100).toFixed(1);
+        if (document.getElementById('ui-credit-limit')) document.getElementById('ui-credit-limit').innerText = formatMoney(FINANCE.getAvailableLimit());
+        
+        let loansList = document.getElementById('ui-active-loans');
+        if (loansList) {
+            let totalDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
+            if(document.getElementById('ui-debt')) document.getElementById('ui-debt').innerText = formatMoney(totalDebt);
+            
+            loansList.innerHTML = '';
+            if (STATE.finances.loans.length === 0) {
+                loansList.innerHTML = '<li><small style="color:#7f8c8d;">Нет активных кредитов.</small></li>';
+            } else {
+                STATE.finances.loans.forEach(l => {
+                    let currentDailyInterest = (l.remainingPrincipal * l.rate) / 365;
+                    let currentDailyPayment = l.dailyPrincipal + currentDailyInterest;
+                    
+                    loansList.innerHTML += `<li style="margin-bottom: 15px; border-bottom: 1px dashed #eee; padding-bottom: 10px; list-style-type: none;">
+                        <strong>Заём $${formatMoney(l.amount)}</strong> (Осталось: ${l.remainingDays} дн.)<br>
+                        <small>Ставка: ${(l.rate*100).toFixed(1)}% | Долг: <span class="danger">$${formatMoney(l.remainingPrincipal)}</span> | Платёж сегодня: $${formatMoney(currentDailyPayment)}</small><br>
+                        <button onclick="FINANCE.payOffLoan(${l.id})" style="background: #e67e22; font-size: 0.8em; margin-top: 5px; padding: 4px 10px;">Досрочно погасить ($${formatMoney(l.remainingPrincipal + currentDailyInterest)})</button>
+                    </li>`;
+                });
+            }
+        }
+
+        let depList = document.getElementById('ui-active-deposits');
+        if (depList) {
+            if (!STATE.finances.deposits) STATE.finances.deposits = [];
+            depList.innerHTML = '';
+            if (STATE.finances.deposits.length === 0) {
+                depList.innerHTML = '<li><small style="color:#7f8c8d;">Нет открытых вкладов.</small></li>';
+            } else {
+                STATE.finances.deposits.forEach(d => {
+                    let payoutText = d.payoutType === 'daily' ? 'Выплата % ежедневно' : 'Капитализация в конце';
+                    let accText = d.payoutType === 'daily' ? 'выплачивается' : `$${formatMoney(d.accrued)}`;
+                    depList.innerHTML += `<li style="margin-bottom: 10px; border-bottom: 1px dashed #eee; padding-bottom: 5px; list-style-type: none;">
+                        <strong>Вклад $${formatMoney(d.amount)}</strong> (Осталось: ${d.daysLeft} дн.)<br>
+                        <small>Ставка: ${(d.rate*100).toFixed(1)}% | ${payoutText} | Накоплено: <span class="success">${accText}</span></small>
+                    </li>`;
+                });
+            }
+        }
+    },
+
+    // --- 9. ФИНАНСОВАЯ ОТЧЕТНОСТЬ (МСФО) ---
+    updateFinanceTab() {
+        if (!document.getElementById('ui-balance-sheet') || typeof LEDGER === 'undefined') return;
+        LEDGER.init();
+        
+        // --- РАСЧЕТ БАЛАНСА ---
+        
+        // 1. Текущие активы (Деньги + Инвестиции)
+        let cash = Math.max(0, STATE.finances.balance);
+        let depositsValue = 0;
+        if (STATE.finances.deposits) {
+            STATE.finances.deposits.forEach(d => { depositsValue += d.amount + d.accrued; });
+        }
+
+        // 1.1. Инвентаризация (Глобальный склад + Полки магазинов)
+        let inventoryValue = 0;
+        Object.keys(STATE.company.inventory).forEach(k => {
+            inventoryValue += STATE.company.inventory[k].qty * STATE.company.inventory[k].avgCost;
+        });
+        STATE.company.businesses.forEach(b => {
+            if (b.localInventory) {
+                Object.keys(b.localInventory).forEach(k => {
+                    inventoryValue += b.localInventory[k].qty * b.localInventory[k].avgCost;
+                });
+            }
+        });
+
+        // 1.2. ЛОГИСТИКА: Товары и деньги в пути (Дебиторка и Авансы)
+        let logisticsValue = 0;
+        let receivablesValue = 0;
+        if (STATE.logistics) {
+            if (STATE.logistics.deliveries) {
+                STATE.logistics.deliveries.forEach(d => { logisticsValue += d.cost; });
+            }
+            if (STATE.logistics.receivables) {
+                STATE.logistics.receivables.forEach(r => { receivablesValue += r.amount; });
+            }
+        }
+
+        // Теперь текущие активы включают товары в пути и ожидаемую выручку!
+        let currentAssets = cash + inventoryValue + depositsValue + logisticsValue + receivablesValue;
+
+        // 2. Внеоборотные активы (Основные средства)
+        let realEstateValue = 0; 
+        let equipmentValue = 0;  
+
+        // 2.1. Предприятия (Заводы, Магазины, Офисы)
+        STATE.company.businesses.forEach(b => {
+            let tpl = RECIPES.BUSINESSES[b.type];
+            let locMult = b.locMult || 1.0; 
+            
+            let baseCost = tpl.area * 50 * locMult;
+            realEstateValue += baseCost;
+            for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult); 
+
+            if (b.equipment && b.equipment.count > 0) {
+                let eqPrice = RECIPES.RESOURCES[tpl.equipmentType].basePrice;
+                let cond = b.equipment.condition || 0;
+                equipmentValue += (b.equipment.count * eqPrice) * (cond / 100);
+            }
+        });
+
+        // 2.2. Склад
+        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouse) {
+            for (let i = 1; i < STATE.company.warehouse.level; i++) {
+                realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
+            }
+        }
+        
+        // 2.3. НИИ
+        if (STATE.rnd && STATE.rnd.facility) {
+            let rndLvl = STATE.rnd.facility.level || 0;
+            for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
+            
+            if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
+                let pcPrice = RECIPES.RESOURCES['pc_workstation'].basePrice || 800;
+                let rndCond = STATE.rnd.facility.equipment.condition || 0;
+                equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * (rndCond / 100);
+            }
+        }
+        
+        let fixedAssets = realEstateValue + equipmentValue;
+        let totalAssets = currentAssets + fixedAssets;
+
+        // 3. Пассивы и Капитал
+        let totalLiabilities = 0;
+        if (STATE.finances.loans) {
+            STATE.finances.loans.forEach(l => { totalLiabilities += l.remainingPrincipal; });
+        }
+        if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
+
+        let startCapital = STATE.finances.startCapital || 25000;
+        let retainedEarnings = totalAssets - totalLiabilities - startCapital;
+        let totalEquity = startCapital + retainedEarnings;
+
+        // ОТРИСОВКА БАЛАНСА
+        document.getElementById('ui-balance-sheet').innerHTML = `
+            <h3>Отчет о финансовом положении (Баланс)</h3>
+            <table style="width:100%; font-size:0.9em;">
+                <tr style="background:#2c3e50; color:white;"><th colspan="2" style="padding:5px; text-align:center;">АКТИВЫ (Имущество)</th></tr>
+                <tr><td>Денежные средства:</td><td style="text-align:right;">$${formatMoney(cash)}</td></tr>
+                <tr><td>Запасы продукции (Склады и Магазины):</td><td style="text-align:right; color:#2980b9;">$${formatMoney(inventoryValue)}</td></tr>
+                <tr><td>Товары в пути (Оплаченные поставки):</td><td style="text-align:right; color:#8e44ad;">$${formatMoney(logisticsValue)}</td></tr>
+                <tr><td>Дебиторская задолженность (Выручка в пути):</td><td style="text-align:right; color:#f39c12;">$${formatMoney(receivablesValue)}</td></tr>
+                <tr><td>Краткосрочные инвестиции:</td><td style="text-align:right;">$${formatMoney(depositsValue)}</td></tr>
+                <tr style="font-weight:bold; background:#fdfefe; border-bottom: 2px solid #bdc3c7;"><td>Итого Текущие Активы:</td><td style="text-align:right;">$${formatMoney(currentAssets)}</td></tr>
+                
+                <tr><td>Недвижимость (Цехи, Магазины, Склады):</td><td style="text-align:right;">$${formatMoney(realEstateValue)}</td></tr>
+                <tr><td>Оборудование (Остаточная стоимость):</td><td style="text-align:right;">$${formatMoney(equipmentValue)}</td></tr>
+                <tr style="font-weight:bold; background:#fdfefe; border-bottom: 1px dashed #bdc3c7;"><td>Итого Внеоборотные Активы:</td><td style="text-align:right;">$${formatMoney(fixedAssets)}</td></tr>
+                
+                <tr style="font-weight:bold; font-size:1.1em; border-top:2px solid #333;">
+                    <td>ИТОГО АКТИВОВ:</td><td style="text-align:right; color:#27ae60;">$${formatMoney(totalAssets)}</td>
+                </tr>
+                
+                <tr><td colspan="2">&nbsp;</td></tr>
+                <tr style="background:#2c3e50; color:white;"><th colspan="2" style="padding:5px; text-align:center;">ПАССИВЫ (Источники средств)</th></tr>
+                
+                <tr><td>Кредиты и займы:</td><td style="text-align:right; color:#c0392b;">$${formatMoney(totalLiabilities)}</td></tr>
+                <tr style="font-weight:bold; background:#fdfefe; border-bottom: 1px dashed #bdc3c7;"><td>Итого Обязательства:</td><td style="text-align:right; color:#c0392b;">$${formatMoney(totalLiabilities)}</td></tr>
+                
+                <tr><td>Уставной капитал:</td><td style="text-align:right;">$${formatMoney(startCapital)}</td></tr>
+                <tr><td>Нераспределенная прибыль:</td><td style="text-align:right; color:${retainedEarnings >= 0 ? '#27ae60' : '#c0392b'};">$${formatMoney(retainedEarnings)}</td></tr>
+                <tr style="font-weight:bold; background:#fdfefe;"><td>Итого Капитал:</td><td style="text-align:right;">$${formatMoney(totalEquity)}</td></tr>
+                
+                <tr style="font-weight:bold; font-size:1.1em; border-top:2px solid #333;">
+                    <td>ИТОГО ПАССИВОВ:</td><td style="text-align:right;">$${formatMoney(totalLiabilities + totalEquity)}</td>
+                </tr>
+            </table>
+        `;
+
+        // --- РАСЧЕТ И ОТРИСОВКА P&L (ниже идет ваш старый код без изменений) ---
+        let y = STATE.ledger.yesterday;
+        let t = STATE.ledger.total;
+        
+        let yFinFees = y.fin_fees || 0; let tFinFees = t.fin_fees || 0;
+        let yExpFines = y.exp_fines || 0; let tExpFines = t.exp_fines || 0;
+        let yExpRepair = y.exp_repair || 0; let tExpRepair = t.exp_repair || 0; 
+        
+        let yTaxPayroll = y.exp_taxes_payroll || 0; let tTaxPayroll = t.exp_taxes_payroll || 0;
+        let yTaxCorp = y.exp_taxes_corp || 0; let tTaxCorp = t.exp_taxes_corp || 0;
+        
+        // Выделение B2C и Маркетинга
+        let yRevB2C = y.rev_b2c || 0; let tRevB2C = t.rev_b2c || 0;
+        let yRevOther = y.rev_other || 0; let tRevOther = t.rev_other || 0; // <--- Случайные события
+        let yExpMarketing = y.exp_marketing || 0; let tExpMarketing = t.exp_marketing || 0;
+        
+        let yRev = y.rev_b2b + y.rev_b2g + yRevB2C + yRevOther;
+        let tRev = t.rev_b2b + t.rev_b2g + tRevB2C + tRevOther;
+        
+        let yOpex = y.exp_salary + y.exp_admin + y.exp_hr + yExpFines + yExpRepair + yTaxPayroll + yExpMarketing;
+        let tOpex = t.exp_salary + t.exp_admin + t.exp_hr + tExpFines + tExpRepair + tTaxPayroll + tExpMarketing;
+        
+        let yEbitda = yRev - y.exp_materials - yOpex;
+        let tEbitda = tRev - t.exp_materials - tOpex;
+        
+        let yFin = y.fin_income - y.fin_expense - yFinFees;
+        let tFin = t.fin_income - t.fin_expense - tFinFees;
+        
+        let yEbt = yEbitda + yFin;
+        let tEbt = tEbitda + tFin;
+        
+        let yNet = yEbt - yTaxCorp;
+        let tNet = tEbt - tTaxCorp;
+
+        let taxInfoHTML = '';
+        if (STATE.taxes) {
+            let tb = STATE.taxes.taxableBase || 0;
+            let dtr = STATE.taxes.daysToReport || 30;
+            let estimatedTax = tb > 0 ? tb * TAXES.RATES.corporate : 0;
+            
+            taxInfoHTML = `
+                <div style="background: #e8f8f5; border: 1px solid #1abc9c; padding: 15px; margin-bottom: 20px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="margin: 0 0 8px 0; color: #16a085; font-size: 1.1em;">🏛 Налоговый календарь (Отчетный период)</h4>
+                        Дней до подачи декларации: <strong style="font-size: 1.1em;">${dtr} дн.</strong><br>
+                        Текущая база (Накопленная прибыль): <strong style="color: ${tb >= 0 ? '#27ae60' : '#c0392b'};">$${formatMoney(tb)}</strong> ${tb < 0 ? '<small>(Убыток — налог 0)</small>' : ''}
+                    </div>
+                    <div style="text-align: right; background: #fff; padding: 10px; border-radius: 4px; border: 1px solid #bdc3c7;">
+                        <small style="color: #7f8c8d; display: block; margin-bottom: 5px;">Резерв под налог (18%):</small>
+                        <strong style="font-size: 1.3em; color: #c0392b;">$${formatMoney(estimatedTax)}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
+        document.getElementById('ui-pnl-statement').innerHTML = `
+            ${taxInfoHTML}
+            <h3>Отчет о прибылях и убытках (P&L)</h3>
+            <table style="width:100%; font-size:0.85em; text-align:right; border-collapse: collapse;">
+                <tr style="border-bottom:2px solid #333; text-align:right;">
+                    <th style="text-align:left; padding-bottom:5px;">Статья (Метод начисления / МСФО)</th><th>Вчера</th><th>За всё время</th>
+                </tr>
+                <tr style="font-weight:bold; background:#ecf0f1;"><td style="text-align:left; padding: 3px 0;">Операционные Доходы</td><td>$${formatMoney(yRev)}</td><td>$${formatMoney(tRev)}</td></tr>
+                <tr><td style="text-align:left; color:#7f8c8d;">- B2B (Свободный рынок)</td><td>$${formatMoney(y.rev_b2b)}</td><td>$${formatMoney(t.rev_b2b)}</td></tr>
+                <tr><td style="text-align:left; color:#7f8c8d;">- B2G (Тендеры)</td><td>$${formatMoney(y.rev_b2g)}</td><td>$${formatMoney(t.rev_b2g)}</td></tr>
+                <tr><td style="text-align:left; color:#2980b9; font-weight:bold;">- B2C (Розничная сеть)</td><td style="color:#2980b9;">$${formatMoney(yRevB2C)}</td><td style="color:#2980b9;">$${formatMoney(tRevB2C)}</td></tr>
+                <tr><td style="text-align:left; color:#16a085;">- Прочие доходы (События, Гранты)</td><td style="color:#16a085;">$${formatMoney(yRevOther)}</td><td style="color:#16a085;">$${formatMoney(tRevOther)}</td></tr>
+                
+                <tr style="font-weight:bold; background:#ecf0f1; border-top:1px solid #ccc;"><td style="text-align:left; padding: 3px 0;">Операционные Расходы (OPEX)</td><td>$${formatMoney(y.exp_materials + yOpex)}</td><td>$${formatMoney(t.exp_materials + tOpex)}</td></tr>
+                <tr><td style="text-align:left; color:#7f8c8d;">- Закупка сырья и оборудования</td><td>$${formatMoney(y.exp_materials)}</td><td>$${formatMoney(t.exp_materials)}</td></tr>
+                <tr><td style="text-align:left; color:#7f8c8d;">- Фонд оплаты труда</td><td>$${formatMoney(y.exp_salary)}</td><td>$${formatMoney(t.exp_salary)}</td></tr>
+                <tr><td style="text-align:left; color:#e67e22;">- Социальные взносы (20% на ФОТ)</td><td style="color:#e67e22;">$${formatMoney(yTaxPayroll)}</td><td style="color:#e67e22;">$${formatMoney(tTaxPayroll)}</td></tr>
+                <tr><td style="text-align:left; color:#7f8c8d;">- Аренда (Магазины, Офисы, Цехи)</td><td>$${formatMoney(y.exp_admin)}</td><td>$${formatMoney(t.exp_admin)}</td></tr>
+                <tr><td style="text-align:left; color:#8e44ad; font-weight:bold;">- Маркетинг и Реклама</td><td style="color:#8e44ad;">$${formatMoney(yExpMarketing)}</td><td style="color:#8e44ad;">$${formatMoney(tExpMarketing)}</td></tr>
+                <tr><td style="text-align:left; color:#7f8c8d;">- ТО и Ремонт</td><td>$${formatMoney(yExpRepair)}</td><td>$${formatMoney(tExpRepair)}</td></tr>
+                <tr><td style="text-align:left; color:#c0392b;">- Прочие расходы (Штрафы, ЧП)</td><td style="color:#c0392b;">$${formatMoney(yExpFines)}</td><td style="color:#c0392b;">$${formatMoney(tExpFines)}</td></tr>
+                
+                <tr style="font-weight:bold; font-size:1.1em; border-top:1px solid #333;"><td style="text-align:left; padding: 5px 0;">EBITDA</td>
+                    <td style="color:${yEbitda>=0?'#27ae60':'#c0392b'}">$${formatMoney(yEbitda)}</td>
+                    <td style="color:${tEbitda>=0?'#27ae60':'#c0392b'}">$${formatMoney(tEbitda)}</td>
+                </tr>
+                
+                <tr style="background:#fdfefe;"><td style="text-align:left; font-weight:bold; padding: 3px 0;">Финансовые операции</td><td>$${formatMoney(yFin)}</td><td>$${formatMoney(tFin)}</td></tr>
+                <tr><td style="text-align:left; color:#7f8c8d;">+ Проценты по вкладам</td><td>$${formatMoney(y.fin_income)}</td><td>$${formatMoney(t.fin_income)}</td></tr>
+                <tr><td style="text-align:left; color:#7f8c8d;">- Проценты по кредитам</td><td>$${formatMoney(y.fin_expense)}</td><td>$${formatMoney(t.fin_expense)}</td></tr>
+                
+                <tr style="font-weight:bold; font-size:1.1em; border-top:2px solid #333;"><td style="text-align:left; padding: 5px 0;">ПРИБЫЛЬ ДО НАЛОГОВ (EBT)</td>
+                    <td style="color:${yEbt>=0?'#27ae60':'#c0392b'}">$${formatMoney(yEbt)}</td>
+                    <td style="color:${tEbt>=0?'#27ae60':'#c0392b'}">$${formatMoney(tEbt)}</td>
+                </tr>
+                <tr><td style="text-align:left; color:#c0392b; font-weight:bold;">- Налог на прибыль корпораций</td><td style="color:#c0392b;">$${formatMoney(yTaxCorp)}</td><td style="color:#c0392b;">$${formatMoney(tTaxCorp)}</td></tr>
+                
+                <tr style="font-weight:bold; font-size:1.2em; border-top:3px double #333; background:#fff3cd;">
+                    <td style="text-align:left; padding: 8px 0;">ЧИСТАЯ ПРИБЫЛЬ</td>
+                    <td style="color:${yNet>=0?'#27ae60':'#c0392b'}">$${formatMoney(yNet)}</td>
+                    <td style="color:${tNet>=0?'#27ae60':'#c0392b'}">$${formatMoney(tNet)}</td>
+                </tr>
+            </table>
+        `;
+    },
+
+    // --- СЛУЖЕБНЫЕ МЕТОДЫ ОШИБОК И ФОРМ ---
+    clearError() {
+        let errDiv = document.getElementById('debug-error');
+        if (errDiv) errDiv.style.display = 'none';
+    },
+
+    showError(err) {
+        let errDiv = document.getElementById('debug-error');
+        if (!errDiv) {
+            errDiv = document.createElement('div');
+            errDiv.id = 'debug-error';
+            errDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; background:#c0392b; color:white; padding:20px; z-index:9999; box-shadow: 0 5px 15px rgba(0,0,0,0.5);';
+            document.body.prepend(errDiv);
+        }
+        errDiv.innerHTML = `
+            <h3 style="margin-top:0;">⚠️ КРИТИЧЕСКАЯ ОШИБКА ИНТЕРФЕЙСА</h3>
+            <p><strong>Суть ошибки:</strong> ${err.message}</p>
+            <button onclick="document.getElementById('debug-error').style.display='none'" style="background:#333; padding: 5px 10px; color: white;">Закрыть это окно</button>
+        `;
+        console.error(err);
+    },
+
+    switchTab(event, tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+    },
+
+    submitLoan() {
+        let amountInput = document.getElementById('input-loan-amount');
+        let termInput = document.getElementById('select-loan-term');
+        let amount = parseFloat(amountInput.value);
+        let term = parseInt(termInput.value);
+        if (isNaN(amount) || amount <= 0) {
+            alert("❌ Пожалуйста, введите корректную сумму кредита.");
+            return;
+        }
+        FINANCE.takeLoan(amount, term);
+        amountInput.value = ''; 
+    },
+
+    submitDeposit() {
+        let amountInput = document.getElementById('input-dep-amount');
+        let termInput = document.getElementById('select-dep-term');
+        let typeInput = document.getElementById('select-dep-type');
+        let amount = parseFloat(amountInput.value);
+        let term = parseInt(termInput.value);
+        let payoutType = typeInput.value;
+        if (isNaN(amount) || amount <= 0) {
+            alert("❌ Пожалуйста, введите корректную сумму депозита.");
+            return;
+        }
+        FINANCE.openDeposit(amount, term, payoutType);
+        amountInput.value = ''; 
+    },
+
+    // НОВОЕ: Обработка покупки с рынка
+    submitBuy(itemKey) {
+        let input = document.getElementById(`buy-qty-${itemKey}`);
+        if (input) {
+            let qty = parseInt(input.value);
+            if (isNaN(qty) || qty <= 0) {
+                alert("❌ Введите корректное количество для покупки.");
+                return;
+            }
+            if (typeof MARKET !== 'undefined') {
+                MARKET.buy(itemKey, qty);
+            }
+        }
+    },
+
+    // Сохранение процентов логистики
+    saveRoutes(bizUid, destsStr) {
+        let dests = destsStr ? destsStr.split(',') : [];
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (!biz) return;
+        
+        let newRoutes = {};
+        dests.forEach(d => {
+            let val = parseInt(document.getElementById(`route-${bizUid}-${d}`).value) || 0;
+            if (val > 0) newRoutes[d] = val; // Сохраняем абсолютные значения в штуках
+        });
+        
+        biz.routing = newRoutes;
+        alert("✅ Квоты отгрузки (в шт.) успешно обновлены!");
+        this.update();
+    },
+    // Красивое окно выбора локации магазина
+    showLocationModal(bizType) {
+        // Удаляем старое окно, если оно зависло
+        let oldModal = document.getElementById('location-modal');
+        if (oldModal) oldModal.remove();
+
+        let modal = document.createElement('div');
+        modal.id = 'location-modal';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(3px);';
+        
+        modal.innerHTML = `
+            <div style="background:#fff; padding:25px; border-radius:12px; width:450px; max-width:90%; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center;">
+                <h2 style="margin-top:0; color:#2c3e50; font-size: 1.5em;">Где открыть магазин?</h2>
+                <p style="color:#7f8c8d; margin-bottom: 25px;">От локации зависит ежедневный трафик покупателей и стоимость аренды помещения.</p>
+                
+                <button onclick="document.getElementById('location-modal').remove(); PRODUCTION.buyBusiness('${bizType}', 'center')" style="width:100%; text-align:left; padding:15px; margin-bottom:12px; background:#fdfefe; border:2px solid #e74c3c; border-radius:8px; cursor:pointer; transition: 0.2s;">
+                    <strong style="color:#c0392b; font-size:1.2em;">🏙️ Центр города</strong><br>
+                    <small style="color:#333; font-size: 0.9em;">Максимальный спрос | Аренда: х3.0</small>
+                </button>
+                
+                <button onclick="document.getElementById('location-modal').remove(); PRODUCTION.buyBusiness('${bizType}', 'residential')" style="width:100%; text-align:left; padding:15px; margin-bottom:12px; background:#fdfefe; border:2px solid #f39c12; border-radius:8px; cursor:pointer; transition: 0.2s;">
+                    <strong style="color:#d35400; font-size:1.2em;">🏘️ Спальный район</strong><br>
+                    <small style="color:#333; font-size: 0.9em;">Стабильный спрос | Аренда: х1.0</small>
+                </button>
+                
+                <button onclick="document.getElementById('location-modal').remove(); PRODUCTION.buyBusiness('${bizType}', 'suburb')" style="width:100%; text-align:left; padding:15px; margin-bottom:12px; background:#fdfefe; border:2px solid #27ae60; border-radius:8px; cursor:pointer; transition: 0.2s;">
+                    <strong style="color:#16a085; font-size:1.2em;">🌲 Пригород</strong><br>
+                    <small style="color:#333; font-size: 0.9em;">Низкий спрос | Аренда: х0.5</small>
+                </button>
+                
+                <button onclick="document.getElementById('location-modal').remove()" style="width:100%; padding:12px; margin-top:15px; background:#ecf0f1; border:none; border-radius:6px; color:#7f8c8d; font-weight: bold; cursor:pointer;">Отмена</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    },
+
+    // --- НОВАЯ ВКЛАДКА: РОЗНИЦА И МАРКЕТИНГ ---
+    updateRetailTab() {
+        let retailBody = document.getElementById('ui-retail-businesses');
+        if (!retailBody) return;
+        
+        retailBody.innerHTML = '';
+        
+        if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
+        let currentBrand = STATE.retail.brand || 10;
+        
+        // ПАНЕЛЬ УПРАВЛЕНИЯ: Кнопки открытия магазинов теперь живут здесь
+        retailBody.innerHTML += `
+        <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #dcdde1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div>
+                <h3 style="margin: 0 0 5px 0; color: #2c3e50;">Управление розничной сетью</h3>
+                <small style="color: #7f8c8d;">Стройте магазины, нанимайте персонал и выходите на B2C рынок.</small>
+            </div>
+            <div>
+                <button onclick="PRODUCTION.buyBusiness('retail_store')" style="background: #27ae60; color: white; font-weight: bold; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">+ Открыть Фирменный магазин</button>
+                <button onclick="PRODUCTION.buyBusiness('marketing_agency')" style="background: #8e44ad; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer;">+ Отдел Маркетинга</button>
+            </div>
+        </div>
+
+        <div style="background: #fdfefe; padding: 20px; border-radius: 8px; border-left: 5px solid #2ecc71; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <h3 style="margin-top:0; color:#27ae60;">🌟 Глобальная сила Бренда: ${currentBrand.toFixed(1)}%</h3>
+            <p style="margin:0; color:#2c3e50; font-size:1.05em;">Сила бренда увеличивает ежедневный поток покупателей (трафик) <strong>во всех ваших магазинах</strong>. Нанимайте PR-менеджеров и Маркетологов в Отделы маркетинга, чтобы раскручивать бренд.</p>
+        </div>`;
+
+        let hasRetail = false;
+
+        STATE.company.businesses.forEach(biz => {
+            let tpl = RECIPES.BUSINESSES[biz.type];
+            if (!tpl.isRetail && !tpl.isMarketing) return; 
+            hasRetail = true;
+            
+            let level = biz.level || 1;
+            let locMult = biz.locMult || 1.0;
+            let adminCost = tpl.area * 2 * level * locMult;
+            
+            // --- ФИКС ОШИБКИ UNDEFINED ---
+            if (!biz.assigned) biz.assigned = {};
+            if (biz.assigned.salesman === undefined) biz.assigned.salesman = 0;
+            if (biz.assigned.store_manager === undefined) biz.assigned.store_manager = 0;
+            if (biz.assigned.marketer === undefined) biz.assigned.marketer = 0;
+            if (biz.assigned.pr_manager === undefined) biz.assigned.pr_manager = 0;
+            
+            // ЕСЛИ ЭТО МАГАЗИН
+            if (tpl.isRetail) {
+                let freeSales = typeof HR !== 'undefined' ? HR.getUnassigned('salesman') : 0;
+                let freeMgr = typeof HR !== 'undefined' ? HR.getUnassigned('store_manager') : 0;
+                let assignedTotal = biz.assigned.salesman + biz.assigned.store_manager;
+                let maxStaff = tpl.staffReq * level;
+                let isFull = assignedTotal >= maxStaff;
+
+                let maxVol = tpl.area * level * locMult * 2;
+                let currentVol = 0;
+                let invHtml = '';
+                
+                if (biz.localInventory) {
+                    Object.keys(biz.localInventory).forEach(k => {
+                        let inv = biz.localInventory[k];
+                        if (inv.qty > 0) {
+                            let rTpl = RECIPES.RESOURCES[k];
+                            currentVol += inv.qty * (rTpl.volume || 0);
+                            
+                            let b2bPrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(k) : 0;
+                            if (!biz.prices) biz.prices = {};
+                            let retailPrice = biz.prices[k] || (b2bPrice * 2.5);
+                            let margin = b2bPrice > 0 ? (retailPrice / b2bPrice) : 1;
+                            
+                            let marginColor = margin >= 4 ? '#e74c3c' : (margin >= 2.5 ? '#f39c12' : '#27ae60');
+                            
+                            let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
+                            let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
+
+                            invHtml += `<tr>
+                                <td style="padding:10px 0; border-bottom:1px solid #f1f2f6;"><strong>${rTpl.name}</strong><br><small style="color:#8e44ad;">★ ${(inv.quality||1.0).toFixed(2)}</small></td>
+                                <td style="border-bottom:1px solid #f1f2f6;"><strong style="color:#2980b9;">${inv.qty} шт.</strong><br><small style="color:#7f8c8d;">Закуп: $${formatMoney(inv.avgCost)}</small></td>
+                                <td style="border-bottom:1px solid #f1f2f6;"><small style="color:#7f8c8d;">Опт (Рынок): $${formatMoney(b2bPrice)}</small><br>
+                                    <div style="display:flex; align-items:center; gap:3px; margin-top:2px;">
+                                        $ <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:70px; padding:3px 4px; font-size:0.9em; border:1px solid #ccc; border-radius:3px;">
+                                        <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:#3498db; color:white; border:none; padding:4px 6px; font-size:0.85em; border-radius:3px; cursor:pointer;">OK</button>
+                                    </div>
+                                    <small style="color:${marginColor};">Наценка: x${margin.toFixed(2)}</small>
+                                </td>
+                                <td style="border-bottom:1px solid #f1f2f6; text-align:right;">
+                                    <strong style="color:#27ae60;">${soldYesterday} шт.</strong><br>
+                                    <small style="color:#7f8c8d;">+$${formatMoney(revYesterday)}</small>
+                                </td>
+                            </tr>`;
+                        }
+                    });
+                }
+                if (invHtml === '') invHtml = '<tr><td colspan="4" style="text-align:center; color:#7f8c8d; padding:15px;">Товара на полках нет</td></tr>';
+                if (invHtml === '') invHtml = '<tr><td colspan="3" style="text-align:center; color:#7f8c8d; padding:15px;">Товара на полках нет</td></tr>';
+                
+                let volPercent = Math.min(100, (currentVol/maxVol)*100).toFixed(1);
+                let eqCount = biz.equipment.count || 0;
+                let maxSlots = level * (tpl.slotsPerLevel || 5);
+
+                retailBody.innerHTML += `
+                <li style="margin-bottom: 25px; background: #fff; padding: 25px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
+                    <h3 style="margin-top:0; border-bottom: 2px solid #3498db; padding-bottom: 12px; color:#2c3e50; font-size:1.4em;">
+                        🏪 ${biz.name}
+                    </h3>
+                    
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <div style="background:#fffcf2; padding:15px; border-radius:6px; border:1px solid #f1c40f;">
+                                <strong style="color:#d35400; font-size:1.1em;">📦 Склад магазина (Занято ${volPercent}%)</strong><br>
+                                <small style="color:#7f8c8d;">Вместимость: ${currentVol.toFixed(1)} / ${maxVol.toFixed(1)} м³ (Зависит от аренды)</small>
+                                <table style="width:100%; margin-top:12px; font-size:0.95em; border-collapse: collapse;">
+                                    <tr style="border-bottom:2px solid #bdc3c7;">
+                                        <th style="text-align:left; padding-bottom:5px;">Товар</th>
+                                        <th style="text-align:left; padding-bottom:5px;">Сток</th>
+                                        <th style="text-align:left; padding-bottom:5px;">Ваша Цена</th>
+                                        <th style="text-align:right; padding-bottom:5px;">Продано (вчера)</th>
+                                    </tr>
+                                    ${invHtml}
+                                </table>
+                            </div>
+                            
+                            <div style="background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 6px; margin-top: 15px;">
+                                <strong style="color:#2c3e50;">МЕБЕЛЬ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
+                                Установлено витрин: <strong>${eqCount} / ${maxSlots}</strong>
+                                <div style="margin-top: 12px; display: flex; gap: 5px;">
+                                    <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:6px; border: 1px solid #ccc; border-radius: 3px;">
+                                    <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#2980b9; flex-grow: 1; border: none; color: white; cursor: pointer; border-radius: 3px;">Докупить витрину</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="flex: 1; min-width: 250px;">
+                            <p style="margin: 0 0 15px 0; font-size:1.1em;">🏢 Аренда: <strong style="color:#c0392b;">$${formatMoney(adminCost)}</strong>/дн</p>
+                            
+                            <div style="background: #fff; padding: 15px; border-radius: 6px; border: 1px dashed #bdc3c7;">
+                                <strong style="font-size: 1.1em; color: #2c3e50;">КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong><br>
+                                <small style="color:#7f8c8d; display:block; margin-bottom:12px;">Обязателен 1 директор. Остальные — продавцы.</small>
+                                
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                                    <span>Продавец <small style="color:#7f8c8d;">(Резерв: ${freeSales})</small></span>
+                                    <div>
+                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
+                                        <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.salesman}</strong> 
+                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                                    <span>Директор <small style="color:#7f8c8d;">(Резерв: ${freeMgr})</small></span>
+                                    <div>
+                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
+                                        <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.store_manager}</strong> 
+                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 20px; text-align: right;">
+                                <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 10px 15px; border-radius: 4px;">Расширить площадь ($${formatMoney(tpl.area * 50 * level)})</button>
+                            </div>
+                        </div>
+                    </div>
+                </li>`;
+            }
+
+            // --- ЕСЛИ ЭТО ОФИС МАРКЕТИНГА ---
+            else if (tpl.isMarketing) {
+                let freeMarketer = typeof HR !== 'undefined' ? HR.getUnassigned('marketer') : 0;
+                let freePR = typeof HR !== 'undefined' ? HR.getUnassigned('pr_manager') : 0;
+                let assignedTotal = biz.assigned.marketer + biz.assigned.pr_manager;
+                let maxStaff = tpl.staffReq * level;
+                let isFull = assignedTotal >= maxStaff;
+
+                let eqCount = biz.equipment.count || 0;
+                let maxSlots = level * (tpl.slotsPerLevel || 5);
+                
+                let workingStaffRatio = assignedTotal > 0 ? Math.min(1, eqCount / assignedTotal) : 0;
+                let effMarketers = biz.assigned.marketer * workingStaffRatio;
+                let effPR = biz.assigned.pr_manager * workingStaffRatio;
+                
+                // Считаем влияние бюджета для красивого вывода в UI
+                let currentCampaign = biz.campaign || 0;
+                let campaignMult = 1.0;
+                let campaignCost = 0;
+                if (currentCampaign == 1) { campaignCost = 100; campaignMult = 1.5; }
+                else if (currentCampaign == 2) { campaignCost = 500; campaignMult = 2.5; }
+                else if (currentCampaign == 3) { campaignCost = 2000; campaignMult = 5.0; }
+                
+                let brandGain = ((effMarketers * 0.2) + (effPR * 0.5)) * campaignMult;
+
+                retailBody.innerHTML += `
+                <li style="margin-bottom: 25px; background: #fff; padding: 25px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
+                    <h3 style="margin-top:0; border-bottom: 2px solid #9b59b6; padding-bottom: 12px; color:#2c3e50; font-size:1.4em;">
+                        📢 ${biz.name}
+                    </h3>
+                    
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <div style="background:#f4ecf7; padding:15px; border-radius:6px; border:1px solid #d2b4de;">
+                                <strong style="color:#8e44ad; font-size:1.1em;">📈 Эффективность кампаний</strong><br>
+                                <small style="color:#7f8c8d;">Ежедневный прирост Силы Бренда.</small>
+                                <div style="margin-top: 10px; font-size: 1.1em; color: #2c3e50;">
+                                    Прогноз прироста: <strong style="color: ${brandGain > 0 ? '#27ae60' : '#7f8c8d'};">+${brandGain.toFixed(2)}% / день</strong>
+                                </div>
+                                
+                                <div style="margin-top:15px; border-top: 1px solid #d2b4de; padding-top: 10px;">
+                                    <strong style="color:#8e44ad; font-size:0.9em;">Рекламный бюджет (Выбор кампании):</strong><br>
+                                    <select id="campaign-${biz.uid}" onchange="UI_DASHBOARD.setCampaign(${biz.uid})" style="width:100%; padding:6px; margin-top:5px; border-radius:4px; border:1px solid #bdc3c7; cursor:pointer;">
+                                        <option value="0" ${currentCampaign==0?'selected':''}>Органика (Без бюджета) — $0/дн</option>
+                                        <option value="1" ${currentCampaign==1?'selected':''}>Листовки и Флаеры — $100/дн (Эффект x1.5)</option>
+                                        <option value="2" ${currentCampaign==2?'selected':''}>Таргет и Радио — $500/дн (Эффект x2.5)</option>
+                                        <option value="3" ${currentCampaign==3?'selected':''}>ТВ и Билборды — $2000/дн (Эффект x5.0)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div style="background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 6px; margin-top: 15px;">
+                                <strong style="color:#2c3e50;">ОБОРУДОВАНИЕ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
+                                Рабочих мест (ПК): <strong>${eqCount} / ${maxSlots}</strong>
+                                <div style="margin-top: 12px; display: flex; gap: 5px;">
+                                    <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:6px; border: 1px solid #ccc; border-radius: 3px;">
+                                    <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#8e44ad; flex-grow: 1; border: none; color: white; cursor: pointer; border-radius: 3px;">Купить ПК</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="flex: 1; min-width: 250px;">
+                            <p style="margin: 0 0 15px 0; font-size:1.1em;">🏢 Аренда офиса: <strong style="color:#c0392b;">$${formatMoney(adminCost)}</strong>/дн</p>
+                            
+                            <div style="background: #f4f6f7; padding: 15px; border-radius: 6px; border: 1px solid #eee;">
+                                <strong style="font-size: 1.1em; color: #2c3e50;">КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong><br>
+                                <small style="color:${assignedTotal > eqCount ? '#e74c3c' : '#7f8c8d'}; display:block; margin-bottom:12px;">${assignedTotal > eqCount ? '⚠️ Не хватает ПК! Часть людей простаивает.' : 'Каждому сотруднику нужен ПК.'}</small>
+                                
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                                    <span>Маркетолог <small style="color:#7f8c8d;">(Резерв: ${freeMarketer})</small></span>
+                                    <div>
+                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'marketer')" ${biz.assigned.marketer===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
+                                        <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.marketer}</strong> 
+                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'marketer')" ${isFull||freeMarketer===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                                    <span>PR-Менеджер <small style="color:#7f8c8d;">(Резерв: ${freePR})</small></span>
+                                    <div>
+                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'pr_manager')" ${biz.assigned.pr_manager===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
+                                        <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.pr_manager}</strong> 
+                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'pr_manager')" ${isFull||freePR===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 20px; text-align: right;">
+                                <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 10px 15px; border-radius: 4px;">Расширить офис ($${formatMoney(tpl.area * 50 * level)})</button>
+                            </div>
+                        </div>
+                    </div>
+                </li>`;
+            }
+        });
+        
+        if (!hasRetail) {
+            retailBody.innerHTML += '<div style="text-align:center; padding: 40px; color:#7f8c8d; font-size:1.2em;">У вас пока нет розничных магазинов.<br>Нажмите кнопку «Открыть Фирменный магазин» выше.</div>';
+        }
+    },
+
+    // Отправка товаров с Общего склада в локальный склад Магазина
+    transferToStore(itemKey) {
+        let storeSelect = document.getElementById(`trans-store-${itemKey}`);
+        let qtyInput = document.getElementById(`trans-qty-${itemKey}`);
+        
+        if (!storeSelect || !qtyInput || !storeSelect.value) return;
+        
+        let storeUid = parseInt(storeSelect.value);
+        let qty = parseInt(qtyInput.value);
+        
+        if (isNaN(storeUid) || isNaN(qty) || qty <= 0) {
+            alert("❌ Укажите корректное количество для отгрузки.");
+            return;
+        }
+        
+        let store = STATE.company.businesses.find(b => b.uid === storeUid);
+        if (!store) return;
+        
+        let globalInv = STATE.company.inventory[itemKey];
+        if (!globalInv || globalInv.qty < qty) {
+            alert("❌ На глобальном складе нет столько товара.");
+            return;
+        }
+        
+        // Считаем свободное место в магазине
+        let currentVol = 0;
+        if (!store.localInventory) store.localInventory = {};
+        Object.keys(store.localInventory).forEach(ik => {
+            currentVol += store.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0);
+        });
+        
+        let tpl = RECIPES.BUSINESSES[store.type];
+        let maxVol = tpl.area * (store.level || 1) * (store.locMult || 1.0) * 2;
+        let itemVol = RECIPES.RESOURCES[itemKey].volume || 0.1;
+        
+        let freeSpace = maxVol - currentVol;
+        let maxCanFit = itemVol > 0 ? Math.floor(freeSpace / itemVol) : qty;
+        
+        if (qty > maxCanFit) {
+            alert(`❌ На складе магазина нет места! Влезет только ${maxCanFit} шт.`);
+            qty = maxCanFit;
+            if (qty <= 0) return;
+        }
+        
+        if (!store.localInventory[itemKey]) {
+            store.localInventory[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
+        }
+        
+        let locInv = store.localInventory[itemKey];
+        let oldTotal = locInv.qty * locInv.avgCost;
+        let oldTotalQ = locInv.qty * (locInv.quality || 1.0);
+        
+        let transferCost = qty * globalInv.avgCost;
+        let transferQuality = globalInv.quality || 1.0;
+        
+        locInv.qty += qty;
+        locInv.avgCost = (oldTotal + transferCost) / locInv.qty;
+        locInv.quality = (oldTotalQ + (qty * transferQuality)) / locInv.qty;
+        
+        globalInv.qty -= qty;
+        if (globalInv.qty === 0) globalInv.avgCost = 0;
+        
+        alert(`✅ Успешно отгружено ${qty} шт. в "${store.name}".`);
+        this.update();
+    },
+    // Сохранение выбранной рекламной кампании
+    setCampaign(bizUid) {
+        let select = document.getElementById(`campaign-${bizUid}`);
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (biz && select) {
+            biz.campaign = parseInt(select.value);
+            this.update();
+        }
+    },
+    // Сохранение розничной цены для конкретного магазина
+    saveStorePrice(bizUid, itemKey) {
+        let input = document.getElementById(`price-${bizUid}-${itemKey}`);
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (input && biz) {
+            let val = parseFloat(input.value);
+            if (isNaN(val) || val <= 0) {
+                alert("❌ Введите корректную цену (больше 0).");
+                return;
+            }
+            if (!biz.prices) biz.prices = {};
+            biz.prices[itemKey] = val;
+            this.update();
+        }
+    },
+    // Красивое модальное окно Журнала событий
+    showEventLog() {
+        let oldModal = document.getElementById('event-modal');
+        if (oldModal) oldModal.remove();
+
+        let modal = document.createElement('div');
+        modal.id = 'event-modal';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(3px);';
+        
+        let logsHtml = '';
+        if (!STATE.eventLog || STATE.eventLog.length === 0) {
+            logsHtml = '<p style="color:#7f8c8d; text-align:center; padding: 20px;">Новостей и событий пока нет.</p>';
+        } else {
+            logsHtml = '<ul style="list-style:none; padding:0; margin:0; max-height: 400px; overflow-y: auto;">';
+            STATE.eventLog.forEach(log => {
+                let color = log.type === 'good' ? '#27ae60' : (log.type === 'bad' ? '#c0392b' : '#2980b9');
+                logsHtml += `
+                <li style="border-left: 4px solid ${color}; background: #f9f9f9; padding: 10px; margin-bottom: 8px; border-radius: 0 4px 4px 0;">
+                    <small style="color:#7f8c8d; display:block; margin-bottom: 4px;">📅 День ${log.day}</small>
+                    <span style="color:#2c3e50;">${log.msg}</span>
+                </li>`;
+            });
+            logsHtml += '</ul>';
+        }
+
+        modal.innerHTML = `
+            <div style="background:#fff; padding:20px; border-radius:8px; width:500px; max-width:90%; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">
+                    <h2 style="margin:0; color:#2c3e50; font-size: 1.5em;">📜 Журнал компании</h2>
+                    <button onclick="document.getElementById('event-modal').remove()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:#7f8c8d;">&times;</button>
+                </div>
+                ${logsHtml}
+                <button onclick="document.getElementById('event-modal').remove()" style="width:100%; padding:10px; margin-top:15px; background:#ecf0f1; border:none; border-radius:4px; color:#34495e; font-weight: bold; cursor:pointer;">Закрыть</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+};
