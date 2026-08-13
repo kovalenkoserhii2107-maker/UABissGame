@@ -94,7 +94,7 @@ const UI_DASHBOARD = {
             let rndLvl = STATE.rnd.facility.level || 0;
             for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
             if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
-                let pcPrice = RECIPES.RESOURCES['pc_workstation'].basePrice || 800;
+                let pcPrice = RECIPES.RESOURCES['smart_pc'].basePrice || 800;
                 equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * ((STATE.rnd.facility.equipment.condition || 0) / 100);
             }
         }
@@ -1180,7 +1180,7 @@ const UI_DASHBOARD = {
             for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
             
             if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
-                let pcPrice = RECIPES.RESOURCES['pc_workstation'].basePrice || 800;
+                let pcPrice = RECIPES.RESOURCES['smart_pc'].basePrice || 800;
                 let rndCond = STATE.rnd.facility.equipment.condition || 0;
                 equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * (rndCond / 100);
             }
