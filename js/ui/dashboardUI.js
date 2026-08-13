@@ -11,6 +11,14 @@ window.formatFinancialResult = function(amount) {
 
 // Главный модуль интерфейса (Отрефакторенная версия)
 const UI_DASHBOARD = {
+    // Состояния фильтров биржи
+    marketFilter: 'all', 
+    marketOptions: { hideEmpty: false, onlyMyStock: false },
+    isMarketOptOpen: false,
+
+    setMarketFilter(f) { this.marketFilter = f; this.update(); },
+    toggleMarketOptMenu() { this.isMarketOptOpen = !this.isMarketOptOpen; this.update(); },
+    toggleMarketOpt(opt) { this.marketOptions[opt] = !this.marketOptions[opt]; this.update(); },
     
     // Мастер-метод: обновляет всё (вызывается при закрытии дня)
     update() {
@@ -913,68 +921,101 @@ const UI_DASHBOARD = {
         }
     },
 
-    // --- НОВАЯ ВКЛАДКА: B2B БИРЖА ---
+    // --- 12. БИРЖА (B2B РЫНОК) С ФИЛЬТРАМИ ---
     updateMarketTab() {
-        let marketBody = document.getElementById('ui-market-body');
-        if (!marketBody || typeof MARKET === 'undefined') return;
+        let marketBody = document.getElementById('ui-market-businesses');
+        if (!marketBody) return;
         
-        // --- БЛОК ЛОГИСТИКИ (Товары и деньги в пути) ---
-        let logisticsHtml = '';
-        if (STATE.logistics) {
-            if (STATE.logistics.deliveries.length > 0) {
-                logisticsHtml += `<div style="background: #e8f8f5; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #1abc9c;">
-                    <strong style="color: #16a085;">🚚 Ожидается поставка закупленного сырья:</strong>
-                    <ul style="margin: 5px 0 0 0; padding-left: 20px;">`;
-                STATE.logistics.deliveries.forEach(d => {
-                    logisticsHtml += `<li>${RECIPES.RESOURCES[d.item].name}: <strong>${d.qty} шт.</strong> <small style="color:#7f8c8d;">(Прибудет через ${d.daysLeft} дн.)</small></li>`;
-                });
-                logisticsHtml += `</ul></div>`;
-            }
-            if (STATE.logistics.receivables.length > 0) {
-                logisticsHtml += `<div style="background: #fef9e7; padding: 10px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #f1c40f;">
-                    <strong style="color: #d35400;">💰 Ожидается поступление средств за отгрузку:</strong>
-                    <ul style="margin: 5px 0 0 0; padding-left: 20px;">`;
-                STATE.logistics.receivables.forEach(r => {
-                    logisticsHtml += `<li>Выручка (B2B): <strong style="color:#27ae60;">$${formatMoney(r.amount)}</strong> <small style="color:#7f8c8d;">(Поступит через ${r.daysLeft} дн.)</small></li>`;
-                });
-                logisticsHtml += `</ul></div>`;
-            }
-        }
+        let retailAccepts = RECIPES.BUSINESSES.retail_store.accepts;
 
-        marketBody.innerHTML = `<tr><td colspan="5" style="padding:0; border:none;">${logisticsHtml}</td></tr>`;
-        
+        // Генерация кнопок-фильтров
+        let filtersHtml = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; background:var(--surface-2); padding:4px; border-radius:8px; border:1px solid var(--border);">
+                    <button onclick="UI_DASHBOARD.setMarketFilter('all')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='all'?'var(--blue)':'transparent'}; color:${this.marketFilter==='all'?'white':'var(--text-dim)'}">Все</button>
+                    <button onclick="UI_DASHBOARD.setMarketFilter('raw')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='raw'?'var(--blue)':'transparent'}; color:${this.marketFilter==='raw'?'white':'var(--text-dim)'}">Сырьё</button>
+                    <button onclick="UI_DASHBOARD.setMarketFilter('components')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='components'?'var(--blue)':'transparent'}; color:${this.marketFilter==='components'?'white':'var(--text-dim)'}">Компоненты</button>
+                    <button onclick="UI_DASHBOARD.setMarketFilter('retail')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='retail'?'var(--blue)':'transparent'}; color:${this.marketFilter==='retail'?'white':'var(--text-dim)'}">Розничные</button>
+                    <button onclick="UI_DASHBOARD.setMarketFilter('equipment')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='equipment'?'var(--blue)':'transparent'}; color:${this.marketFilter==='equipment'?'white':'var(--text-dim)'}">Оборудование</button>
+                </div>
+
+                <div style="position:relative;">
+                    <button onclick="UI_DASHBOARD.toggleMarketOptMenu()" class="btn-secondary" style="padding:8px 15px; border-radius:6px;">⚙️ Фильтры</button>
+                    
+                    <div style="display:${this.isMarketOptOpen?'block':'none'}; position:absolute; top:40px; right:0; background:white; border:1px solid var(--border); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.1); padding:15px; min-width:250px; z-index:100;">
+                        <h4 style="margin:0 0 10px 0; color:var(--text);">Ручные параметры</h4>
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:10px; font-size:0.95em;">
+                            <input type="checkbox" ${this.marketOptions.hideEmpty ? 'checked' : ''} onchange="UI_DASHBOARD.toggleMarketOpt('hideEmpty')"> Скрыть товары без запасов на бирже
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.95em;">
+                            <input type="checkbox" ${this.marketOptions.onlyMyStock ? 'checked' : ''} onchange="UI_DASHBOARD.toggleMarketOpt('onlyMyStock')"> Показывать только то, что есть на моем складе
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        let tableHeader = `
+        <table class="data-table" style="width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <tr style="background: var(--surface-2); text-align: left;">
+                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Товар</th>
+                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Остаток на Бирже</th>
+                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Мой склад</th>
+                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Опт. Цена</th>
+                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Действия</th>
+            </tr>`;
+
+        let rowsHtml = '';
+        let itemsCount = 0;
+
         Object.keys(RECIPES.RESOURCES).forEach(key => {
             let res = RECIPES.RESOURCES[key];
             let inv = STATE.company.inventory[key] || { qty: 0, avgCost: 0, quality: 1.0 };
+            
+            // 1. ЛОГИКА ФИЛЬТРАЦИИ ПО КАТЕГОРИЯМ
+            let isRaw = !!res.isRaw;
+            let isEq = !!res.isEquipment;
+            let isRet = retailAccepts.includes(key);
+            let isComp = !isRaw && !isEq && !isRet; // Все остальное - компоненты
+
+            let matchCategory = false;
+            if (this.marketFilter === 'all') matchCategory = true;
+            else if (this.marketFilter === 'raw' && isRaw) matchCategory = true;
+            else if (this.marketFilter === 'equipment' && isEq) matchCategory = true;
+            else if (this.marketFilter === 'retail' && isRet) matchCategory = true;
+            else if (this.marketFilter === 'components' && isComp) matchCategory = true;
+
+            if (!matchCategory) return; // Пропускаем
+
+            // 2. ЛОГИКА РУЧНЫХ ФИЛЬТРОВ (Галочки)
+            let availablePool = typeof MARKET !== 'undefined' ? MARKET.getAvailablePool(key) : 0;
+            if (this.marketOptions.hideEmpty && availablePool <= 0) return;
+            if (this.marketOptions.onlyMyStock && inv.qty <= 0) return;
+
+            itemsCount++;
             let basePrice = MARKET.getCurrentPrice(key);
             
-            marketBody.innerHTML += `
-            <tr style="background: #fdfefe; border-bottom: 1px dashed #eee;">
-                <td style="padding: 12px 0;"><strong>${res.name}</strong><br><small style="color:#7f8c8d;">(Рынок B2B)</small></td>                 <td style="color:#7f8c8d; font-size: 1.5em;">∞</td>                 <td style="color:#7f8c8d;">★ 1.00</td>                 <td><strong>$${formatMoney(basePrice)}</strong></td>
-                <td style="white-space: nowrap;">
-                    <input type="number" id="buy-qty-${key}" value="10" min="1" style="width: 60px; padding: 4px;">
-                    <button onclick="UI_DASHBOARD.submitBuy('${key}')" style="background:#3498db; padding: 5px 12px; color: white; border: none; cursor: pointer;">Купить</button>
+            rowsHtml += `
+            <tr style="background: #fdfefe; border-bottom: 1px dashed var(--border);">
+                <td style="padding: 12px;"><strong>${res.name}</strong><br><small style="color:var(--text-dim);">${isRaw?'Сырьё':(isEq?'Оборудование':(isRet?'Ритейл':'Компонент'))}</small></td>
+                <td style="padding: 12px;"><strong style="color: ${availablePool > 0 ? 'var(--blue)' : 'var(--red)'};">${availablePool} шт.</strong></td>
+                <td style="padding: 12px;"><strong style="color: var(--green);">${inv.qty} шт.</strong><br><small style="color:var(--text-dim);">По $${formatMoney(inv.avgCost)}</small></td>
+                <td style="padding: 12px;"><strong>$${formatMoney(basePrice)}</strong></td>
+                <td style="padding: 12px; white-space: nowrap;">
+                    <div style="display:flex; gap:5px;">
+                        <input type="number" id="buy-qty-${key}" value="10" min="1" max="${availablePool}" style="width: 60px; padding: 4px; border:1px solid var(--border); border-radius:4px;">
+                        <button onclick="UI_DASHBOARD.submitBuy('${key}')" ${availablePool <= 0 ? 'disabled style="opacity:0.5;"' : 'style="background:var(--blue); padding: 5px 12px; color: white; border: none; border-radius:4px; cursor: pointer;"'}>Купить</button>
+                    </div>
                 </td>
             </tr>`;
-
-            if (inv.qty > 0) {
-                let itemQ = inv.quality || 1.0;
-                let finalPrice = basePrice * itemQ;
-                marketBody.innerHTML += `
-                <tr style="background: #f4f6f7; border-bottom: 2px solid #bdc3c7;">
-                    <td style="padding: 12px 0; padding-left: 15px; border-left: 4px solid #2980b9;">
-                        <strong>${res.name}</strong><br><small style="color:#2980b9; font-weight: bold;">(Ваш склад)</small>
-                    </td>
-                    <td><strong style="color: #2c3e50;">${inv.qty} шт.</strong></td>
-                    <td><strong style="color:#8e44ad;">★ ${itemQ.toFixed(2)}</strong></td>                     <td><strong style="color:#2c3e50; font-size: 1.1em;">$${formatMoney(finalPrice)}</strong></td>
-                    <td>
-                        <button onclick="MARKET.sell('${key}', ${inv.qty})" style="background:#e67e22; width: 100\%; padding: 6px 12px; color: white; border: none; cursor: pointer;">Продать ($${formatMoney(finalPrice * inv.qty)})</button>
-                    </td>
-                </tr>`;
-            }
         });
-    },
 
+        if (itemsCount === 0) {
+            rowsHtml = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-dim);">По вашим фильтрам ничего не найдено.</td></tr>';
+        }
+
+        marketBody.innerHTML = filtersHtml + tableHeader + rowsHtml + '</table>';
+    },
     // --- 7. HR И КАДРЫ ---
     updateHRTab() {
         if (typeof HR === 'undefined' || !document.getElementById('ui-staff-total')) return;
