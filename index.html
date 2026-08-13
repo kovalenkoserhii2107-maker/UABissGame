@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>UABiz: Экономический симулятор</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     /* =========================================================
        APPLE HIG DESIGN TOKENS (светлая тема)
@@ -590,51 +591,54 @@
         <!-- ВКЛАДКА 0: КОМПАНИЯ (ГЛАВНЫЙ ДАШБОРД) -->
         <div id="tab-dashboard" class="tab-content active">
 
+            <!-- 1. ПАНЕЛЬ КЛЮЧЕВЫХ МЕТРИК (KPI) -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
                 <div class="card" style="margin-bottom: 0; padding: 15px;">
-                    <h4 style="margin:0 0 10px 0; color: var(--text-dim);">Свободные средства</h4>
-                    <h2 class="success" style="margin:0;">$<span id="dash-balance">0.00</span></h2>
+                    <h4 style="margin:0 0 8px 0; color: var(--text-dim);">Свободный Cash</h4>
+                    <h2 class="success" style="margin:0;">$<span id="dash-kpi-cash">0.00</span></h2>
                 </div>
                 <div class="card" style="margin-bottom: 0; padding: 15px;">
-                    <h4 style="margin:0 0 10px 0; color: var(--text-dim);">Логистика (Заполненность)</h4>
-                    <h2 style="margin:0;"><span id="dash-warehouse-vol" style="color: var(--blue);">0</span> <small style="font-size: 0.5em;">/ <span id="dash-warehouse-max">1000</span> м³</small></h2>
-                    <div style="width: 100%; background: var(--surface-3); height: 5px; margin-top: 10px; border-radius: 3px;"><div id="dash-warehouse-bar" style="width: 0%; background: var(--blue); height: 100%; border-radius: 3px;"></div></div>
+                    <h4 style="margin:0 0 8px 0; color: var(--text-dim);">Net Worth (Капитализация)</h4>
+                    <h2 style="margin:0; color: var(--blue);">$<span id="dash-kpi-networth">0.00</span></h2>
                 </div>
                 <div class="card" style="margin-bottom: 0; padding: 15px;">
-                    <h4 style="margin:0 0 10px 0; color: var(--text-dim);">Штат компании</h4>
-                    <h2 style="margin:0;"><span id="dash-staff">0</span> <small style="font-size: 0.5em;">сотрудников</small></h2>
+                    <h4 style="margin:0 0 8px 0; color: var(--text-dim);">Сила бренда (B2C)</h4>
+                    <h2 style="margin:0;"><span id="dash-kpi-brand">0</span>%</h2>
+                </div>
+                <div class="card" style="margin-bottom: 0; padding: 15px;">
+                    <h4 style="margin:0 0 8px 0; color: var(--text-dim);">Доступный кредит</h4>
+                    <h2 style="margin:0; color: var(--orange);">$<span id="dash-kpi-credit">0.00</span></h2>
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+            <!-- 2. ГРАФИКИ (CHART.JS) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                <div class="card" style="margin-bottom: 0;">
+                    <h3>Cash Flow (За 7 дней)</h3>
+                    <div style="position: relative; height: 250px; width: 100%;">
+                        <canvas id="chart-cashflow"></canvas>
+                    </div>
+                </div>
+                <div class="card" style="margin-bottom: 0;">
+                    <h3>Структура Активов</h3>
+                    <div style="position: relative; height: 250px; width: 100%;">
+                        <canvas id="chart-assets"></canvas>
+                    </div>
+                </div>
+            </div>
 
-                <div class="card">
-                    <h3>Операционная сводка активов</h3>
-                    <p><small>Текущее состояние производственных мощностей, обеспеченность кадрами и запасами сырья.</small></p>
-                    <ul id="dash-businesses" style="padding-left: 0; margin-top: 15px;">
-                        <li>Нет активов.</li>
+            <!-- 3. ОПЕРАЦИОННЫЙ РАДАР И КОНТРАКТЫ -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+                <div class="card" style="margin-bottom: 0;">
+                    <h3>Операционный радар</h3>
+                    <ul id="dash-radar-list" style="padding-left: 0; list-style: none; margin-top: 15px; display: grid; grid-template-columns: 1fr; gap: 10px;">
+                        <!-- Радар генерируется в JS -->
                     </ul>
                 </div>
-
-                <div>
-                    <div class="card" style="margin-bottom: 20px;">
-                        <h3>Мои обязательства (Активные контракты)</h3>
-                        <ul id="dash-active-contracts" style="padding-left: 0; list-style: none; margin-top: 10px;">
-                            <li><small>Нет активных тендеров.</small></li>
-                        </ul>
-                    </div>
-
-                    <div class="card" style="margin-bottom: 20px;">
-                        <h3>Инвестиции (Депозиты)</h3>
-                        <p>Всего размещено: <strong>$<span id="dash-dep-total" class="success">0.00</span></strong></p>
-                        <ul id="dash-deposits" style="padding-left: 20px; font-size: 0.9em;"></ul>
-                    </div>
-
-                    <div class="card">
-                        <h3>Обязательства (Кредиты)</h3>
-                        <p>Остаток долга: <strong>$<span id="dash-loan-total" class="danger">0.00</span></strong></p>
-                        <ul id="dash-loans" style="padding-left: 20px; font-size: 0.9em;"></ul>
-                    </div>
+                
+                <div class="card" style="margin-bottom: 0;">
+                    <h3>Взятые Тендеры (В работе)</h3>
+                    <ul id="dash-active-contracts" style="padding-left: 0; list-style: none; margin-top: 15px;"></ul>
                 </div>
             </div>
         </div>
