@@ -52,167 +52,227 @@ const UI_DASHBOARD = {
         }
     },
 
-    // --- 2. ГЛАВНЫЙ ДАШБОРД (КОМПАНИЯ) ---
-    updateDashboardTab() {
-        if (!document.getElementById('dash-balance')) return;
-        
-        document.getElementById('dash-balance').innerText = formatMoney(STATE.finances.balance);
-        if (document.getElementById('dash-staff')) {
-            document.getElementById('dash-staff').innerText = typeof HR !== 'undefined' ? HR.getTotalStaff() : 0;
+    // --- ИНИЦИАЛИЗАЦИЯ ГРАФИКОВ ---
+    initCharts() {
+        if (!this.charts) this.charts = { cashflow: null, assets: null };
+        if (typeof Chart !== 'undefined') {
+            Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+            Chart.defaults.color = '#86868B';
         }
+    },
+
+    // --- 2. ГЛАВНЫЙ ДАШБОРД CEO (КОМПАНИЯ) ---
+    updateDashboardTab() {
+        if (!document.getElementById('dash-kpi-cash')) return;
+        this.initCharts();
+
+        // 1. РАСЧЕТ КАПИТАЛИЗАЦИИ И АКТИВОВ
+        let cash = Math.max(0, STATE.finances.balance);
+        let inventoryValue = 0;
         
-        // Складские метрики на главном экране
-        if (typeof WAREHOUSE !== 'undefined' && document.getElementById('dash-warehouse-vol')) {
-            WAREHOUSE.init();
-            let curVol = WAREHOUSE.getCurrentVolume();
-            let maxVol = WAREHOUSE.getMaxVolume();
-            document.getElementById('dash-warehouse-vol').innerText = curVol.toFixed(1);
-            if(document.getElementById('dash-warehouse-max')) document.getElementById('dash-warehouse-max').innerText = maxVol;
+        // Инвентарь общий + локальные магазины
+        Object.keys(STATE.company.inventory).forEach(k => inventoryValue += STATE.company.inventory[k].qty * STATE.company.inventory[k].avgCost);
+        STATE.company.businesses.forEach(b => {
+            if (b.localInventory) Object.keys(b.localInventory).forEach(k => inventoryValue += b.localInventory[k].qty * b.localInventory[k].avgCost);
+        });
+        
+        // Логистика (в пути)
+        let logisticsValue = 0;
+        if (STATE.logistics) {
+            if (STATE.logistics.deliveries) STATE.logistics.deliveries.forEach(d => logisticsValue += d.cost);
+            if (STATE.logistics.receivables) STATE.logistics.receivables.forEach(r => logisticsValue += r.amount);
+        }
+
+        // Инфраструктура
+        let realEstateValue = 0;
+        let equipmentValue = 0;
+        STATE.company.businesses.forEach(b => {
+            let tpl = RECIPES.BUSINESSES[b.type];
+            let locMult = b.locMult || 1.0; 
+            realEstateValue += tpl.area * 50 * locMult;
+            for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult); 
+            if (b.equipment && b.equipment.count > 0) {
+                let eqPrice = RECIPES.RESOURCES[tpl.equipmentType].basePrice;
+                equipmentValue += (b.equipment.count * eqPrice) * ((b.equipment.condition || 0) / 100);
+            }
+        });
+        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouse) {
+            for (let i = 1; i < STATE.company.warehouse.level; i++) realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
+        }
+        if (STATE.rnd && STATE.rnd.facility) {
+            let rndLvl = STATE.rnd.facility.level || 0;
+            for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
+            if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
+                let pcPrice = RECIPES.RESOURCES['pc_workstation'].basePrice || 800;
+                equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * ((STATE.rnd.facility.equipment.condition || 0) / 100);
+            }
+        }
+        let fixedAssets = realEstateValue + equipmentValue;
+
+        // Долги
+        let totalLiabilities = 0;
+        if (STATE.finances.loans) STATE.finances.loans.forEach(l => totalLiabilities += l.remainingPrincipal);
+        if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
+
+        let netWorth = cash + inventoryValue + logisticsValue + fixedAssets - totalLiabilities;
+
+        // ОБНОВЛЕНИЕ KPI
+        document.getElementById('dash-kpi-cash').innerText = formatMoney(STATE.finances.balance);
+        document.getElementById('dash-kpi-networth').innerText = formatMoney(netWorth);
+        document.getElementById('dash-kpi-brand').innerText = (STATE.retail && STATE.retail.brand) ? STATE.retail.brand.toFixed(1) : '10.0';
+        document.getElementById('dash-kpi-credit').innerText = typeof FINANCE !== 'undefined' ? formatMoney(FINANCE.getAvailableLimit()) : '0.00';
+
+        // 2. ОТРИСОВКА ГРАФИКОВ
+        if (typeof Chart !== 'undefined') {
+            // График 1: Структура Активов
+            let ctxAssets = document.getElementById('chart-assets').getContext('2d');
+            let assetsData = [cash, inventoryValue, fixedAssets, logisticsValue];
+            if (!this.charts.assets) {
+                this.charts.assets = new Chart(ctxAssets, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Cash', 'Склады', 'Инфраструктура', 'Логистика'],
+                        datasets: [{ data: assetsData, backgroundColor: ['#34C759', '#007AFF', '#FF9500', '#AF52DE'], borderWidth: 0, hoverOffset: 4 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } } } }
+                });
+            } else {
+                this.charts.assets.data.datasets[0].data = assetsData;
+                this.charts.assets.update();
+            }
+
+            // График 2: Cash Flow (7 дней)
+            let ctxFlow = document.getElementById('chart-cashflow').getContext('2d');
+            let labels = [];
+            let incomeData = [];
+            let expenseData = [];
             
-            let percent = Math.min(100, (curVol / maxVol) * 100);
-            if(document.getElementById('dash-warehouse-bar')) {
-                document.getElementById('dash-warehouse-bar').style.width = percent + '%';
-                document.getElementById('dash-warehouse-bar').style.background = percent > 90 ? '#e74c3c' : '#3498db';
+            let hist = (STATE.ledger && STATE.ledger.history) ? [...STATE.ledger.history].reverse() : [];
+            while (hist.length < 7) hist.unshift(null); 
+
+            hist.forEach((dayData, i) => {
+                let dayNum = STATE.time.day - (hist.length - i - 1) - 1; 
+                labels.push(`Д ${dayNum > 0 ? dayNum : '-'}`);
+                if (dayData) {
+                    let inc = (dayData.rev_b2b||0) + (dayData.rev_b2g||0) + (dayData.rev_b2c||0) + (dayData.rev_other||0) + (dayData.fin_income||0);
+                    let exp = (dayData.exp_materials||0) + (dayData.exp_salary||0) + (dayData.exp_admin||0) + (dayData.exp_hr||0) + (dayData.exp_fines||0) + (dayData.exp_repair||0) + (dayData.exp_taxes_payroll||0) + (dayData.exp_taxes_corp||0) + (dayData.exp_marketing||0) + (dayData.fin_expense||0) + (dayData.fin_fees||0);
+                    incomeData.push(inc);
+                    expenseData.push(exp);
+                } else {
+                    incomeData.push(0); expenseData.push(0);
+                }
+            });
+
+            if (!this.charts.cashflow) {
+                this.charts.cashflow = new Chart(ctxFlow, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            { label: 'Доходы', data: incomeData, backgroundColor: '#34C759', borderRadius: 4 },
+                            { label: 'Расходы', data: expenseData, backgroundColor: '#FF3B30', borderRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { callback: function(val) { return '$' + (val>=1000 ? (val/1000).toFixed(1)+'k' : val); } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            } else {
+                this.charts.cashflow.data.labels = labels;
+                this.charts.cashflow.data.datasets[0].data = incomeData;
+                this.charts.cashflow.data.datasets[1].data = expenseData;
+                this.charts.cashflow.update();
             }
         }
 
-        // Инвентарь
-        let invValue = 0;
-        if (STATE.company.inventory) {
-            Object.keys(STATE.company.inventory).forEach(k => {
-                invValue += STATE.company.inventory[k].qty * STATE.company.inventory[k].avgCost;
-            });
-        }
-        let dashInv = document.getElementById('dash-inventory');
-        if (dashInv) dashInv.innerText = formatMoney(invValue);
-        
-        // Операционная сводка
-        let dashBiz = document.getElementById('dash-businesses');
-        if (dashBiz) {
-            dashBiz.innerHTML = '';
+        // 3. ОПЕРАЦИОННЫЙ РАДАР (СВЕТОФОР)
+        let radarList = document.getElementById('dash-radar-list');
+        if (radarList) {
+            radarList.innerHTML = '';
             if (STATE.company.businesses.length === 0) {
-                dashBiz.innerHTML = '<li><small style="color:#7f8c8d;">У вас пока нет производственных активов.</small></li>';
+                radarList.innerHTML = '<li style="color:var(--text-dim); padding:10px;">Нет работающих активов.</li>';
             } else {
                 STATE.company.businesses.forEach(biz => {
-                    if (!biz.assigned) biz.assigned = { junior: 0, middle: 0, senior: 0 };
                     let tpl = RECIPES.BUSINESSES[biz.type];
                     let level = biz.level || 1;
+                    let statusColor = '#34C759'; // Green
+                    let statusText = 'В норме';
+                    let icon = '🏭';
                     
-                    let maxStaff = tpl.staffReq * level;
-                    let maxOut = tpl.maxOut * level;
-                    let assignedTotal = biz.assigned.junior + biz.assigned.middle + biz.assigned.senior;
-                    
-                    let prodPower = (biz.assigned.junior * HR.GRADES.junior.prodMult) + 
-                                    (biz.assigned.middle * HR.GRADES.middle.prodMult) + 
-                                    (biz.assigned.senior * HR.GRADES.senior.prodMult);
-                    let uiEfficiency = maxStaff > 0 ? (prodPower / maxStaff) : 1;
-                    if (assignedTotal === 0) uiEfficiency = 0;
-                    let effPercent = (uiEfficiency * 100).toFixed(0);
-                    let statusColor = uiEfficiency >= 1 ? 'color: #8e44ad; font-weight: bold;' : (uiEfficiency > 0 ? 'color: #27ae60;' : 'color: #c0392b;');
-                    
-                    let salaryCost = (biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary);
-                    let adminCost = tpl.area * 2 * level; 
-
-                    let outRes = RECIPES.RESOURCES[tpl.output] || { name: 'Услуги (Розница)' };
-                    let outInv = STATE.company.inventory[tpl.output] ? STATE.company.inventory[tpl.output].qty : 0;
-                    
-                    let estDailyOutput = Math.floor(maxOut * uiEfficiency);
-                    let daysAvailable = Infinity;
-                    let rawMaterialText = '';
-                    let inputsKeys = Object.keys(tpl.inputs);
-                    
-                    if (inputsKeys.length === 0) {
-                        rawMaterialText = '<span style="color:#7f8c8d;">Не требуется</span>';
-                    } else if (estDailyOutput === 0) {
-                        rawMaterialText = '<span style="color:#7f8c8d;">Производство стоит</span>';
+                    if (tpl.isRetail) {
+                        icon = '🏪';
+                        let hasStock = biz.localInventory && Object.values(biz.localInventory).some(inv => inv.qty > 0);
+                        if (!hasStock) { statusColor = '#FF3B30'; statusText = 'Пустые полки!'; }
+                    } else if (tpl.isMarketing) {
+                        icon = '📢';
+                        if (!biz.campaign || biz.campaign === 0) { statusColor = '#FF9500'; statusText = 'Только органика'; }
                     } else {
-                        inputsKeys.forEach(k => {
-                            let reqNum = tpl.inputs[k];
-                            let inQty = STATE.company.inventory[k] ? STATE.company.inventory[k].qty : 0;
-                            let dailyConsumption = reqNum * estDailyOutput;
-                            let daysForThisMat = dailyConsumption > 0 ? Math.floor(inQty / dailyConsumption) : Infinity;
-                            if (daysForThisMat < daysAvailable) daysAvailable = daysForThisMat;
-                        });
-                        let daysColor = daysAvailable <= 1 ? '#e74c3c' : (daysAvailable <= 3 ? '#e67e22' : '#27ae60');
-                        rawMaterialText = `<strong style="color:${daysColor};">${daysAvailable} дн.</strong>`;
+                        let maxStaff = tpl.staffReq * level;
+                        let assignedTotal = (biz.assigned.junior||0) + (biz.assigned.middle||0) + (biz.assigned.senior||0);
+                        let prodPower = ((biz.assigned.junior||0) * HR.GRADES.junior.prodMult) + ((biz.assigned.middle||0) * HR.GRADES.middle.prodMult) + ((biz.assigned.senior||0) * HR.GRADES.senior.prodMult);
+                        let uiEfficiency = maxStaff > 0 ? (prodPower / maxStaff) : 1;
+                        if (assignedTotal === 0) uiEfficiency = 0;
+                        
+                        let eqCount = biz.equipment.count || 0;
+                        let cond = biz.equipment.condition !== undefined ? biz.equipment.condition : 100;
+                        let conditionMult = cond < 70 ? Math.max(0.0, cond/70) : 1.0;
+                        let maxOutByEquip = eqCount * (tpl.outputPerMachine || 10);
+                        let estDailyOutput = Math.floor(maxOutByEquip * uiEfficiency * conditionMult);
+
+                        let minDaysMats = Infinity;
+                        if (estDailyOutput > 0) {
+                            Object.keys(tpl.inputs).forEach(k => {
+                                let inQty = STATE.company.inventory[k] ? STATE.company.inventory[k].qty : 0;
+                                let req = tpl.inputs[k] * estDailyOutput;
+                                let days = Math.floor(inQty / req);
+                                if (days < minDaysMats) minDaysMats = days;
+                            });
+                        }
+
+                        if (assignedTotal === 0 || eqCount === 0) {
+                            statusColor = '#FF3B30'; statusText = 'Простаивает (Нет кадров/ПК)';
+                        } else if (estDailyOutput === 0 || minDaysMats === 0) {
+                            statusColor = '#FF3B30'; statusText = 'Остановка (Нет сырья)';
+                        } else if (minDaysMats <= 2 || uiEfficiency < 0.8) {
+                            statusColor = '#FF9500'; statusText = 'Требует внимания';
+                        } else {
+                            statusText = `В норме (Сырья на ${minDaysMats} дн.)`;
+                        }
                     }
 
-                    dashBiz.innerHTML += `
-                    <li style="margin-bottom: 15px; border-bottom: 1px solid #dcdde1; padding-bottom: 15px; list-style-type: none;">
-                        <div style="margin-bottom: 8px;">
-                            <strong>${tpl.name} <span style="color:#3498db; font-size: 0.9em;">(Ур. ${level})</span></strong> 
-                            <span style="${statusColor} float: right;">[Мощность: ${effPercent}%]</span>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85em; background: #fdfefe; padding: 10px; border-radius: 4px; border: 1px dashed #bdc3c7;">
+                    radarList.innerHTML += `
+                        <li style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
                             <div>
-                                📦 <strong>Продукт:</strong> ${outRes.name} (На складе: <strong style="color:#2980b9;">${outInv} шт.</strong>)<br>
-                                ⚙️ <strong>Лимит станков:</strong> ${maxOut} шт/день<br>
-                                🔄 <strong>Сырья хватит на:</strong> ${rawMaterialText}
+                                <strong>${icon} ${biz.name || tpl.name}</strong><br>
+                                <small style="color:var(--text-dim);">${tpl.name}</small>
                             </div>
-                            <div>
-                                👥 <strong>Штат:</strong> ${assignedTotal} / ${maxStaff} мест<br>
-                                💰 <strong>ФОТ (вчера):</strong> $${formatMoney(salaryCost)}<br>
-                                🏢 <strong>Админ. расходы:</strong> $${formatMoney(adminCost)}
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:0.85em; color:var(--text-dim);">${statusText}</span>
+                                <div style="width:12px; height:12px; border-radius:50%; background:${statusColor}; box-shadow:0 0 8px ${statusColor}80;"></div>
                             </div>
-                        </div>
-                    </li>`;
+                        </li>
+                    `;
                 });
             }
         }
 
-        // Контракты на дашборде
+        // Обновление старых списков контрактов и финансов
         let dashContracts = document.getElementById('dash-active-contracts');
         if (dashContracts && typeof CONTRACTS !== 'undefined') {
             dashContracts.innerHTML = '';
             if (!STATE.contracts || STATE.contracts.active.length === 0) {
-                dashContracts.innerHTML = '<li><small style="color:#7f8c8d;">Нет активных тендеров в работе.</small></li>';
+                dashContracts.innerHTML = '<li><small style="color:var(--text-dim);">Нет активных тендеров в работе.</small></li>';
             } else {
                 STATE.contracts.active.forEach(c => {
-                    let itemName = RECIPES.RESOURCES[c.item].name;
                     let inv = STATE.company.inventory[c.item] ? STATE.company.inventory[c.item].qty : 0;
-                    let canFulfill = inv >= c.qty;
-                    let bg = canFulfill ? '#e8f8f5' : (c.deadline <= 3 ? '#fdedec' : '#fdfefe');
-                    
-                    dashContracts.innerHTML += `
-                    <li style="background: ${bg}; border: 1px solid #d0d3d4; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-                        <strong>Поставка: ${itemName}</strong><br>
-                        <small>Собрано: <strong>${inv} / ${c.qty}</strong> шт. | Оплата: <span class="success">$${formatMoney(c.totalReward)}</span></small><br>
-                        <small>Срок: <strong class="${c.deadline <= 3 ? 'danger' : ''}">${c.deadline} дн.</strong> | Штраф: <span class="danger">$${formatMoney(c.penalty)}</span></small><br>
-                        <button onclick="CONTRACTS.fulfill(${c.id})" ${!canFulfill ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="background: #27ae60; width: 100%; margin-top: 5px; padding: 5px;">Отгрузить товар</button>
-                    </li>`;
+                    dashContracts.innerHTML += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border);"><strong>${RECIPES.RESOURCES[c.item].name}</strong>: Собрано ${inv} / ${c.qty} шт. <span style="float:right; color:var(--red);">${c.deadline} дн.</span></li>`;
                 });
             }
-        }
-        
-        // Депозиты и Кредиты на дашборде
-        let depTotal = 0;
-        let dashDep = document.getElementById('dash-deposits');
-        if (dashDep) {
-            dashDep.innerHTML = '';
-            if (!STATE.finances.deposits || STATE.finances.deposits.length === 0) {
-                dashDep.innerHTML = '<li><small style="color:#7f8c8d;">Нет депозитов.</small></li>';
-            } else {
-                STATE.finances.deposits.forEach(d => {
-                    depTotal += d.amount;
-                    dashDep.innerHTML += `<li>$${formatMoney(d.amount)} <span style="color:#7f8c8d;">(${d.daysLeft} дн. / ${(d.rate*100).toFixed(1)}%)</span></li>`;
-                });
-            }
-            if(document.getElementById('dash-dep-total')) document.getElementById('dash-dep-total').innerText = formatMoney(depTotal);
-        }
-        
-        let loanTotal = 0;
-        let dashLoans = document.getElementById('dash-loans');
-        if (dashLoans) {
-            dashLoans.innerHTML = '';
-            if (!STATE.finances.loans || STATE.finances.loans.length === 0) {
-                dashLoans.innerHTML = '<li><small style="color:#7f8c8d;">Нет кредитов.</small></li>';
-            } else {
-                STATE.finances.loans.forEach(l => {
-                    loanTotal += l.remainingPrincipal;
-                    dashLoans.innerHTML += `<li>$${formatMoney(l.remainingPrincipal)} <span style="color:#7f8c8d;">(${l.remainingDays} дн. / ${(l.rate*100).toFixed(1)}%)</span></li>`;
-                });
-            }
-            if(document.getElementById('dash-loan-total')) document.getElementById('dash-loan-total').innerText = formatMoney(loanTotal);
         }
     },
 
