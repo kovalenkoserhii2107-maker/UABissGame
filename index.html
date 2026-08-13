@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UABiz: Экономический симулятор</title>
+<style>
+    /* =========================================================
+       APPLE HIG DESIGN TOKENS (светлая тема)
+       Эти же имена переменных используются в блоках NOTIFY и
+       TUTORIAL ниже — благодаря этому оба модуля автоматически
+       переходят на новую палитру без единой правки в notify.js/
+       tutorial.js.
+       ========================================================= */
+    :root {
+        --bg: #F5F5F7;
+        --surface: #FFFFFF;
+        --surface-2: #F5F5F7;
+        --surface-3: #E8E8ED;
+        --border: rgba(0, 0, 0, 0.08);
+
+        --text: #1D1D1F;
+        --text-dim: #86868B;
+        --text-faint: #AEAEB2;
+
+        --blue: #007AFF;
+        --blue-dim: rgba(0, 122, 255, 0.10);
+        --green: #34C759;
+        --green-dim: rgba(52, 199, 89, 0.12);
+        --red: #FF3B30;
+        --red-dim: rgba(255, 59, 48, 0.12);
+        --orange: #FF9500;
+        --orange-dim: rgba(255, 149, 0, 0.12);
+
+        /* Алиасы под NOTIFY/TUTORIAL (сохраняют совместимость имён) */
+        --accent: var(--green);
+        --accent-dim: var(--green-dim);
+        --accent-ink: #FFFFFF;
+        --danger: var(--red);
+        --info: var(--blue);
+        --warning: var(--orange);
+
+        --radius: 14px;
+        --radius-sm: 12px;
+
+        --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --font-mono: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+        --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.04);
+        --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.06);
+        --shadow-pop: 0 20px 60px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+        margin: 0; padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-body);
+        font-size: 15px;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    *:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
+
+    h1, h2, h3, h4 { font-family: var(--font-display); color: var(--text); font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px 0; }
+    hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+    a { color: var(--blue); }
+    small { color: var(--text-dim); }
+    p { line-height: 1.5; }
+
+    span[id^="ui-"], span[id^="dash-"] { font-variant-numeric: tabular-nums; }
+
+    .success { color: var(--green) !important; }
+    .danger  { color: var(--red) !important; }
+
+    /* =========================================================
+       BUTTONS / INPUTS
+       ========================================================= */
+    button {
+        background: var(--blue);
+        color: #FFFFFF;
+        border: none;
+        padding: 10px 16px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-weight: 590;
+        font-family: var(--font-body);
+        font-size: 0.88rem;
+        letter-spacing: -0.005em;
+        transition: filter .15s ease, transform .08s ease, opacity .15s ease;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; filter: none; }
+
+    input, select {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: var(--radius-sm);
+        padding: 9px 12px;
+        font-family: var(--font-body);
+        font-size: 0.9rem;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input:focus, select:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px var(--blue-dim);
+        outline: none;
+    }
+
+    table { width: 100%; text-align: left; border-collapse: collapse; }
+    th {
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-dim);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+    }
+    td {
+        padding: 11px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.9rem;
+        color: var(--text);
+    }
+
+    /* =========================================================
+       LAYOUT
+       ========================================================= */
+    .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+    .app-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        background: rgba(255, 255, 255, 0.75);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .header-inner {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 14px 28px;
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        flex-wrap: wrap;
+    }
+
+    .brand-mark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 1.05rem;
+        color: var(--text);
+        margin-right: 8px;
+    }
+    .brand-mark .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+
+    .header-block { display: flex; flex-direction: column; gap: 1px; }
+    .header-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; }
+    .header-value { font-size: 1.05rem; font-weight: 600; color: var(--text); }
+    .header-value.balance { color: var(--green); font-size: 1.15rem; }
+    .header-value-sub { font-size: 0.85rem; color: var(--text-faint); font-weight: 500; }
+
+    .header-spacer { flex: 1; }
+
+    .btn-primary-lg { padding: 11px 20px; font-size: 0.92rem; border-radius: var(--radius-sm); }
+
+    .ticker-strip {
+        height: 28px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        border-top: 1px solid var(--border);
+    }
+    .ticker-track {
+        display: inline-flex;
+        gap: 40px;
+        white-space: nowrap;
+        padding-left: 100%;
+        font-size: 0.74rem;
+        color: var(--text-dim);
+        animation: ticker-scroll 40s linear infinite;
+    }
+    .ticker-track span.ev-good { color: var(--green); font-weight: 500; }
+    .ticker-track span.ev-bad { color: var(--red); font-weight: 500; }
+    .ticker-track span.ev-info { color: var(--blue); font-weight: 500; }
+    @keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+    @media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; padding-left: 16px; } }
+
+    .tabs-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 99;
+        display: flex;
+        justify-content: center;
+        padding: 14px 28px 0;
+        background: transparent;
+    }
+    .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        background: var(--surface-3);
+        padding: 3px;
+        border-radius: 11px;
+        max-width: 1280px;
+    }
+    .tab {
+        padding: 8px 16px;
+        border-radius: 8px;
+        color: var(--text-dim);
+        font-size: 0.86rem;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+        user-select: none;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active {
+        background: var(--surface);
+        color: var(--text);
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 1px rgba(0,0,0,0.04);
+    }
+
+    .content {
+        max-width: 1280px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 20px 28px 60px;
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .tab-content { display: none; animation: fadeIn .25s ease; }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 22px;
+        margin-bottom: 20px;
+        box-shadow: var(--shadow-card);
+    }
+    .card h3 { font-size: 1.05rem; }
+    .card h4 { font-size: 0.92rem; }
+
+    @media (max-width: 900px) {
+        .header-inner { padding: 12px 16px; gap: 16px; }
+        .tabs-wrap { padding: 12px 12px 0; }
+        .content { padding: 16px; }
+        .tabs { justify-content: flex-start; overflow-x: auto; max-width: 100%; }
+    }
+
+    /* =========================================================
+       NOTIFY — Toast Notification System
+       (без изменений в логике/структуре — только токены выше
+       переопределяют цвета под Apple-палитру)
+       ========================================================= */
+    #notify-stack {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 12px;
+        max-width: 380px;
+        width: calc(100vw - 48px);
+        pointer-events: none;
+    }
+
+    .notify-toast {
+        pointer-events: auto;
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--surface, #FFFFFF);
+        border: 1px solid var(--border, rgba(0,0,0,0.08));
+        border-radius: var(--radius, 14px);
+        padding: 14px 34px 16px 16px;
+        box-shadow: var(--shadow-pop, 0 20px 50px rgba(0,0,0,0.15));
+        overflow: hidden;
+        font-family: var(--font-body, -apple-system, sans-serif);
+
+        opacity: 0;
+        transform: translateX(48px) scale(0.98);
+        transition: transform 0.35s cubic-bezier(.16,1,.3,1), opacity 0.3s ease;
+    }
+
+    .notify-toast.is-visible {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+
+    .notify-toast.is-leaving {
+        opacity: 0;
+        transform: translateX(48px) scale(0.96);
+        transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+
+    .notify-toast::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+    }
+    .notify-toast.type-success::before { background: var(--accent, #34C759); }
+    .notify-toast.type-error::before   { background: var(--danger, #FF3B30); }
+    .notify-toast.type-info::before    { background: var(--info, #007AFF); }
+    .notify-toast.type-warning::before { background: var(--warning, #FF9500); }
+
+    .notify-icon {
+        font-size: 1.25rem;
+        line-height: 1;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    .notify-body { flex: 1; min-width: 0; }
+
+    .notify-title {
+        font-family: var(--font-display, -apple-system, sans-serif);
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: var(--text, #1D1D1F);
+        margin-bottom: 3px;
+        word-break: break-word;
+    }
+
+    .notify-text {
+        font-size: 0.82rem;
+        line-height: 1.45;
+        color: var(--text-dim, #86868B);
+        word-break: break-word;
+    }
+
+    .notify-close {
+        position: absolute;
+        top: 8px; right: 8px;
+        width: 22px; height: 22px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        color: var(--text-faint, #AEAEB2);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 1.05rem;
+        line-height: 1;
+        transition: background .15s ease, color .15s ease;
+    }
+    .notify-close:hover {
+        background: var(--surface-2, #F5F5F7);
+        color: var(--text, #1D1D1F);
+    }
+
+    .notify-progress {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 3px;
+        background: rgba(0,0,0,0.06);
+    }
+    .notify-progress-bar { width: 100%; height: 100%; }
+    .notify-toast.type-success .notify-progress-bar { background: var(--accent, #34C759); }
+    .notify-toast.type-error   .notify-progress-bar { background: var(--danger, #FF3B30); }
+    .notify-toast.type-info    .notify-progress-bar { background: var(--info, #007AFF); }
+    .notify-toast.type-warning .notify-progress-bar { background: var(--warning, #FF9500); }
+
+    @media (prefers-reduced-motion: reduce) {
+        .notify-toast, .notify-toast.is-visible, .notify-toast.is-leaving {
+            transition: opacity 0.2s ease !important;
+            transform: none !important;
+        }
+    }
+
+    @media (max-width: 600px) {
+        #notify-stack { left: 12px; right: 12px; top: 12px; bottom: auto; max-width: none; width: auto; }
+    }
+
+    /* =========================================================
+       TUTORIAL — стили онбординга
+       (без изменений в логике/структуре — только токены выше
+       переопределяют цвета под Apple-палитру)
+       ========================================================= */
+    #tutorial-root {
+        position: fixed;
+        inset: 0;
+        z-index: 99997;
+        display: none;
+        pointer-events: none; /* Пропускаем клики сквозь прозрачный слой */
+    }
+    #tutorial-root.is-active { display: block; }
+
+    .tutorial-curtain {
+        position: fixed;
+        background: rgba(29, 29, 31, 0.45);
+        pointer-events: auto;
+        transition: all 0.35s cubic-bezier(.16,1,.3,1);
+    }
+
+    .tutorial-ring {
+        position: fixed;
+        border: 2px solid var(--accent, #34C759);
+        border-radius: 12px;
+        pointer-events: none;
+        opacity: 0;
+        transition: all 0.35s cubic-bezier(.16,1,.3,1), opacity 0.25s ease;
+        animation: tutorial-pulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes tutorial-pulse {
+        0%, 100% {
+            box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.25), 0 0 20px rgba(52, 199, 89, 0.35);
+        }
+        50% {
+            box-shadow: 0 0 0 8px rgba(52, 199, 89, 0.12), 0 0 30px rgba(52, 199, 89, 0.55);
+        }
+    }
+
+    .tutorial-tooltip {
+        position: fixed;
+        z-index: 99997;
+        width: 320px;
+        max-width: calc(100vw - 32px);
+        background: var(--surface, #FFFFFF);
+        border: 1px solid var(--border, rgba(0,0,0,0.08));
+        border-radius: var(--radius, 14px);
+        box-shadow: var(--shadow-pop, 0 20px 50px rgba(0,0,0,0.15));
+        padding: 18px 18px 16px;
+        font-family: var(--font-body, -apple-system, sans-serif);
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 0.25s ease, transform 0.25s ease, top 0.35s cubic-bezier(.16,1,.3,1), left 0.35s cubic-bezier(.16,1,.3,1);
+        pointer-events: auto;
+    }
+    .tutorial-tooltip.is-visible { opacity: 1; transform: translateY(0); }
+    .tutorial-tooltip.is-centered { top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; }
+    .tutorial-tooltip.is-centered.is-visible { transform: translate(-50%, -50%) !important; }
+
+    .tutorial-tooltip-badge {
+        display: inline-block;
+        font-family: var(--font-mono, -apple-system, sans-serif);
+        font-size: 0.68rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--accent, #34C759);
+        background: var(--accent-dim, rgba(52,199,89,0.12));
+        padding: 3px 8px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        font-weight: 600;
+    }
+
+    .tutorial-tooltip-title {
+        font-family: var(--font-display, -apple-system, sans-serif);
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text, #1D1D1F);
+        margin-bottom: 6px;
+    }
+
+    .tutorial-tooltip-text {
+        font-size: 0.86rem;
+        line-height: 1.5;
+        color: var(--text-dim, #86868B);
+        margin-bottom: 12px;
+    }
+
+    .tutorial-waiting-hint {
+        font-size: 0.76rem;
+        color: var(--text-faint, #AEAEB2);
+        font-style: italic;
+        margin-bottom: 12px;
+        display: none;
+    }
+
+    .tutorial-tooltip-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .tutorial-skip {
+        background: transparent;
+        color: var(--text-faint, #AEAEB2);
+        font-size: 0.76rem;
+        font-weight: 500;
+        padding: 6px 4px;
+    }
+    .tutorial-skip:hover { color: var(--text-dim, #86868B); filter: none; background: transparent; }
+
+    .tutorial-next {
+        background: var(--accent, #34C759);
+        color: var(--accent-ink, #FFFFFF);
+        padding: 8px 16px;
+        font-size: 0.82rem;
+        white-space: nowrap;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .tutorial-curtain, .tutorial-ring, .tutorial-tooltip {
+            transition: opacity 0.15s ease !important;
+            animation: none !important;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .tutorial-tooltip { width: calc(100vw - 24px); padding: 14px 14px 12px; }
+    }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+    <!-- ============ ГЛАВНЫЙ ЗАГОЛОВОК (glass, sticky) ============ -->
+    <!-- Класс "topbar" сохранён для совместимости с TUTORIAL (шаг 0 подсвечивает '.topbar') -->
+    <header class="app-header topbar">
+        <div class="header-inner">
+            <div class="brand-mark"><span class="dot"></span> UABiz</div>
+
+            <div class="header-block">
+                <span class="header-label">Операционный день</span>
+                <span class="header-value" id="ui-day">1</span>
+            </div>
+
+            <div class="header-block">
+                <span class="header-label">Баланс корп. счёта</span>
+                <span class="header-value balance">$<span id="ui-balance">25000.00</span></span>
+            </div>
+
+            <div class="header-block">
+                <span class="header-label">Кредитный скоринг</span>
+                <span class="header-value" id="ui-credit">200</span><span class="header-value-sub"> / 1000</span>
+            </div>
+
+            <div class="header-spacer"></div>
+
+            <button class="btn-primary-lg" onclick="GAME.nextDay()">Закрыть операционный день ➔</button>
+        </div>
+
+        <div class="ticker-strip">
+            <div class="ticker-track" id="ticker-track">
+                <span>Инициализация бизнес-журнала…</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============ СЕГМЕНТИРОВАННЫЙ КОНТРОЛ (вкладки) ============ -->
+    <nav class="tabs-wrap">
+        <div class="tabs">
+            <div class="tab active" onclick="UI_DASHBOARD.switchTab(event, 'tab-dashboard')">📊 Компания</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-contracts')">📜 Тендеры</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-rnd')">🧪 R&D</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-production')">🏭 Активы и Склад</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-retail')">🏪 Розница</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-market')">⚖️ Биржа</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-hr')">👥 HR</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-bank')">🏦 Банк</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-finance')">📉 Отчетность</div>
+        </div>
+    </nav>
+
+    <!-- ============ КОНТЕНТ ============ -->
+    <main class="content">
+
+        <!-- ВКЛАДКА 0: КОМПАНИЯ (ГЛАВНЫЙ ДАШБОРД) -->
+        <div id="tab-dashboard" class="tab-content active">
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <div class="card" style="margin-bottom: 0; padding: 15px;">
+                    <h4 style="margin:0 0 10px 0; color: var(--text-dim);">Свободные средства</h4>
+                    <h2 class="success" style="margin:0;">$<span id="dash-balance">0.00</span></h2>
+                </div>
+                <div class="card" style="margin-bottom: 0; padding: 15px;">
+                    <h4 style="margin:0 0 10px 0; color: var(--text-dim);">Логистика (Заполненность)</h4>
+                    <h2 style="margin:0;"><span id="dash-warehouse-vol" style="color: var(--blue);">0</span> <small style="font-size: 0.5em;">/ <span id="dash-warehouse-max">1000</span> м³</small></h2>
+                    <div style="width: 100%; background: var(--surface-3); height: 5px; margin-top: 10px; border-radius: 3px;"><div id="dash-warehouse-bar" style="width: 0%; background: var(--blue); height: 100%; border-radius: 3px;"></div></div>
+                </div>
+                <div class="card" style="margin-bottom: 0; padding: 15px;">
+                    <h4 style="margin:0 0 10px 0; color: var(--text-dim);">Штат компании</h4>
+                    <h2 style="margin:0;"><span id="dash-staff">0</span> <small style="font-size: 0.5em;">сотрудников</small></h2>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+
+                <div class="card">
+                    <h3>Операционная сводка активов</h3>
+                    <p><small>Текущее состояние производственных мощностей, обеспеченность кадрами и запасами сырья.</small></p>
+                    <ul id="dash-businesses" style="padding-left: 0; margin-top: 15px;">
+                        <li>Нет активов.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <div class="card" style="margin-bottom: 20px;">
+                        <h3>Мои обязательства (Активные контракты)</h3>
+                        <ul id="dash-active-contracts" style="padding-left: 0; list-style: none; margin-top: 10px;">
+                            <li><small>Нет активных тендеров.</small></li>
+                        </ul>
+                    </div>
+
+                    <div class="card" style="margin-bottom: 20px;">
+                        <h3>Инвестиции (Депозиты)</h3>
+                        <p>Всего размещено: <strong>$<span id="dash-dep-total" class="success">0.00</span></strong></p>
+                        <ul id="dash-deposits" style="padding-left: 20px; font-size: 0.9em;"></ul>
+                    </div>
+
+                    <div class="card">
+                        <h3>Обязательства (Кредиты)</h3>
+                        <p>Остаток долга: <strong>$<span id="dash-loan-total" class="danger">0.00</span></strong></p>
+                        <ul id="dash-loans" style="padding-left: 20px; font-size: 0.9em;"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА: ТЕНДЕРЫ (B2G/B2B) -->
+        <div id="tab-contracts" class="tab-content">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+                <div class="card">
+                    <h3>Биржа контрактов (Доступные)</h3>
+                    <p><small>Государственные и частные заказы. Покупают дороже рынка, но за срыв сроков списывается штраф из баланса.</small></p>
+                    <ul id="ui-contracts-available" style="padding-left: 0; list-style: none;"></ul>
+                </div>
+                <div class="card">
+                    <h3>Мои обязательства (В работе)</h3>
+                    <p><small>Произведите товар и нажмите "Отгрузить". Не успеете — заплатите неустойку.</small></p>
+                    <ul id="ui-contracts-active" style="padding-left: 0; list-style: none;"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА: ЛАБОРАТОРИЯ -->
+        <div id="tab-rnd" class="tab-content">
+            <div class="card">
+                <h3>Управление отделом исследований</h3>
+                <p>Назначайте инженеров для генерации Очков Исследований (RP). Зарплата списывается ежедневно.</p>
+                <div id="ui-rnd-staff" style="background: var(--surface-2); padding: 10px; border-radius: var(--radius-sm); margin-bottom: 15px;"></div>
+
+                <hr>
+                <h4>Текущий проект:</h4>
+                <div id="ui-rnd-active"></div>
+
+                <hr>
+                <h4>Доступно для исследования:</h4>
+                <ul id="ui-rnd-available" style="padding-left: 20px;"></ul>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА: ПРОИЗВОДСТВО И СКЛАД -->
+        <div id="tab-production" class="tab-content">
+            <div class="card">
+                <h3>Инвестиции в производство</h3>
+                <div id="ui-buy-businesses"></div>
+            </div>
+            <div class="card">
+                <h3>Управление складскими мощностями</h3>
+                <p><strong>Текущий уровень:</strong> <span id="ui-wh-lvl">1</span> | <strong>Админ. издержки:</strong> $<span id="ui-wh-rent" class="danger">50</span> / день</p>
+
+                <p style="margin: 0 0 10px 0;">Занято: <strong id="ui-wh-current">0</strong> м³ из <strong id="ui-wh-max">1000</strong> м³</p>
+
+                <div style="width: 100%; background: var(--surface-3); height: 10px; margin-bottom: 15px; border-radius: 4px; border: 1px solid var(--border);">
+                    <div id="ui-wh-bar" style="width: 0%; background: var(--blue); height: 100%; border-radius: 3px; transition: width 0.3s;"></div>
+                </div>
+
+                <button id="ui-wh-upgrade-btn" onclick="WAREHOUSE.upgrade()" style="background: var(--orange);">Расширить склад</button>
+            </div>
+            <div class="card">
+                <h3>Мои активы (Работающие предприятия)</h3>
+                <ul id="ui-active-businesses" style="padding-left: 20px;">
+                    <li>Нет активных предприятий.</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>Складские запасы</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Товарная позиция</th>
+                            <th>В наличии</th>
+                            <th>Качество</th>
+                            <th>Ср. Себестоимость</th>
+                            <th>Общая стоимость</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ui-warehouse-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА: РИТЕЙЛ -->
+        <div id="tab-retail" class="tab-content">
+            <div id="ui-retail-businesses"></div>
+        </div>
+
+        <!-- ВКЛАДКА: Биржа -->
+        <div id="tab-market" class="tab-content">
+            <div class="card">
+                <h3 style="margin-bottom: 16px;">B2B Биржа (Оптовый рынок)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Товарная позиция</th>
+                            <th>Количество</th>
+                            <th>Качество</th>
+                            <th>Цена за ед.</th>
+                            <th>Операции</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ui-market-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА: HR-ОТДЕЛ -->
+        <div id="tab-hr" class="tab-content">
+            <div class="card">
+                <h3>Управление персоналом</h3>
+                <p><strong>Общий штат:</strong> <span id="ui-staff-total">0</span> чел. | <strong>Фонд оплаты труда:</strong> $<span id="ui-staff-salary" class="danger">0.00</span> / день</p>
+
+                <div id="ui-hr-breakdown" style="margin-bottom: 15px; padding: 12px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: var(--radius-sm);"></div>
+
+                <div style="display: flex; gap: 20px; margin-top: 15px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 250px; padding: 15px; background: var(--surface-2); border-radius: var(--radius);">
+                        <h4 style="margin-top:0;">Найм в цеха (Сборка)</h4>
+                        <p><small>Производят продукцию на заводах. Выжать 100% мощности могут только Senior-инженеры.</small></p>
+                        <div id="ui-hire-factory"></div>
+                    </div>
+                    <div style="flex: 1; min-width: 250px; padding: 15px; background: var(--surface-2); border-radius: var(--radius);">
+                        <h4 style="margin-top:0;">Научный персонал (R&D)</h4>
+                        <p><small>Разрабатывают технологии. Не могут работать на заводах.</small></p>
+                        <div id="ui-hire-rnd"></div>
+                    </div>
+                </div>
+
+                <hr>
+                <h4>Академия (Сотрудники на обучении)</h4>
+                <div id="ui-hr-training-list" style="margin-bottom: 20px;"></div>
+
+                <hr>
+                <h4>Кадровый резерв (Ждут назначения на объекты)</h4>
+                <div id="ui-hr-reserve-table"></div>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА: БАНК -->
+        <div id="tab-bank" class="tab-content">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+
+                <div>
+                    <div class="card">
+                        <h3>Кредитование бизнеса</h3>
+                        <p>Доступный лимит: $<span id="ui-credit-limit" class="success">0.00</span></p>
+                        <p>Базовая ставка: <span id="ui-rate" style="color: var(--blue); font-weight: bold;">15</span>% годовых</p>
+                        <hr>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color:var(--text-dim);">Сумма кредита ($):</label>
+                            <input type="number" id="input-loan-amount" placeholder="Например: 5000" style="width: 100%; margin-bottom: 10px;">
+
+                            <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color:var(--text-dim);">Срок кредитования:</label>
+                            <select id="select-loan-term" style="width: 100%; margin-bottom: 10px;">
+                                <option value="7">Краткосрочный (7 дней)</option>
+                                <option value="30" selected>Месяц (30 дней)</option>
+                                <option value="90">Квартал (90 дней)</option>
+                                <option value="180">Полгода (180 дней)</option>
+                                <option value="270">3 квартала (270 дней)</option>
+                                <option value="360">Год (360 дней)</option>
+                            </select>
+                        </div>
+                        <button onclick="UI_DASHBOARD.submitLoan()" style="width: 100%;">Подать заявку на кредит</button>
+                    </div>
+
+                    <div class="card">
+                        <h3>Размещение депозитов (Инвестиции)</h3>
+                        <p><small>Базовая ставка растет в зависимости от срока. Капитализация в конце срока дает <strong>+1%</strong>.</small></p>
+                        <hr>
+                        <div style="margin-bottom: 10px;">
+                            <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color:var(--text-dim);">Сумма вклада ($):</label>
+                            <input type="number" id="input-dep-amount" placeholder="Например: 10000" style="width: 100%; margin-bottom: 10px;">
+
+                            <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color:var(--text-dim);">Срок размещения:</label>
+                            <select id="select-dep-term" style="width: 100%; margin-bottom: 10px;">
+                                <option value="7">7 дней (База: 4%)</option>
+                                <option value="30">30 дней (База: 6%)</option>
+                                <option value="90">90 дней (База: 9%)</option>
+                                <option value="180">180 дней (База: 12%)</option>
+                                <option value="270">270 дней (База: 14%)</option>
+                                <option value="360">360 дней (База: 16%)</option>
+                            </select>
+
+                            <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color:var(--text-dim);">Способ выплаты %:</label>
+                            <select id="select-dep-type" style="width: 100%; margin-bottom: 10px;">
+                                <option value="daily">Ежедневно на счет (Для кассовых разрывов)</option>
+                                <option value="end">В конце срока (+1% к ставке, Капитализация)</option>
+                            </select>
+                        </div>
+                        <button onclick="UI_DASHBOARD.submitDeposit()" style="width: 100%; background: var(--text);">Открыть депозит</button>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="card">
+                        <h3>Портфель обязательств (Мои кредиты)</h3>
+                        <p>Общий долг: $<span id="ui-debt" class="danger">0.00</span></p>
+                        <ul id="ui-active-loans" style="padding-left: 20px; list-style-type: square;">
+                            <li><small>Нет активных кредитов.</small></li>
+                        </ul>
+                    </div>
+
+                    <div class="card">
+                        <h3>Портфель активов (Мои депозиты)</h3>
+                        <ul id="ui-active-deposits" style="padding-left: 20px; list-style-type: square;">
+                            <li><small>Нет открытых вкладов.</small></li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА: ФИНАНСОВАЯ ОТЧЕТНОСТЬ -->
+        <div id="tab-finance" class="tab-content">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                <div class="card" id="ui-balance-sheet"></div>
+                <div class="card" id="ui-pnl-statement"></div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- Архитектура скриптов (без изменений в путях/порядке ядра) -->
+<script src="js/core/state.js"></script>
+<script src="js/core/utils.js"></script>
+<script src="js/ui/notify.js"></script>
+<script src="js/data/recipes.js"></script>
+<script src="js/managers/market.js"></script>
+<script src="js/managers/finance.js"></script>
+<script src="js/managers/production.js"></script>
+<script src="js/managers/hr.js"></script>
+<script src="js/managers/events.js"></script>
+<script src="js/managers/rnd.js"></script>
+<script src="js/managers/ledger.js"></script>
+<script src="js/managers/warehouse.js"></script>
+<script src="js/managers/contracts.js"></script>
+<script src="js/managers/taxes.js"></script>
+<script src="js/ui/dashboardUI.js"></script>
+<script src="js/ui/tutorial.js"></script>
+<script src="js/core/gameLoop.js"></script>
+
+<!-- =========================================================
+     Аддитивный слой тикер-ленты (без изменений в логике —
+     просто продолжает читать STATE.eventLog / STATE.ledger).
+     ========================================================= -->
+<script>
+(function () {
+    function renderTicker() {
+        var track = document.getElementById('ticker-track');
+        if (!track || typeof STATE === 'undefined') return;
+
+        var items = [];
+
+        if (STATE.eventLog && STATE.eventLog.length > 0) {
+            STATE.eventLog.slice(0, 8).forEach(function (log) {
+                var cls = log.type === 'good' ? 'ev-good' : (log.type === 'bad' ? 'ev-bad' : 'ev-info');
+                var plain = log.msg.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                items.push('<span class="' + cls + '">День ' + log.day + ' · ' + plain + '</span>');
+            });
+        }
+
+        if (STATE.ledger && STATE.ledger.today && typeof formatMoney === 'function') {
+            var t = STATE.ledger.today;
+            if (t.rev_b2b) items.push('<span class="ev-good">B2B выручка сегодня: +$' + formatMoney(t.rev_b2b) + '</span>');
+            if (t.rev_b2c) items.push('<span class="ev-good">B2C выручка сегодня: +$' + formatMoney(t.rev_b2c) + '</span>');
+            if (t.exp_taxes_corp) items.push('<span class="ev-bad">Налог на прибыль: -$' + formatMoney(t.exp_taxes_corp) + '</span>');
+        }
+
+        if (items.length === 0) {
+            items.push('<span>Бизнес-журнал пуст. Закройте операционный день, чтобы увидеть события.</span>');
+        }
+
+        track.innerHTML = items.join('<span style="color:var(--text-faint);">•</span>') +
+            '<span style="color:var(--text-faint);">•</span>' +
+            items.join('<span style="color:var(--text-faint);">•</span>');
+    }
+
+    function attachTickerHook() {
+        if (typeof UI_DASHBOARD === 'undefined' || !UI_DASHBOARD.update) {
+            setTimeout(attachTickerHook, 50);
+            return;
+        }
+        var originalUpdate = UI_DASHBOARD.update.bind(UI_DASHBOARD);
+        UI_DASHBOARD.update = function () {
+            originalUpdate();
+            renderTicker();
+        };
+        renderTicker();
+    }
+
+    attachTickerHook();
+})();
+</script>
+
+</body>
+</html>
