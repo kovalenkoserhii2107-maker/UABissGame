@@ -16,20 +16,26 @@ const TUTORIAL = {
     STEPS: [
         {
             target: '.topbar',
-            title: 'Добро пожаловать в бизнес!',
-            text: 'Ваш стартовый капитал — $25,000. Ваша первая задача — открыть успешный розничный магазин, наладить сбыт ходовых товаров и заработать начальный капитал.',
+            title: 'Добро пожаловать в UABiz!',
+            text: 'Вы начинаете путь предпринимателя с капиталом $25,000. Впереди 5 глав развития — от небольшого магазина до национальной корпорации. Давайте запустим ваш первый прибыльный бизнес!',
+            trigger: { type: 'manual' }
+        },
+        {
+            target: '#ui-quest-widget',
+            title: 'Квест-Центр и Главы Империи',
+            text: 'Здесь отображаются стратегические цели текущей главы. За выполнение каждой задачи вы получаете финансовые гранты, повышение кредитного рейтинга и доступ к новым отраслям.',
             trigger: { type: 'manual' }
         },
         {
             target: '[onclick*="\'tab-retail\'"]',
             title: 'Торговля и Розница',
-            text: 'Перейдите во вкладку «Розница», чтобы открыть свой первый фирменный магазин.',
+            text: 'Самый надежный способ начать — розничная торговля ходовыми товарами. Перейдите во вкладку «Розница».',
             trigger: { type: 'click' }
         },
         {
             target: '[onclick*="buyBusiness(\'retail_store\')"]',
-            title: 'Открытие магазина',
-            text: 'Нажмите «+ Открыть Фирменный магазин» и выберите стартовый город.',
+            title: 'Открытие фирменного магазина',
+            text: 'Нажмите «+ Открыть Фирменный магазин» и выберите стартовый город (например, Одессу или Харьков). В городах с высоким спросом выручка выше!',
             trigger: {
                 type: 'condition',
                 check: (state) => state.company.businesses.some(b => b.type === 'retail_store')
@@ -37,42 +43,60 @@ const TUTORIAL = {
         },
         {
             target: '[onclick*="\'tab-hr\'"]',
-            title: 'Отдел кадров',
-            text: 'Магазину требуются сотрудники: Директор магазина и Продавец-консультант. Перейдите в HR.',
+            title: 'Отдел кадров (HR)',
+            text: 'Магазину требуются специалисты: Директор магазина (управляет точкой) и Продавец-консультант (обслуживает поток покупателей). Перейдите в HR.',
             trigger: { type: 'click' }
         },
         {
             target: '[onclick*="HR.hire(\'store_manager\')"]',
-            title: 'Найм персонала',
-            text: 'Наймите 1 Директора магазина (Store Manager) и Продавца (Salesman) в кадровый резерв.',
+            title: 'Найм команды',
+            text: 'Наймите в кадровый резерв 1 Директора магазина (Store Manager) и 1 Продавца (Salesman).',
             trigger: {
                 type: 'condition',
-                check: (state) => (state.hr && state.hr.staff && (state.hr.staff.store_manager || 0) > 0)
+                check: (state) => (state.hr && state.hr.staff && (state.hr.staff.store_manager || 0) > 0 && (state.hr.staff.salesman || 0) > 0)
+            }
+        },
+        {
+            target: '[onclick*="\'tab-retail\'"]',
+            title: 'Распределение персонала',
+            text: 'Вернитесь во вкладку «Розница» и назначьте нанятых сотрудников в ваш магазин с помощью кнопок «+».',
+            trigger: {
+                type: 'condition',
+                check: (state) => state.company.businesses.some(b => b.type === 'retail_store' && b.assigned && (b.assigned.store_manager || 0) >= 1 && (b.assigned.salesman || 0) >= 1)
             }
         },
         {
             target: '[onclick*="\'tab-market\'"]',
-            title: 'Оптовая биржа',
-            text: 'Пора закупить ходовые потребительские товары для полок вашего магазина.',
+            title: 'Оптовая товарная биржа',
+            text: 'Штат на месте, теперь нужно заполнить полки товарами. Перейдите во вкладку «Биржа».',
             trigger: { type: 'click' }
         },
         {
             target: '[onclick*="submitBuy(\'bakery\')"]',
-            title: 'Закупка товаров',
-            text: 'Купите партию «Хлеб и Выпечка» (или других продуктов) с доставкой на склад в ваш город.',
-            trigger: { type: 'click' }
+            title: 'Закупка ходовых товаров',
+            text: 'Выберите город вашего магазина, укажите количество (например, 50-100 шт. Хлеба, Овощей или Консервов) и нажмите «Купить». Товар отправится в доставку!',
+            trigger: {
+                type: 'condition',
+                check: (state) => (state.logistics && state.logistics.deliveries && state.logistics.deliveries.length > 0) || (state.company.warehouses && Object.values(state.company.warehouses).some(w => Object.values(w.inventory).some(i => i.qty > 0)))
+            }
         },
         {
-            target: '[onclick*="\'tab-dashboard\'"]',
-            title: 'Квест-Центр и Стратегия',
-            text: 'На главном дашборде активен Квест-Центр. Закрывайте цели глав, забирайте гранты и развивайтесь от магазина до национальной корпорации!',
+            target: '[onclick*="\'tab-warehouse\'"]',
+            title: 'Склады и автопополнение',
+            text: 'Во вкладке «Склады» вы можете контролировать остатки товаров в регионах, расширять вместимость хабов и настраивать правила автоснабжения магазинов.',
             trigger: { type: 'click' }
         },
         {
             target: '[onclick*="GAME.nextDay()"]',
-            title: 'Старт бизнеса',
-            text: 'Нажмите «Следующий день», чтобы принять поставку, открыть двери магазина и получить первую выручку!',
+            title: 'Завершение операционного дня',
+            text: 'Нажмите «Закрыть операционный день», чтобы товары прибыли со склада, магазин открыл двери и принес первую выручку!',
             trigger: { type: 'click' }
+        },
+        {
+            target: '[onclick*="\'tab-finance\'"]',
+            title: 'Финансовый контроль и Развитие!',
+            text: 'Во вкладке «Отчетность» отслеживайте P&L и налоги. Выполняйте задачи в Квест-Центре, стройте собственные фабрики, открывайте НИИ и стройте свою бизнес-империю! Если захотите повторить обучение — нажмите кнопку «🎓 Обучение» в шапке.',
+            trigger: { type: 'manual' }
         }
     ],
 
@@ -353,6 +377,16 @@ const TUTORIAL = {
             this._updateHooked = true;
         };
         tryHook();
+    },
+
+    restart() {
+        if (typeof localStorage !== 'undefined') localStorage.removeItem('uabiz_tutorial_done');
+        if (!STATE.tutorial) STATE.tutorial = {};
+        STATE.tutorial.isActive = true;
+        STATE.tutorial.step = 0;
+        this.init();
+        this.renderStep();
+        if (typeof NOTIFY !== 'undefined') NOTIFY.info('Обучение', 'Интерактивный курс перезапущен!');
     }
 };
 
