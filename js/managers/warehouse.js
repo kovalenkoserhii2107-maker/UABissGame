@@ -73,6 +73,9 @@ const WAREHOUSE = {
     },
 
     upgrade(cityId) {
+        // ЗАЩИТА: Если вместо ID города прилетел системный клик (MouseEvent) или пустота - прерываемся
+        if (!cityId || typeof cityId !== 'string') return;
+
         this.init();
         let cost = this.getUpgradeCost(cityId);
         let wh = STATE.company.warehouses[cityId];
