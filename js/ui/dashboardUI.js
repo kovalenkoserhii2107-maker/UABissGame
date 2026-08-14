@@ -928,8 +928,12 @@ const UI_DASHBOARD = {
                     <div style="color:#c0392b; margin-top:8px; font-size:0.85em; font-style:italic;">* Доставка из других городов платная (за м³ и км пробега).</div>
                 </div>`;
                 
+                // ВОССТАНОВЛЕНА ПЕРЕМЕННАЯ routingHtml
+                let routingHtml = `<div style="background: #fff3cd; padding: 10px; border-radius: 4px; border: 1px solid #f1c40f; margin-top: 10px;">
+                    <strong style="font-size: 0.9em; color: #b9770e;">АВТО-ПОСТАВКИ (ШТУК В ДЕНЬ):</strong><br>`;
+
                 if (viableRoutes.length === 0) {
-                    routingHtml += `<div style="font-size:0.85em; color:#7f8c8d;">Нет потребителей. 100% уходит на Склад города.</div>`;
+                    routingHtml += `<div style="font-size:0.85em; color:#7f8c8d;">Нет потребителей. 100% уходит на выбранный склад.</div>`;
                 } else {
                     viableRoutes.forEach(route => {
                         let val = biz.routing[route.id] || 0;
@@ -964,6 +968,7 @@ const UI_DASHBOARD = {
                                 <strong style="color:#7f8c8d;">ПОТРЕБНОСТЬ В СЫРЬЕ (Склад ${cityData.name}):</strong><br>
                                 ${inputsHtml}
                             </div>
+                            ${logisticsSelectorsHtml}
                             ${routingHtml}
                             <div style="background: #fdfefe; padding: 10px; border: 1px dashed #bdc3c7; border-radius: 4px; margin-top: 10px; font-size: 0.9em;">
                                 <strong style="color:#2c3e50;">ОБОРУДОВАНИЕ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
