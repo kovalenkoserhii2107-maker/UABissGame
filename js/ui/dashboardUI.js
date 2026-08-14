@@ -299,7 +299,7 @@ const UI_DASHBOARD = {
                     <strong style="color:${netColor};">$${formatMoney(yNet)}</strong>
                 </div>
             `;
-        }
+        },
 
         // 3. ОПЕРАЦИОННЫЙ РАДАР (СВЕТОФОР)
         let radarList = document.getElementById('dash-radar-list');
