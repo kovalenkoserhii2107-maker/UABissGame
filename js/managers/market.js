@@ -77,6 +77,9 @@ const MARKET = {
             return;
         }
 
+        // Подтягиваем имя города из новой системы GEO
+        let cityName = typeof GEO !== 'undefined' ? GEO.getCity(cityId).name : cityId;
+
         // ПРОВЕРКА ЛИМИТА СКЛАДА ДЛЯ КОНКРЕТНОГО ГОРОДА
         if (typeof WAREHOUSE !== 'undefined' && WAREHOUSE.getCurrentVolume) {
             let itemVol = res.volume || 1.0; 
@@ -84,7 +87,7 @@ const MARKET = {
             let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
             
             if (totalVol > freeSpace) {
-                NOTIFY.error('Склад переполнен!', `В г. ${CITIES[cityId].name} нет места. Свободно: ${freeSpace.toFixed(1)} м³.`);
+                NOTIFY.error('Склад переполнен!', `В г. ${cityName} нет места. Свободно: ${freeSpace.toFixed(1)} м³.`);
                 return;
             }
         }
@@ -101,7 +104,7 @@ const MARKET = {
             // ВАЖНО: Добавляем targetCity в накладную
             STATE.logistics.deliveries.push({ item: itemKey, qty: qty, cost: cost, daysLeft: 1, targetCity: cityId });
             
-            NOTIFY.success('Успех', `Закупка оформлена. ${qty} шт. прибудут в г. ${CITIES[cityId].name} завтра.`);
+            NOTIFY.success('Успех', `Закупка оформлена. ${qty} шт. прибудут в г. ${cityName} завтра.`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {
             NOTIFY.error('Ошибка', `Недостаточно средств. Нужно $${formatMoney(cost)}`);
@@ -127,7 +130,8 @@ const MARKET = {
             if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
             STATE.logistics.receivables.push({ amount: revenue, cogs: cogs, source: 'B2B', daysLeft: 1 });
             
-            NOTIFY.success('Успех', `Партия отгружена со склада ${CITIES[cityId].name}. Выручка $${formatMoney(revenue)} поступит завтра.`);
+            let cityName = typeof GEO !== 'undefined' ? GEO.getCity(cityId).name : cityId;
+            NOTIFY.success('Успех', `Партия отгружена со склада ${cityName}. Выручка $${formatMoney(revenue)} поступит завтра.`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {
              if (typeof NOTIFY !== 'undefined') NOTIFY.error('Ошибка', 'Недостаточно товара на складе для продажи.');
