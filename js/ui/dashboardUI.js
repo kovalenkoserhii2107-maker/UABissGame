@@ -1327,11 +1327,12 @@ const UI_DASHBOARD = {
         let yRevB2C = y.rev_b2c || 0; let tRevB2C = t.rev_b2c || 0;
         let yRevOther = y.rev_other || 0; let tRevOther = t.rev_other || 0; 
         let yExpMarketing = y.exp_marketing || 0; let tExpMarketing = t.exp_marketing || 0;
+        let yExpLogistics = y.exp_logistics || 0; let tExpLogistics = t.exp_logistics || 0;
         
         let yRev = y.rev_b2b + y.rev_b2g + yRevB2C + yRevOther;
         let tRev = t.rev_b2b + t.rev_b2g + tRevB2C + tRevOther;
         
-        let yOpex = y.exp_salary + y.exp_admin + y.exp_hr + yExpFines + yExpRepair + yTaxPayroll + yExpMarketing;
+        let yOpex = y.exp_salary + y.exp_admin + y.exp_hr + yExpFines + yExpRepair + yTaxPayroll + yExpMarketing + yExpLogistics;
         let tOpex = t.exp_salary + t.exp_admin + t.exp_hr + tExpFines + tExpRepair + tTaxPayroll + tExpMarketing;
         
         let yEbitda = yRev - y.exp_materials - yOpex;
@@ -1386,6 +1387,7 @@ const UI_DASHBOARD = {
                 <tr><td style="text-align:left; color:#e67e22;">- Социальные взносы (20% на ФОТ)</td><td style="color:#e67e22;">$${formatMoney(yTaxPayroll)}</td><td style="color:#e67e22;">$${formatMoney(tTaxPayroll)}</td></tr>
                 <tr><td style="text-align:left; color:#7f8c8d;">- Аренда (Магазины, Офисы, Цехи)</td><td>$${formatMoney(y.exp_admin)}</td><td>$${formatMoney(t.exp_admin)}</td></tr>
                 <tr><td style="text-align:left; color:#8e44ad; font-weight:bold;">- Маркетинг и Реклама</td><td style="color:#8e44ad;">$${formatMoney(yExpMarketing)}</td><td style="color:#8e44ad;">$${formatMoney(tExpMarketing)}</td></tr>
+                <tr><td style="text-align:left; color:#f39c12;">- Логистика (Доставка)</td><td style="color:#f39c12;">$${formatMoney(yExpLogistics)}</td><td style="color:#f39c12;">$${formatMoney(tExpLogistics)}</td></tr>
                 <tr><td style="text-align:left; color:#7f8c8d;">- ТО и Ремонт</td><td>$${formatMoney(yExpRepair)}</td><td>$${formatMoney(tExpRepair)}</td></tr>
                 <tr><td style="text-align:left; color:#c0392b;">- Прочие расходы (Штрафы, ЧП)</td><td style="color:#c0392b;">$${formatMoney(yExpFines)}</td><td style="color:#c0392b;">$${formatMoney(tExpFines)}</td></tr>
                 
@@ -1922,7 +1924,7 @@ const UI_DASHBOARD = {
         }
     },
 
-    // Отправка товаров с Общего склада в локальный склад Магазина
+    // Отправка товаров с Общего склада в локальный склад Магазина (ПЛАТНАЯ ЛОГИСТИКА)
     transferToStore(itemKey, cityId) {
         let storeSelect = document.getElementById(`trans-store-${cityId}-${itemKey}`);
         let qtyInput = document.getElementById(`trans-qty-${cityId}-${itemKey}`);
@@ -1931,7 +1933,6 @@ const UI_DASHBOARD = {
         
         let storeUid = parseInt(storeSelect.value);
         let qty = parseInt(qtyInput.value);
-        
         let store = STATE.company.businesses.find(b => b.uid === storeUid);
         if (!store) return;
         
@@ -1939,32 +1940,53 @@ const UI_DASHBOARD = {
         let globalInv = localWh.inventory[itemKey];
         if (!globalInv || globalInv.qty < qty) return NOTIFY.error('Ошибка', 'На складе города нет столько товара.');
         
-        let currentVol = 0;
-        if (!store.localInventory) store.localInventory = {};
-        Object.keys(store.localInventory).forEach(ik => currentVol += store.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0));
-        
         let tpl = RECIPES.BUSINESSES[store.type];
         let maxVol = tpl.area * (store.level || 1) * (store.locMult || 1.0) * 2;
         let itemVol = RECIPES.RESOURCES[itemKey].volume || 0.1;
         
+        let currentVol = 0;
+        if (!store.localInventory) store.localInventory = {};
+        Object.keys(store.localInventory).forEach(ik => currentVol += store.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0));
+        
         let maxCanFit = itemVol > 0 ? Math.floor((maxVol - currentVol) / itemVol) : qty;
         if (qty > maxCanFit) {
-            NOTIFY.error('Ошибка', `На складе магазина нет места! Влезет только ${maxCanFit} шт.`);
             qty = maxCanFit;
-            if (qty <= 0) return;
+            if (qty <= 0) return NOTIFY.error('Ошибка', `На складе магазина нет места!`);
         }
+
+        // РАСЧЕТ СТОИМОСТИ ЛОГИСТИКИ (МЕЖДУ ГОРОДАМИ)
+        let sourceCity = cityId;
+        let targetCity = store.city || 'odesa';
+        let dist = typeof GEO !== 'undefined' ? GEO.getDistance(sourceCity, targetCity) : 10;
+        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.15;
+        
+        // Формула: Расстояние * Базовая ставка * Объем груза (м³)
+        let totalVolume = qty * itemVol;
+        let logCost = dist * logBase * totalVolume;
+
+        if (STATE.finances.balance < logCost) {
+            NOTIFY.error('Ошибка логистики', `Не хватает средств на оплату транспортной компании. Нужно $${formatMoney(logCost)}.`);
+            return;
+        }
+
+        // Списываем деньги и записываем в P&L
+        STATE.finances.balance -= logCost;
+        if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', logCost);
         
         if (!store.localInventory[itemKey]) store.localInventory[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
-        
         let locInv = store.localInventory[itemKey];
-        locInv.avgCost = ((locInv.qty * locInv.avgCost) + (qty * globalInv.avgCost)) / (locInv.qty + qty);
+        
+        // ВАЖНО: Стоимость доставки ложится в себестоимость товара!
+        let totalOldCost = locInv.qty * locInv.avgCost;
+        let totalNewCost = qty * globalInv.avgCost;
+        locInv.avgCost = (totalOldCost + totalNewCost + logCost) / (locInv.qty + qty);
         locInv.quality = ((locInv.qty * (locInv.quality || 1)) + (qty * (globalInv.quality || 1))) / (locInv.qty + qty);
         locInv.qty += qty;
         
         globalInv.qty -= qty;
         if (globalInv.qty === 0) globalInv.avgCost = 0;
         
-        NOTIFY.success('Успех', `Успешно отгружено ${qty} шт. в "${store.name}".`);
+        NOTIFY.success('Успех', `Успешно отгружено ${qty} шт. в "${store.name}". Оплата логистики: $${formatMoney(logCost)}.`);
         this.update();
     },
     
