@@ -1023,20 +1023,28 @@ const UI_DASHBOARD = {
         }
     },
 
-    // --- НОВАЯ ВКЛАДКА: B2B БИРЖА С РАБОЧИМИ ФИЛЬТРАМИ ---
+    // --- БИРЖА С РАБОЧИМИ ФИЛЬТРАМИ И АКТИВНЫМИ ОРДЕРАМИ ---
     updateMarketTab() {
         let marketContainer = document.getElementById('ui-market-businesses');
         if (!marketContainer || typeof MARKET === 'undefined') return;
 
         let cityOptions = '';
         if (STATE.company.warehouses) {
-            Object.keys(CITIES).forEach(cId => {
+            Object.keys(GEO.CITIES).forEach(cId => {
                 let wh = STATE.company.warehouses[cId];
                 if (wh && wh.level > 0) {
                     let maxVol = WAREHOUSE.getMaxVolume(cId);
                     let curVol = WAREHOUSE.getCurrentVolume(cId);
-                    let freeSpace = Math.max(0, maxVol - curVol).toFixed(1);
-                    cityOptions += `<option value="${cId}">${CITIES[cId].name} (Свободно: ${freeSpace} м³)</option>`;
+                    let pendingVol = 0;
+                    if (STATE.logistics && STATE.logistics.deliveries) {
+                        STATE.logistics.deliveries.forEach(d => {
+                            if (d.targetCity === cId && RECIPES.RESOURCES[d.item]) {
+                                pendingVol += d.qty * (RECIPES.RESOURCES[d.item].volume || 1.0);
+                            }
+                        });
+                    }
+                    let freeSpace = Math.max(0, maxVol - curVol - pendingVol).toFixed(1);
+                    cityOptions += `<option value="${cId}">${GEO.CITIES[cId].name} (Свободно: ${freeSpace} м³)</option>`;
                 }
             });
         }
@@ -1046,7 +1054,6 @@ const UI_DASHBOARD = {
             return;
         }
 
-        // Рендер кнопок фильтра
         let filterHtml = `
         <div style="margin-bottom: 20px; display: flex; gap: 10px;">
             <button onclick="UI_DASHBOARD.setMarketFilter('all')" style="background: ${this.marketFilter==='all' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='all' ? '#fff' : 'var(--text)'};">Все товары</button>
@@ -1054,6 +1061,52 @@ const UI_DASHBOARD = {
             <button onclick="UI_DASHBOARD.setMarketFilter('finished')" style="background: ${this.marketFilter==='finished' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='finished' ? '#fff' : 'var(--text)'};">Готовая продукция</button>
             <button onclick="UI_DASHBOARD.setMarketFilter('equipment')" style="background: ${this.marketFilter==='equipment' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='equipment' ? '#fff' : 'var(--text)'};">Оборудование / ПК</button>
         </div>`;
+
+        // Рендер активных ордеров (Товары в пути)
+        let pendingOrdersHtml = '';
+        if (STATE.logistics && STATE.logistics.deliveries) {
+            let marketOrders = STATE.logistics.deliveries.filter(d => d.isMarketOrder);
+            if (marketOrders.length > 0) {
+                pendingOrdersHtml += `
+                <div style="margin-bottom: 20px; background: #fffcf2; border: 1px solid #f1c40f; border-radius: 6px; padding: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #d35400;">📦 Оформленные поставки (В пути)</h4>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                        <tr style="border-bottom: 1px solid #f1c40f; text-align: left; color: #b9770e;">
+                            <th style="padding: 5px;">Товар</th>
+                            <th style="padding: 5px;">Кол-во</th>
+                            <th style="padding: 5px;">Качество/Бренд</th>
+                            <th style="padding: 5px;">Цена (ед)</th>
+                            <th style="padding: 5px;">Партия</th>
+                            <th style="padding: 5px;">Доставка</th>
+                            <th style="padding: 5px;">Списано</th>
+                            <th style="padding: 5px; text-align: right;">Действие</th>
+                        </tr>
+                `;
+                
+                marketOrders.forEach(d => {
+                    let resName = RECIPES.RESOURCES[d.item] ? RECIPES.RESOURCES[d.item].name : d.item;
+                    let unitPrice = d.cost / d.qty;
+                    let cName = typeof GEO !== 'undefined' ? GEO.getCity(d.targetCity).name : d.targetCity;
+
+                    pendingOrdersHtml += `
+                        <tr style="border-bottom: 1px dashed #fdebd0;">
+                            <td style="padding: 8px 5px;"><strong>${resName}</strong><br><small style="color:#7f8c8d;">В г. ${cName}</small></td>
+                            <td style="padding: 8px 5px; color:#2980b9; font-weight:bold;">${d.qty} шт.</td>
+                            <td style="padding: 8px 5px;">★ ${(d.quality||1.0).toFixed(2)}<br><small>Бренд: ${d.brand||0}</small></td>
+                            <td style="padding: 8px 5px;">$${formatMoney(unitPrice)}</td>
+                            <td style="padding: 8px 5px;">$${formatMoney(d.cost)}</td>
+                            <td style="padding: 8px 5px; color:#c0392b;">$${formatMoney(d.logCost)}</td>
+                            <td style="padding: 8px 5px; color:#27ae60; font-weight:bold;">$${formatMoney(d.totalCost)}</td>
+                            <td style="padding: 8px 5px; text-align: right;">
+                                <button onclick="MARKET.cancelOrder('${d.id}')" style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; font-size:0.85em;">Отменить</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                pendingOrdersHtml += `</table></div>`;
+            }
+        }
 
         let html = `
         ${filterHtml}
@@ -1063,6 +1116,7 @@ const UI_DASHBOARD = {
                 ${cityOptions}
             </select>
         </div>
+        ${pendingOrdersHtml}
         <table style="width: 100%; border-collapse: collapse; font-size: 0.95em;">
             <tr style="border-bottom: 2px solid #34495e; text-align: left;">
                 <th style="padding: 10px;">Сырье / Товар</th>
@@ -1076,7 +1130,6 @@ const UI_DASHBOARD = {
         Object.keys(RECIPES.RESOURCES).forEach(key => {
             let res = RECIPES.RESOURCES[key];
             
-            // ЛОГИКА ФИЛЬТРАЦИИ
             if (this.marketFilter === 'raw' && !res.isRaw) return;
             if (this.marketFilter === 'finished' && (res.isRaw || res.isEquipment)) return;
             if (this.marketFilter === 'equipment' && !res.isEquipment) return;
@@ -1086,7 +1139,6 @@ const UI_DASHBOARD = {
             let b2bQuality = 1.00;
             let b2bBrand = 0;
             
-            // Рендер товаров на НАШИХ складах для продажи
             Object.keys(STATE.company.warehouses).forEach(cId => {
                 let wh = STATE.company.warehouses[cId];
                 if (wh.inventory && wh.inventory[key] && wh.inventory[key].qty > 0) {
@@ -1108,7 +1160,6 @@ const UI_DASHBOARD = {
                 }
             });
             
-            // Рендер товаров РЫНКА для покупки
             html += `
             <tr style="border-bottom: 1px solid #ecf0f1;">
                 <td style="padding: 10px;">
@@ -1144,21 +1195,36 @@ const UI_DASHBOARD = {
         marketContainer.innerHTML = html;
     },
 
-    // Умный расчет максимально возможной закупки
+    // Умный расчет максимально возможной закупки с учетом логистики и товаров в пути
     setMaxBuy(itemKey) {
-        let cityId = document.getElementById('market-target-city').value;
+        let citySelect = document.getElementById('market-target-city');
+        if (!citySelect) return;
+        
+        let cityId = citySelect.value;
         let price = MARKET.getCurrentPrice(itemKey);
         let availMarket = MARKET.getAvailablePool(itemKey);
         
-        // 1. Ограничение по деньгам
-        let maxByMoney = Math.floor(STATE.finances.balance / price);
-        
-        // 2. Ограничение по объему выбранного склада
         let itemVol = RECIPES.RESOURCES[itemKey].volume || 1.0;
-        let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
+        let dist = typeof GEO !== 'undefined' ? Math.max(10, GEO.getDistance('kyiv', cityId)) : 10;
+        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.15;
+        let logCostPerItem = dist * logBase * itemVol;
+
+        // Ограничение по балансу: стоимость товара + стоимость его доставки
+        let maxByMoney = Math.floor(STATE.finances.balance / (price + logCostPerItem));
+        
+        // Ограничение по объему с учетом товаров в пути
+        let pendingVol = 0;
+        if (STATE.logistics && STATE.logistics.deliveries) {
+            STATE.logistics.deliveries.forEach(d => {
+                if (d.targetCity === cityId && RECIPES.RESOURCES[d.item]) {
+                    pendingVol += d.qty * (RECIPES.RESOURCES[d.item].volume || 1.0);
+                }
+            });
+        }
+
+        let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId) - pendingVol;
         let maxBySpace = Math.floor(freeSpace / itemVol);
 
-        // Итоговый максимум — это наименьшее из трех узких мест
         let maxPossible = Math.min(availMarket, maxByMoney, maxBySpace);
         if (maxPossible < 0) maxPossible = 0;
 
