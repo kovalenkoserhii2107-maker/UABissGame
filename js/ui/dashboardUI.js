@@ -1620,17 +1620,45 @@ const UI_DASHBOARD = {
         amountInput.value = ''; 
     },
 
-    // НОВОЕ: Обработка покупки с рынка
+    // Умный расчет максимально возможной закупки (кнопка MAX)
+    setMaxBuy(itemKey) {
+        let citySelect = document.getElementById('market-target-city');
+        if (!citySelect) return;
+        
+        let cityId = citySelect.value;
+        let price = MARKET.getCurrentPrice(itemKey);
+        let availMarket = MARKET.getAvailablePool(itemKey);
+        
+        // 1. Ограничение по деньгам
+        let maxByMoney = Math.floor(STATE.finances.balance / price);
+        
+        // 2. Ограничение по объему выбранного склада
+        let itemVol = RECIPES.RESOURCES[itemKey].volume || 1.0;
+        let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
+        let maxBySpace = Math.floor(freeSpace / itemVol);
+
+        // Итоговый максимум — это наименьшее из трех узких мест
+        let maxPossible = Math.min(availMarket, maxByMoney, maxBySpace);
+        if (maxPossible < 0) maxPossible = 0;
+
+        document.getElementById(`buy-qty-${itemKey}`).value = maxPossible;
+    },
+
+    // Обработка покупки с рынка
     submitBuy(itemKey) {
         let input = document.getElementById(`buy-qty-${itemKey}`);
-        if (input) {
+        let citySelect = document.getElementById('market-target-city');
+        
+        if (input && citySelect) {
             let qty = parseInt(input.value);
+            let cityId = citySelect.value;
+            
             if (isNaN(qty) || qty <= 0) {
                 NOTIFY.error('Ошибка', 'Введите корректное количество для покупки.');
                 return;
             }
             if (typeof MARKET !== 'undefined') {
-                MARKET.buy(itemKey, qty);
+                MARKET.buy(itemKey, qty, cityId); // Теперь город передается на биржу!
             }
         }
     },
