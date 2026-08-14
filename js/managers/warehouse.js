@@ -1,6 +1,5 @@
 // Модуль складской логистики и распределения (на базе GEO)
-const WAREHOUSE = {
-    init() {
+init() {
         if (!STATE.company.warehouses) {
             STATE.company.warehouses = {};
             // Инициализируем все города из GEO с нулевым уровнем
@@ -13,9 +12,17 @@ const WAREHOUSE = {
             }
             delete STATE.company.inventory; 
         }
-        // Защита от добавления новых городов
+        
+        // БРОНЯ: Восстанавливаем целостность данных для ВСЕХ городов
         Object.keys(GEO.CITIES).forEach(cId => {
-            if (!STATE.company.warehouses[cId]) STATE.company.warehouses[cId] = { level: 0, inventory: {} };
+            // 1. Если города вообще нет в сохранении
+            if (!STATE.company.warehouses[cId]) {
+                STATE.company.warehouses[cId] = { level: 0, inventory: {} };
+            }
+            // 2. Если город есть, но инвентарь сломался (Именно это вызывало краш)
+            if (!STATE.company.warehouses[cId].inventory) {
+                STATE.company.warehouses[cId].inventory = {};
+            }
         });
     },
 
