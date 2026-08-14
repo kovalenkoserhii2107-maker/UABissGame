@@ -1,5 +1,6 @@
 // Модуль складской логистики и распределения (на базе GEO)
-init() {
+const WAREHOUSE = {
+    init() {
         if (!STATE.company.warehouses) {
             STATE.company.warehouses = {};
             // Инициализируем все города из GEO с нулевым уровнем
@@ -15,11 +16,9 @@ init() {
         
         // БРОНЯ: Восстанавливаем целостность данных для ВСЕХ городов
         Object.keys(GEO.CITIES).forEach(cId => {
-            // 1. Если города вообще нет в сохранении
             if (!STATE.company.warehouses[cId]) {
                 STATE.company.warehouses[cId] = { level: 0, inventory: {} };
             }
-            // 2. Если город есть, но инвентарь сломался (Именно это вызывало краш)
             if (!STATE.company.warehouses[cId].inventory) {
                 STATE.company.warehouses[cId].inventory = {};
             }
@@ -52,7 +51,7 @@ init() {
     getUpgradeCost(cityId) {
         this.init();
         let wh = STATE.company.warehouses[cityId];
-        // Если склада в городе еще нет (0 уровень), постройка обойдется в $5,000
+        // Постройка первого хаба в городе стоит $5,000
         if (!wh || wh.level === 0) return 5000; 
         return Math.floor(10000 * Math.pow(1.8, wh.level - 1));
     },
@@ -80,7 +79,6 @@ init() {
     },
 
     upgrade(cityId) {
-        // ЗАЩИТА: Если вместо ID города прилетел системный клик (MouseEvent) или пустота - прерываемся
         if (!cityId || typeof cityId !== 'string') return;
 
         this.init();
@@ -114,7 +112,6 @@ init() {
             if (STATE.ledger && STATE.ledger.yesterday) STATE.ledger.yesterday.exp_admin = (STATE.ledger.yesterday.exp_admin || 0) + totalRent;
         }
 
-        // Авто-снабжение (базовое, без логистики, т.к. логистика теперь ручная платная)
         STATE.company.businesses.forEach(biz => {
             let tpl = RECIPES.BUSINESSES[biz.type];
             if (!tpl.isRetail || !biz.autoSupplyRules) return;
