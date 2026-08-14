@@ -2050,7 +2050,7 @@ const UI_DASHBOARD = {
             </div>
         `;
         document.body.appendChild(modal);
-    }
+    },
 
     // --- УНИВЕРСАЛЬНОЕ ОКНО ВЫБОРА ЛОКАЦИИ (ГЕО-ЭКОНОМИКА) ---
     showCityModal(actionType, bizType = null) {
