@@ -68,7 +68,18 @@ const UI_DASHBOARD = {
         let cash = Math.max(0, STATE.finances.balance);
         let inventoryValue = 0;
         
-        Object.keys(STATE.company.inventory).forEach(k => inventoryValue += STATE.company.inventory[k].qty * STATE.company.inventory[k].avgCost);
+        // --- ИЗМЕНЕНИЕ 1: Подсчет инвентаря по всем складам (городам) ---
+        if (STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.inventory) {
+                    Object.keys(wh.inventory).forEach(k => {
+                        inventoryValue += wh.inventory[k].qty * wh.inventory[k].avgCost;
+                    });
+                }
+            });
+        }
+        
         STATE.company.businesses.forEach(b => {
             if (b.localInventory) Object.keys(b.localInventory).forEach(k => inventoryValue += b.localInventory[k].qty * b.localInventory[k].avgCost);
         });
@@ -92,9 +103,16 @@ const UI_DASHBOARD = {
             }
         });
         
-        // ЗАЩИТА: Проверяем существование склада
-        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouse && STATE.company.warehouse.level) {
-            for (let i = 1; i < STATE.company.warehouse.level; i++) realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
+        // --- ИЗМЕНЕНИЕ 2: Подсчет стоимости складов по всем городам ---
+        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.level > 0) {
+                    for (let i = 1; i < wh.level; i++) {
+                        realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
+                    }
+                }
+            });
         }
         
         // ЗАЩИТА: Проверяем существование лаборатории
@@ -320,7 +338,11 @@ const UI_DASHBOARD = {
                         let minDaysMats = Infinity;
                         if (estDailyOutput > 0) {
                             Object.keys(tpl.inputs).forEach(k => {
-                                let inQty = STATE.company.inventory[k] ? STATE.company.inventory[k].qty : 0;
+                                // --- ИЗМЕНЕНИЕ 3: Ищем сырье в том городе, где находится завод ---
+                                let city = biz.city || 'odesa';
+                                let inQty = (STATE.company.warehouses && STATE.company.warehouses[city] && STATE.company.warehouses[city].inventory[k]) 
+                                    ? STATE.company.warehouses[city].inventory[k].qty 
+                                    : 0;
                                 let req = tpl.inputs[k] * estDailyOutput;
                                 let days = Math.floor(inQty / req);
                                 if (days < minDaysMats) minDaysMats = days;
@@ -361,12 +383,21 @@ const UI_DASHBOARD = {
                 dashContracts.innerHTML = '<li><small style="color:var(--text-dim);">Нет активных тендеров в работе.</small></li>';
             } else {
                 STATE.contracts.active.forEach(c => {
-                    let inv = STATE.company.inventory[c.item] ? STATE.company.inventory[c.item].qty : 0;
+                    // --- ИЗМЕНЕНИЕ 4: Сбор товара для контрактов со всех складов ---
+                    let inv = 0;
+                    if (STATE.company.warehouses) {
+                        Object.keys(STATE.company.warehouses).forEach(cId => {
+                            let wh = STATE.company.warehouses[cId];
+                            if (wh.inventory && wh.inventory[c.item]) {
+                                inv += wh.inventory[c.item].qty;
+                            }
+                        });
+                    }
                     dashContracts.innerHTML += `<li style="padding: 8px 0; border-bottom: 1px solid var(--border);"><strong>${RECIPES.RESOURCES[c.item].name}</strong>: Собрано ${inv} / ${c.qty} шт. <span style="float:right; color:var(--red);">${c.deadline} дн.</span></li>`;
                 });
             }
         }
-    },
+    }
 
     // --- 3. ТЕНДЕРЫ И КОНТРАКТЫ ---
     updateContractsTab() {
@@ -400,7 +431,13 @@ const UI_DASHBOARD = {
             } else {
                 STATE.contracts.active.forEach(c => {
                     let itemName = RECIPES.RESOURCES[c.item].name;
-                    let inv = STATE.company.inventory[c.item] ? STATE.company.inventory[c.item].qty : 0;
+                    let inv = 0;
+                    if (STATE.company.warehouses) {
+                        Object.keys(STATE.company.warehouses).forEach(cId => {
+                            let wh = STATE.company.warehouses[cId];
+                            if (wh.inventory && wh.inventory[c.item]) inv += wh.inventory[c.item].qty;
+                        });
+                    }
                     let canFulfill = inv >= c.qty;
                     
                     let bg = canFulfill ? '#e8f8f5' : (c.deadline <= 3 ? '#fdedec' : '#fdfefe');
@@ -642,36 +679,40 @@ const UI_DASHBOARD = {
 
     // --- 5. СКЛАДСКАЯ ИНФРАСТРУКТУРА ---
     updateWarehouseUI() {
-        if (typeof WAREHOUSE === 'undefined') return;
-        WAREHOUSE.init();
+        if (typeof WAREHOUSE === 'undefined' || !STATE.company.warehouses) return;
         
-        let curVol = WAREHOUSE.getCurrentVolume();
-        let maxVol = WAREHOUSE.getMaxVolume();
-        let whRent = WAREHOUSE.getDailyRent();
+        let totalCurVol = 0;
+        let totalMaxVol = 0;
+        let totalRent = 0;
+        let mainLvl = STATE.company.warehouses['odesa'] ? STATE.company.warehouses['odesa'].level : 0;
+
+        Object.keys(STATE.company.warehouses).forEach(cId => {
+            if (STATE.company.warehouses[cId].level > 0) {
+                totalCurVol += WAREHOUSE.getCurrentVolume(cId);
+                totalMaxVol += WAREHOUSE.getMaxVolume(cId);
+                totalRent += WAREHOUSE.getDailyRent(cId);
+            }
+        });
 
         if (document.getElementById('ui-wh-lvl')) {
-            let lvl = STATE.company.warehouse.level;
-            document.getElementById('ui-wh-lvl').innerText = lvl;
-            if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = formatMoney(whRent);
-            if(document.getElementById('ui-wh-current')) document.getElementById('ui-wh-current').innerText = curVol.toFixed(1);
-            if(document.getElementById('ui-wh-max')) document.getElementById('ui-wh-max').innerText = maxVol;
+            document.getElementById('ui-wh-lvl').innerText = mainLvl + ' (Одесса)';
+            if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = formatMoney(totalRent);
+            if(document.getElementById('ui-wh-current')) document.getElementById('ui-wh-current').innerText = totalCurVol.toFixed(1);
+            if(document.getElementById('ui-wh-max')) document.getElementById('ui-wh-max').innerText = totalMaxVol;
             
             let bar = document.getElementById('ui-wh-bar');
             if (bar) {
-                let percent = Math.min(100, (curVol / maxVol) * 100);
+                let percent = totalMaxVol > 0 ? Math.min(100, (totalCurVol / totalMaxVol) * 100) : 0;
                 bar.style.width = percent + '%';
                 bar.style.background = percent > 90 ? '#e74c3c' : (percent > 75 ? '#f39c12' : '#3498db');
             }
             
             let btn = document.getElementById('ui-wh-upgrade-btn');
             if (btn) {
-                if (lvl >= WAREHOUSE.LEVELS.length) {
-                    btn.style.display = 'none';
-                } else {
-                    btn.style.display = 'inline-block';
-                    let nextLvl = WAREHOUSE.LEVELS[lvl];
-                    btn.innerText = `Расширить до ${nextLvl.maxVol} м³ ($${formatMoney(nextLvl.upgradeCost)})`;
-                }
+                let nextCost = WAREHOUSE.getUpgradeCost('odesa');
+                btn.style.display = 'inline-block';
+                btn.innerText = `Расширить Одессу ($${formatMoney(nextCost)})`;
+                btn.onclick = () => WAREHOUSE.upgrade('odesa');
             }
         }
     },
@@ -679,53 +720,62 @@ const UI_DASHBOARD = {
     // --- 6. ПРОИЗВОДСТВО И СКЛАД ---
     updateProductionTab() {
         let warehouseBody = document.getElementById('ui-warehouse-body');
-        if (warehouseBody) {
+        if (warehouseBody && STATE.company.warehouses) {
             warehouseBody.innerHTML = '';
             let isEmpty = true;
-            Object.keys(RECIPES.RESOURCES).forEach(key => {
-                let inv = STATE.company.inventory[key];
-                if (inv && inv.qty > 0) {
-                    isEmpty = false;
-                    let res = RECIPES.RESOURCES[key];
-                    let volStr = res.volume > 0 ? res.volume + ' м³/шт' : 'Цифровой товар';
-                    let totalVal = inv.qty * inv.avgCost;
+            
+            Object.keys(CITIES).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh && wh.level > 0) {
+                    warehouseBody.innerHTML += `<tr style="background:#ecf0f1; border-top: 2px solid #bdc3c7;"><td colspan="5" style="text-align:left; font-weight:bold; padding:8px 10px; color:#2c3e50;">📍 Склад: ${CITIES[cId].name} (Ур. ${wh.level})</td></tr>`;
                     
-                    // Формируем выпадающий список магазинов для ручной отгрузки
-                    let storeOptions = '';
-                    STATE.company.businesses.forEach(b => {
-                        let bTpl = RECIPES.BUSINESSES[b.type];
-                        if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key)) {
-                            storeOptions += `<option value="${b.uid}">${b.name}</option>`;
+                    let cityEmpty = true;
+                    Object.keys(RECIPES.RESOURCES).forEach(key => {
+                        let inv = wh.inventory[key];
+                        if (inv && inv.qty > 0) {
+                            cityEmpty = false;
+                            isEmpty = false;
+                            let res = RECIPES.RESOURCES[key];
+                            let volStr = res.volume > 0 ? res.volume + ' м³/шт' : 'Цифровой товар';
+                            let totalVal = inv.qty * inv.avgCost;
+                            
+                            let storeOptions = '';
+                            STATE.company.businesses.forEach(b => {
+                                let bTpl = RECIPES.BUSINESSES[b.type];
+                                let bCity = b.city || 'odesa';
+                                if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key) && bCity === cId) {
+                                    storeOptions += `<option value="${b.uid}">${b.name}</option>`;
+                                }
+                            });
+                            
+                            let transferHtml = '';
+                            if (storeOptions !== '') {
+                                transferHtml = `<div style="margin-top: 8px; display: flex; gap: 5px; align-items:center;">
+                                    <select id="trans-store-${cId}-${key}" style="font-size:0.85em; padding:4px; max-width:130px; border-radius:3px; border:1px solid #bdc3c7;">
+                                        <option value="">В магазин...</option>${storeOptions}
+                                    </select>
+                                    <input type="number" id="trans-qty-${cId}-${key}" value="${inv.qty}" max="${inv.qty}" style="width:60px; font-size:0.85em; padding:4px; border-radius:3px; border:1px solid #bdc3c7;">
+                                    <button onclick="UI_DASHBOARD.transferToStore('${key}', '${cId}')" style="background:#e67e22; color:white; border:none; padding: 4px 10px; border-radius:3px; cursor:pointer;">Отгрузить</button>
+                                </div>`;
+                            }
+
+                            warehouseBody.innerHTML += `<tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 10px 10px;">
+                                    <strong style="font-size:1.1em; color:#2c3e50;">${res.name}</strong><br>
+                                    <small style="color: #7f8c8d;">${volStr}</small>
+                                    ${transferHtml}
+                                </td>
+                                <td><strong style="color: #2980b9; font-size:1.1em;">${inv.qty} шт.</strong></td>
+                                <td><span style="color: #8e44ad; font-weight: bold;">★ ${(inv.quality || 1.0).toFixed(2)}</span></td>
+                                <td>$${formatMoney(inv.avgCost)}</td>
+                                <td><strong>$${formatMoney(totalVal)}</strong></td>
+                            </tr>`;
                         }
                     });
-                    
-                    let transferHtml = '';
-                    if (storeOptions !== '') {
-                        transferHtml = `<div style="margin-top: 8px; display: flex; gap: 5px; align-items:center;">
-                            <select id="trans-store-${key}" style="font-size:0.85em; padding:4px; max-width:130px; border-radius:3px; border:1px solid #bdc3c7;">
-                                <option value="">В магазин...</option>${storeOptions}
-                            </select>
-                            <input type="number" id="trans-qty-${key}" value="${inv.qty}" max="${inv.qty}" style="width:60px; font-size:0.85em; padding:4px; border-radius:3px; border:1px solid #bdc3c7;">
-                            <button onclick="UI_DASHBOARD.transferToStore('${key}')" style="background:#e67e22; color:white; border:none; padding: 4px 10px; border-radius:3px; cursor:pointer;">Отгрузить</button>
-                        </div>`;
-                    }
-
-                    warehouseBody.innerHTML += `<tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 10px 0;">
-                            <strong style="font-size:1.1em; color:#2c3e50;">${res.name}</strong><br>
-                            <small style="color: #7f8c8d;">${volStr}</small>
-                            ${transferHtml}
-                        </td>
-                        <td><strong style="color: #2980b9; font-size:1.1em;">${inv.qty} шт.</strong></td>
-                        <td><span style="color: #8e44ad; font-weight: bold;">★ ${(inv.quality || 1.0).toFixed(2)}</span></td>
-                        <td>$${formatMoney(inv.avgCost)}</td>
-                        <td><strong>$${formatMoney(totalVal)}</strong></td>
-                    </tr>`;
+                    if (cityEmpty) warehouseBody.innerHTML += '<tr><td colspan="5" style="text-align:center; padding: 15px; color:#7f8c8d;">В этом городе склад пуст.</td></tr>';
                 }
             });
-            if (isEmpty) {
-                warehouseBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#7f8c8d;">Ваш склад абсолютно пуст.</td></tr>';
-            }
+            if (isEmpty) warehouseBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#7f8c8d;">Ваши логистические хабы абсолютно пусты.</td></tr>';
         }
 
         let bizList = document.getElementById('ui-active-businesses');
@@ -921,7 +971,7 @@ const UI_DASHBOARD = {
         }
     },
 
-// --- НОВАЯ ВКЛАДКА: B2B БИРЖА (Мульти-склад + Качество) ---
+    // --- НОВАЯ ВКЛАДКА: B2B БИРЖА (Мульти-склад + Качество) ---
     updateMarketTab() {
         let marketContainer = document.getElementById('ui-market-businesses');
         if (!marketContainer || typeof MARKET === 'undefined') return;
@@ -971,7 +1021,28 @@ const UI_DASHBOARD = {
             // Заготовка: В будущем качество и бренд сырья на бирже могут зависеть от поставщиков
             let b2bQuality = 1.00;
             let b2bBrand = 0;
-
+            
+            // Рендер товаров на складах для продажи
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.inventory && wh.inventory[key] && wh.inventory[key].qty > 0) {
+                    let inv = wh.inventory[key];
+                    let finalPrice = basePrice * (inv.quality || 1.0);
+                    html += `
+                    <tr style="background: #f4f6f7; border-bottom: 2px solid #bdc3c7;">
+                        <td style="padding: 10px; border-left: 4px solid #2980b9;">
+                            <strong>${res.name}</strong><br><small style="color:#2980b9; font-weight: bold;">(Склад: ${CITIES[cId].name})</small>
+                        </td>
+                        <td><strong style="color: #2c3e50;">${inv.qty} шт.</strong></td>
+                        <td><strong style="color:#8e44ad;">★ ${(inv.quality || 1.0).toFixed(2)}</strong></td>
+                        <td><strong style="color:#2c3e50; font-size: 1.1em;">$${formatMoney(finalPrice)}</strong></td>
+                        <td>
+                            <button onclick="MARKET.sell('${key}', ${inv.qty}, '${cId}')" style="background:#e67e22; width: 100%; padding: 6px 12px; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold;">Продать ($${formatMoney(finalPrice * inv.qty)})</button>
+                        </td>
+                    </tr>`;
+                }
+            });
+            
             html += `
             <tr style="border-bottom: 1px solid #ecf0f1;">
                 <td style="padding: 10px;">
@@ -1097,6 +1168,19 @@ const UI_DASHBOARD = {
 
     // --- 9. ФИНАНСОВАЯ ОТЧЕТНОСТЬ (МСФО) ---
     updateFinanceTab() {
+        // 1.1. Инвентаризация (Глобальный склад + Полки магазинов)
+        let inventoryValue = 0;
+        if (STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.inventory) {
+                    Object.keys(wh.inventory).forEach(k => {
+                        inventoryValue += wh.inventory[k].qty * wh.inventory[k].avgCost;
+                    });
+                }
+            });
+        }
+        
         if (!document.getElementById('ui-balance-sheet') || typeof LEDGER === 'undefined') return;
         LEDGER.init();
         
@@ -1837,63 +1921,43 @@ const UI_DASHBOARD = {
     },
 
     // Отправка товаров с Общего склада в локальный склад Магазина
-    transferToStore(itemKey) {
-        let storeSelect = document.getElementById(`trans-store-${itemKey}`);
-        let qtyInput = document.getElementById(`trans-qty-${itemKey}`);
+    transferToStore(itemKey, cityId) {
+        let storeSelect = document.getElementById(`trans-store-${cityId}-${itemKey}`);
+        let qtyInput = document.getElementById(`trans-qty-${cityId}-${itemKey}`);
         
         if (!storeSelect || !qtyInput || !storeSelect.value) return;
         
         let storeUid = parseInt(storeSelect.value);
         let qty = parseInt(qtyInput.value);
         
-        if (isNaN(storeUid) || isNaN(qty) || qty <= 0) {
-            NOTIFY.error('Ошибка', 'Укажите корректное количество для отгрузки.');
-            return;
-        }
-        
         let store = STATE.company.businesses.find(b => b.uid === storeUid);
         if (!store) return;
         
-        let globalInv = STATE.company.inventory[itemKey];
-        if (!globalInv || globalInv.qty < qty) {
-            NOTIFY.error('Ошибка', 'На глобальном складе нет столько товара.');
-            return;
-        }
+        let localWh = STATE.company.warehouses[cityId];
+        let globalInv = localWh.inventory[itemKey];
+        if (!globalInv || globalInv.qty < qty) return NOTIFY.error('Ошибка', 'На складе города нет столько товара.');
         
-        // Считаем свободное место в магазине
         let currentVol = 0;
         if (!store.localInventory) store.localInventory = {};
-        Object.keys(store.localInventory).forEach(ik => {
-            currentVol += store.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0);
-        });
+        Object.keys(store.localInventory).forEach(ik => currentVol += store.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0));
         
         let tpl = RECIPES.BUSINESSES[store.type];
         let maxVol = tpl.area * (store.level || 1) * (store.locMult || 1.0) * 2;
         let itemVol = RECIPES.RESOURCES[itemKey].volume || 0.1;
         
-        let freeSpace = maxVol - currentVol;
-        let maxCanFit = itemVol > 0 ? Math.floor(freeSpace / itemVol) : qty;
-        
+        let maxCanFit = itemVol > 0 ? Math.floor((maxVol - currentVol) / itemVol) : qty;
         if (qty > maxCanFit) {
             NOTIFY.error('Ошибка', `На складе магазина нет места! Влезет только ${maxCanFit} шт.`);
             qty = maxCanFit;
             if (qty <= 0) return;
         }
         
-        if (!store.localInventory[itemKey]) {
-            store.localInventory[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
-        }
+        if (!store.localInventory[itemKey]) store.localInventory[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
         
         let locInv = store.localInventory[itemKey];
-        let oldTotal = locInv.qty * locInv.avgCost;
-        let oldTotalQ = locInv.qty * (locInv.quality || 1.0);
-        
-        let transferCost = qty * globalInv.avgCost;
-        let transferQuality = globalInv.quality || 1.0;
-        
+        locInv.avgCost = ((locInv.qty * locInv.avgCost) + (qty * globalInv.avgCost)) / (locInv.qty + qty);
+        locInv.quality = ((locInv.qty * (locInv.quality || 1)) + (qty * (globalInv.quality || 1))) / (locInv.qty + qty);
         locInv.qty += qty;
-        locInv.avgCost = (oldTotal + transferCost) / locInv.qty;
-        locInv.quality = (oldTotalQ + (qty * transferQuality)) / locInv.qty;
         
         globalInv.qty -= qty;
         if (globalInv.qty === 0) globalInv.avgCost = 0;
@@ -1901,6 +1965,7 @@ const UI_DASHBOARD = {
         NOTIFY.success('Успех', `Успешно отгружено ${qty} шт. в "${store.name}".`);
         this.update();
     },
+    
     // Сохранение выбранной рекламной кампании
     setCampaign(bizUid) {
         let select = document.getElementById(`campaign-${bizUid}`);
