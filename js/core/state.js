@@ -4,9 +4,9 @@ const STATE = {
         day: 1
     },
     finances: {
-        startCapital: 250000000, // Базовый уставной капитал для отчета
-        balance: 250000000,
-        creditScore: 2000,
+        startCapital: 25000, // Базовый уставной капитал для отчета
+        balance: 25000,
+        creditScore: 200,
         loans: [], 
         deposits: []
     },
