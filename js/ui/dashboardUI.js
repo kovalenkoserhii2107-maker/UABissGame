@@ -1231,7 +1231,7 @@ const UI_DASHBOARD = {
         document.getElementById(`buy-qty-${itemKey}`).value = maxPossible;
     },
 
-    // Отправка ордера на закупку с указанием города
+// Обработка покупки с рынка
     submitBuy(itemKey) {
         let input = document.getElementById(`buy-qty-${itemKey}`);
         let citySelect = document.getElementById('market-target-city');
