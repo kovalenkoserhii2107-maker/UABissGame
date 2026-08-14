@@ -47,9 +47,12 @@ const WAREHOUSE = {
     getUpgradeCost(cityId) {
         this.init();
         let wh = STATE.company.warehouses[cityId];
-        // Постройка первого хаба в городе стоит $5,000
-        if (!wh || wh.level === 0) return 5000; 
-        return Math.floor(10000 * Math.pow(1.8, wh.level - 1));
+        let city = (typeof GEO !== 'undefined' && GEO.getCity) ? GEO.getCity(cityId) : { rentMult: 1.0 };
+        let mult = city.rentMult || 1.0;
+
+        // Постройка первого хаба в городе стоит базово $5,000 * rentMult региона
+        if (!wh || wh.level === 0) return Math.floor(5000 * mult); 
+        return Math.floor(10000 * Math.pow(1.8, wh.level - 1) * mult);
     },
 
     getDailyRent(cityId) {
