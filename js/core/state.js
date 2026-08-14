@@ -13,14 +13,14 @@ const STATE = {
     company: {
         businesses: [],
         inventory: {},
-        warehouse: { level: 1 }
+        warehouse: null
     },
     hr: {
         staff: {},
         trainingQueue: []
     },
     rnd: {
-        unlocked: ['fab', 'farm3d', 'it_office', 'workshop'],
+        unlocked: ['microchips', 'parts3d'],
         activeProject: null,
         points: 0,
         staff: {}
