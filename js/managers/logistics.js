@@ -3,22 +3,28 @@ const LOGISTICS = {
     processDaily() {
         if (!STATE.logistics) return;
         
-        // 1. Входящие грузы (покупки на бирже приехали на склад)
+        // 1. Входящие грузы (покупки на бирже приехали на локальный склад)
         if (STATE.logistics.deliveries) {
             for (let i = STATE.logistics.deliveries.length - 1; i >= 0; i--) {
                 let d = STATE.logistics.deliveries[i];
                 d.daysLeft--;
+                
                 if (d.daysLeft <= 0) {
-                    if (!STATE.company.inventory[d.item]) {
-                        STATE.company.inventory[d.item] = { qty: 0, avgCost: 0, quality: 1.0 };
+                    // Ищем склад назначения (если город удалили из игры, везем в Одессу)
+                    let targetWh = STATE.company.warehouses[d.targetCity];
+                    if (!targetWh) targetWh = STATE.company.warehouses['odesa']; 
+
+                    if (!targetWh.inventory[d.item]) {
+                        targetWh.inventory[d.item] = { qty: 0, avgCost: 0, quality: 1.0 };
                     }
-                    let inv = STATE.company.inventory[d.item];
+                    
+                    let inv = targetWh.inventory[d.item];
                     let oldTotal = inv.qty * inv.avgCost;
                     
                     inv.qty += d.qty;
                     inv.avgCost = (oldTotal + d.cost) / inv.qty;
                     
-                    STATE.logistics.deliveries.splice(i, 1); // Удаляем из очереди доставки
+                    STATE.logistics.deliveries.splice(i, 1); 
                 }
             }
         }
