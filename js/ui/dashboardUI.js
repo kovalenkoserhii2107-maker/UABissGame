@@ -677,117 +677,118 @@ const UI_DASHBOARD = {
         }
     },
 
-    // --- 5. СКЛАДСКАЯ ИНФРАСТРУКТУРА (ТЕПЕРЬ ПОЛНОЦЕННАЯ ВКЛАДКА) ---
+    // --- 5. СКЛАДСКИЕ КАРТОЧКИ ---
     updateWarehouseUI() {
         if (typeof WAREHOUSE === 'undefined') return;
         WAREHOUSE.init(); 
         
-        let totalCurVol = 0;
-        let totalMaxVol = 0;
-        let totalRent = 0;
-        let activeWhs = [];
-
+        let warehouseList = document.getElementById('ui-warehouse-list');
+        if (!warehouseList) return;
+        
+        warehouseList.innerHTML = '';
+        let hasWarehouses = false;
+        
         Object.keys(STATE.company.warehouses).forEach(cId => {
             let wh = STATE.company.warehouses[cId];
             if (wh.level > 0) {
-                totalCurVol += WAREHOUSE.getCurrentVolume(cId);
-                totalMaxVol += WAREHOUSE.getMaxVolume(cId);
-                totalRent += WAREHOUSE.getDailyRent(cId);
-                let cityName = typeof GEO !== 'undefined' ? GEO.getCity(cId).name : cId;
-                activeWhs.push(`${cityName} (Ур. ${wh.level})`);
+                hasWarehouses = true;
+                let city = typeof GEO !== 'undefined' ? GEO.getCity(cId) : { name: cId, rentMult: 1.0 };
+                let curVol = WAREHOUSE.getCurrentVolume(cId);
+                let maxVol = WAREHOUSE.getMaxVolume(cId);
+                let percent = maxVol > 0 ? Math.min(100, (curVol / maxVol) * 100).toFixed(1) : 0;
+                let dailyRent = WAREHOUSE.getDailyRent(cId);
+                
+                let nextMaxVol = Math.floor(5000 * Math.pow(1.5, wh.level));
+                let upgradeCost = WAREHOUSE.getUpgradeCost(cId);
+                let addedVol = nextMaxVol - maxVol;
+                let nextRent = Math.floor(100 * Math.pow(1.5, wh.level) * city.rentMult);
+                let addedRent = nextRent - dailyRent;
+
+                let invHtml = '';
+                if (!wh.inventory) wh.inventory = {};
+                
+                Object.keys(RECIPES.RESOURCES).forEach(key => {
+                    let inv = wh.inventory[key];
+                    if (inv && inv.qty > 0) {
+                        let res = RECIPES.RESOURCES[key];
+                        let totalVal = inv.qty * inv.avgCost;
+                        let volStr = res.volume > 0 ? res.volume + ' м³/шт' : 'Цифровой товар';
+                        
+                        let storeOptions = '';
+                        STATE.company.businesses.forEach(b => {
+                            let bTpl = RECIPES.BUSINESSES[b.type];
+                            if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key)) {
+                                let storeCityName = typeof GEO !== 'undefined' ? GEO.getCity(b.city || 'odesa').name : '';
+                                let extraCost = (b.city || 'odesa') !== cId ? ' (Платная логистика)' : '';
+                                storeOptions += `<option value="${b.uid}">${b.name} - ${storeCityName}${extraCost}</option>`;
+                            }
+                        });
+                        
+                        let transferHtml = '';
+                        if (storeOptions !== '') {
+                            transferHtml = `<div style="margin-top: 8px; display: flex; gap: 5px; align-items:center;">
+                                <select id="trans-store-${cId}-${key}" style="font-size:0.85em; padding:4px; max-width:140px; border-radius:3px; border:1px solid #bdc3c7;">
+                                    <option value="">В магазин...</option>${storeOptions}
+                                </select>
+                                <input type="number" id="trans-qty-${cId}-${key}" value="${inv.qty}" max="${inv.qty}" style="width:60px; font-size:0.85em; padding:4px; border-radius:3px; border:1px solid #bdc3c7;">
+                                <button onclick="UI_DASHBOARD.transferToStore('${key}', '${cId}')" style="background:#e67e22; color:white; border:none; padding: 4px 10px; border-radius:3px; cursor:pointer;">Отгрузить</button>
+                            </div>`;
+                        }
+
+                        invHtml += `<tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: 10px 10px;">
+                                <strong style="font-size:1.1em; color:#2c3e50;">${res.name}</strong><br>
+                                <small style="color: #7f8c8d;">${volStr}</small>
+                                ${transferHtml}
+                            </td>
+                            <td><strong style="color: #2980b9; font-size:1.1em;">${inv.qty} шт.</strong></td>
+                            <td><span style="color: #8e44ad; font-weight: bold;">★ ${(inv.quality || 1.0).toFixed(2)}</span></td>
+                            <td>$${formatMoney(inv.avgCost)}</td>
+                            <td><strong>$${formatMoney(totalVal)}</strong></td>
+                        </tr>`;
+                    }
+                });
+                
+                if (invHtml === '') invHtml = '<tr><td colspan="5" style="text-align:center; padding: 15px; color:#7f8c8d;">Склад пуст. Закупите сырье на бирже или запустите производство.</td></tr>';
+
+                warehouseList.innerHTML += `
+                <li class="card" style="margin-bottom: 20px; list-style-type: none; padding: 0; overflow: hidden; border: 1px solid #dcdde1; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
+                    <div style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fdfefe;">
+                        <div>
+                            <h3 style="margin: 0 0 5px 0; color: #2c3e50; font-size:1.3em;">📍 Логистический хаб: ${city.name} <span style="color:#3498db; font-size:0.8em;">(Ур. ${wh.level})</span></h3>
+                            <p style="margin: 0; color: #7f8c8d; font-size:1.05em;">Аренда земли: <strong style="color:#c0392b;">$${formatMoney(dailyRent)}</strong> / день</p>
+                        </div>
+                        <div style="text-align: right; min-width: 250px;">
+                            <p style="margin: 0 0 8px 0; font-size:1em; color: #2c3e50;">Занято: <strong>${curVol.toFixed(1)}</strong> м³ из <strong>${maxVol}</strong> м³</p>
+                            <div style="width: 100%; background: var(--surface-3); height: 10px; border-radius: 5px; overflow:hidden;">
+                                <div style="width: ${percent}%; background: ${percent > 90 ? '#e74c3c' : '#3498db'}; height: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="padding: 20px;">
+                        <table style="width: 100%; font-size: 0.9em; border-collapse: collapse;">
+                            <tr style="border-bottom: 2px solid #bdc3c7; text-align: left;">
+                                <th style="padding: 8px 10px;">Товарная позиция</th>
+                                <th style="padding: 8px 10px;">В наличии</th>
+                                <th style="padding: 8px 10px;">Качество</th>
+                                <th style="padding: 8px 10px;">Себестоимость</th>
+                                <th style="padding: 8px 10px;">Итоговая стоимость</th>
+                            </tr>
+                            ${invHtml}
+                        </table>
+                        <div style="margin-top: 20px; text-align: right; border-top: 1px dashed #bdc3c7; padding-top: 15px;">
+                            <button onclick="WAREHOUSE.upgrade('${cId}')" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 8px 16px; border-radius: 4px; font-weight:bold; font-size:1em;">
+                                Расширить площадь ($${formatMoney(upgradeCost)}) <br>
+                                <small style="font-weight:normal;">Даст +${addedVol} м³ | Аренда +$${addedRent}/дн</small>
+                            </button>
+                        </div>
+                    </div>
+                </li>`;
             }
         });
 
-        if (document.getElementById('ui-wh-lvl')) {
-            if (activeWhs.length === 0) {
-                document.getElementById('ui-wh-lvl').innerHTML = '<span style="color:#e74c3c; font-weight:bold;">Нет построенных складов</span>';
-                if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = '0';
-            } else {
-                document.getElementById('ui-wh-lvl').innerHTML = activeWhs.join(' | ');
-                if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = formatMoney(totalRent);
-            }
-            
-            if(document.getElementById('ui-wh-current')) document.getElementById('ui-wh-current').innerText = totalCurVol.toFixed(1);
-            if(document.getElementById('ui-wh-max')) document.getElementById('ui-wh-max').innerText = totalMaxVol;
-            
-            let bar = document.getElementById('ui-wh-bar');
-            if (bar) {
-                let percent = totalMaxVol > 0 ? Math.min(100, (totalCurVol / totalMaxVol) * 100) : 0;
-                bar.style.width = percent + '%';
-                bar.style.background = percent > 90 ? '#e74c3c' : (percent > 75 ? '#f39c12' : '#3498db');
-            }
-            
-            let btn = document.getElementById('ui-wh-upgrade-btn');
-            if (btn) {
-                btn.style.display = 'inline-block';
-                btn.innerText = activeWhs.length === 0 ? 'Открыть первый складской хаб' : 'Управление складами (Карта)';
-                btn.onclick = () => UI_DASHBOARD.showCityModal('warehouse');
-            }
-        }
-
-        // Рендер таблицы остатков (перенесено из ProductionTab)
-        let warehouseBody = document.getElementById('ui-warehouse-body');
-        if (warehouseBody && STATE.company.warehouses) {
-            warehouseBody.innerHTML = '';
-            let isEmpty = true;
-            
-            Object.keys(GEO.CITIES).forEach(cId => {
-                let wh = STATE.company.warehouses[cId];
-                if (wh && wh.level > 0) {
-                    let city = GEO.getCity(cId);
-                    warehouseBody.innerHTML += `<tr style="background:#ecf0f1; border-top: 2px solid #bdc3c7;"><td colspan="5" style="text-align:left; font-weight:bold; padding:8px 10px; color:#2c3e50;">📍 Склад: ${city.name} (Ур. ${wh.level})</td></tr>`;
-                    
-                    let cityEmpty = true;
-                    if (!wh.inventory) wh.inventory = {}; 
-                    
-                    Object.keys(RECIPES.RESOURCES).forEach(key => {
-                        let inv = wh.inventory[key];
-                        if (inv && inv.qty > 0) {
-                            cityEmpty = false;
-                            isEmpty = false;
-                            let res = RECIPES.RESOURCES[key];
-                            let volStr = res.volume > 0 ? res.volume + ' м³/шт' : 'Цифровой товар';
-                            let totalVal = inv.qty * inv.avgCost;
-                            
-                            let storeOptions = '';
-                            STATE.company.businesses.forEach(b => {
-                                let bTpl = RECIPES.BUSINESSES[b.type];
-                                // Можно отправлять товары в магазины
-                                if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key)) {
-                                    let storeCityName = typeof GEO !== 'undefined' ? GEO.getCity(b.city || 'odesa').name : '';
-                                    let extraCost = (b.city || 'odesa') !== cId ? ' (Платная логистика)' : '';
-                                    storeOptions += `<option value="${b.uid}">${b.name} - ${storeCityName}${extraCost}</option>`;
-                                }
-                            });
-                            
-                            let transferHtml = '';
-                            if (storeOptions !== '') {
-                                transferHtml = `<div style="margin-top: 8px; display: flex; gap: 5px; align-items:center;">
-                                    <select id="trans-store-${cId}-${key}" style="font-size:0.85em; padding:4px; max-width:140px; border-radius:3px; border:1px solid #bdc3c7;">
-                                        <option value="">В магазин...</option>${storeOptions}
-                                    </select>
-                                    <input type="number" id="trans-qty-${cId}-${key}" value="${inv.qty}" max="${inv.qty}" style="width:60px; font-size:0.85em; padding:4px; border-radius:3px; border:1px solid #bdc3c7;">
-                                    <button onclick="UI_DASHBOARD.transferToStore('${key}', '${cId}')" style="background:#e67e22; color:white; border:none; padding: 4px 10px; border-radius:3px; cursor:pointer;">Отгрузить</button>
-                                </div>`;
-                            }
-
-                            warehouseBody.innerHTML += `<tr style="border-bottom: 1px solid #eee;">
-                                <td style="padding: 10px 10px;">
-                                    <strong style="font-size:1.1em; color:#2c3e50;">${res.name}</strong><br>
-                                    <small style="color: #7f8c8d;">${volStr}</small>
-                                    ${transferHtml}
-                                </td>
-                                <td><strong style="color: #2980b9; font-size:1.1em;">${inv.qty} шт.</strong></td>
-                                <td><span style="color: #8e44ad; font-weight: bold;">★ ${(inv.quality || 1.0).toFixed(2)}</span></td>
-                                <td>$${formatMoney(inv.avgCost)}</td>
-                                <td><strong>$${formatMoney(totalVal)}</strong></td>
-                            </tr>`;
-                        }
-                    });
-                    if (cityEmpty) warehouseBody.innerHTML += '<tr><td colspan="5" style="text-align:center; padding: 15px; color:#7f8c8d;">В этом городе склад пуст.</td></tr>';
-                }
-            });
-            if (isEmpty) warehouseBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#7f8c8d;">Ваши логистические хабы абсолютно пусты. Закупите сырье на бирже или запустите производство.</td></tr>';
+        if (!hasWarehouses) {
+            warehouseList.innerHTML = '<div style="text-align:center; padding: 40px; color:#7f8c8d; font-size:1.1em; background: #fff; border-radius: 8px; border: 1px solid #eee;">У вас нет открытых складов. Откройте первый склад, нажав кнопку выше.</div>';
         }
     },
 
@@ -848,7 +849,18 @@ const UI_DASHBOARD = {
                 let q_tech = (STATE.rnd && STATE.rnd.techLevels && STATE.rnd.techLevels[biz.type]) ? STATE.rnd.techLevels[biz.type] : 1.0;
                 let q_hr = 1.0;
                 if (assignedTotal > 0) q_hr = ((biz.assigned.junior * 1.0) + (biz.assigned.middle * 1.2) + (biz.assigned.senior * 1.5)) / assignedTotal;
-                
+
+                let whOptions = '';
+                Object.keys(STATE.company.warehouses).forEach(cId => {
+                    if (STATE.company.warehouses[cId].level > 0) {
+                        let cName = typeof GEO !== 'undefined' ? GEO.getCity(cId).name : cId;
+                        whOptions += `<option value="${cId}">${cName}</option>`;
+                    }
+                });
+
+                let sourceWh = biz.sourceWh || cityId;
+                let targetWh = biz.targetWh || cityId;
+         
                 let inputsHtml = '';
                 let sumMatQuality = 0;
                 let totalInputsCount = 0;
@@ -898,8 +910,23 @@ const UI_DASHBOARD = {
                     }
                 });
 
-                let routingHtml = `<div style="background: #fff3cd; padding: 10px; border-radius: 4px; border: 1px solid #f1c40f; margin-top: 10px;">
-                    <strong style="font-size: 0.9em; color: #b9770e;">АВТО-ПОСТАВКИ (ШТУК В ДЕНЬ):</strong><br>`;
+                let logisticsSelectorsHtml = `
+                <div style="background: #fdfefe; padding: 12px; border: 1px solid #bdc3c7; border-radius: 4px; margin-top: 12px; font-size: 0.9em;">
+                    <strong style="color:#2c3e50;">ЛОГИСТИКА И СНАБЖЕНИЕ:</strong><br>
+                    <div style="display:flex; justify-content:space-between; margin-top:8px; align-items:center;">
+                        <span>Брать сырьё со склада:</span>
+                        <select id="source-wh-${biz.uid}" onchange="UI_DASHBOARD.setFactoryWarehouses(${biz.uid})" style="padding:4px; border-radius:3px; border: 1px solid #ccc; width: 140px;">
+                            ${whOptions.replace(`value="${sourceWh}"`, `value="${sourceWh}" selected`)}
+                        </select>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-top:8px; align-items:center;">
+                        <span>Отгружать готовую продукцию на:</span>
+                        <select id="target-wh-${biz.uid}" onchange="UI_DASHBOARD.setFactoryWarehouses(${biz.uid})" style="padding:4px; border-radius:3px; border: 1px solid #ccc; width: 140px;">
+                            ${whOptions.replace(`value="${targetWh}"`, `value="${targetWh}" selected`)}
+                        </select>
+                    </div>
+                    <div style="color:#c0392b; margin-top:8px; font-size:0.85em; font-style:italic;">* Доставка из других городов платная (за м³ и км пробега).</div>
+                </div>`;
                 
                 if (viableRoutes.length === 0) {
                     routingHtml += `<div style="font-size:0.85em; color:#7f8c8d;">Нет потребителей. 100% уходит на Склад города.</div>`;
@@ -1603,6 +1630,17 @@ const UI_DASHBOARD = {
         }
     },
 
+    setFactoryWarehouses(uid) {
+        let biz = STATE.company.businesses.find(b => b.uid === uid);
+        if (biz) {
+            let sWh = document.getElementById(`source-wh-${uid}`);
+            let tWh = document.getElementById(`target-wh-${uid}`);
+            if (sWh) biz.sourceWh = sWh.value;
+            if (tWh) biz.targetWh = tWh.value;
+            this.update();
+        }
+    },
+    
     // Сохранение процентов логистики
     saveRoutes(bizUid, destsStr) {
         let dests = destsStr ? destsStr.split(',') : [];
