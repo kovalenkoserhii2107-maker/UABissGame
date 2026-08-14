@@ -2029,4 +2029,74 @@ const UI_DASHBOARD = {
         `;
         document.body.appendChild(modal);
     }
+
+    // --- УНИВЕРСАЛЬНОЕ ОКНО ВЫБОРА ЛОКАЦИИ (ГЕО-ЭКОНОМИКА) ---
+    showCityModal(actionType, bizType = null) {
+        let oldModal = document.getElementById('city-modal');
+        if (oldModal) oldModal.remove();
+
+        let modal = document.createElement('div');
+        modal.id = 'city-modal';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
+        
+        let title = actionType === 'warehouse' ? 'Где открываем новый складской хаб?' : 'Выберите город для инвестиций';
+        if (bizType && typeof RECIPES !== 'undefined' && RECIPES.BUSINESSES[bizType]) {
+            title = `Открытие: ${RECIPES.BUSINESSES[bizType].name}`;
+        }
+
+        let citiesHtml = '';
+        Object.keys(GEO.CITIES).forEach(cId => {
+            let city = GEO.CITIES[cId];
+            
+            // Расчеты для превью
+            let rentColor = city.rentMult > 1.1 ? '#c0392b' : (city.rentMult < 1 ? '#27ae60' : '#7f8c8d');
+            let salaryColor = city.salaryMult > 1.1 ? '#c0392b' : (city.salaryMult < 1 ? '#27ae60' : '#7f8c8d');
+            let demandColor = city.demandMult > 1.1 ? '#27ae60' : (city.demandMult < 1 ? '#c0392b' : '#7f8c8d');
+
+            let actionCode = '';
+            if (actionType === 'warehouse') {
+                let cost = WAREHOUSE.getUpgradeCost(cId);
+                actionCode = `document.getElementById('city-modal').remove(); WAREHOUSE.upgrade('${cId}');`;
+                citiesHtml += `
+                <div onclick="${actionCode}" style="background:#fdfefe; border:2px solid #bdc3c7; border-radius:8px; padding:15px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="font-size:1.2em; color:#2c3e50;">${city.name}</strong><br>
+                        <small style="color:#7f8c8d;">Население: ${(city.population/1000000).toFixed(1)} млн</small>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="display:block; font-size:1.1em; color:#27ae60; font-weight:bold;">$${formatMoney(cost)}</span>
+                        <small style="color:${rentColor};">Аренда: x${city.rentMult}</small>
+                    </div>
+                </div>`;
+            } else {
+                actionCode = `document.getElementById('city-modal').remove(); PRODUCTION.buyBusiness('${bizType}', '${cId}');`;
+                citiesHtml += `
+                <div onclick="${actionCode}" style="background:#fdfefe; border:2px solid #bdc3c7; border-radius:8px; padding:15px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="flex:1;">
+                        <strong style="font-size:1.2em; color:#2c3e50;">${city.name}</strong><br>
+                        <small style="color:#7f8c8d;">Население: ${(city.population/1000000).toFixed(1)} млн</small>
+                    </div>
+                    <div style="flex:1; text-align:center; font-size:0.85em;">
+                        <div style="color:${rentColor};">🏢 Аренда: <strong>x${city.rentMult}</strong></div>
+                        <div style="color:${salaryColor};">💼 Зарплаты: <strong>x${city.salaryMult}</strong></div>
+                    </div>
+                    <div style="flex:1; text-align:right;">
+                        <div style="color:${demandColor}; font-size:1.1em;">🛒 Спрос: <strong>x${city.demandMult}</strong></div>
+                    </div>
+                </div>`;
+            }
+        });
+
+        modal.innerHTML = `
+            <div style="background:#fff; padding:25px; border-radius:12px; width:550px; max-width:95%; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                <h2 style="margin-top:0; color:#2c3e50; font-size: 1.5em; border-bottom:2px solid #ecf0f1; padding-bottom:10px;">🗺️ ${title}</h2>
+                <p style="color:#7f8c8d; margin-bottom: 20px; font-size:0.9em;">Выберите локацию. От города зависят постоянные расходы и объем рынка сбыта.</p>
+                <div style="max-height: 50vh; overflow-y: auto; padding-right: 5px;">
+                    ${citiesHtml}
+                </div>
+                <button onclick="document.getElementById('city-modal').remove()" style="width:100%; padding:12px; margin-top:15px; background:#ecf0f1; border:none; border-radius:6px; color:#7f8c8d; font-weight: bold; cursor:pointer;">Отмена</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
 };
