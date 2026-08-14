@@ -101,10 +101,11 @@ const RETAIL = {
             // Жесткий срез по емкости локации
             let actualTraffic = Math.floor(Math.min(potentialTraffic, maxCapacity) * staffEfficiency);
 
-            // Качество витрин
+            // Качество витрин и торгового оборудования
             let eqCount = biz.equipment ? (biz.equipment.count || 0) : 0;
             let eqCondition = biz.equipment ? (biz.equipment.condition || 100) : 100;
-            let displayEfficiency = (eqCount > 0) ? (eqCondition / 100) : 0.1; // Без витрин почти не покупают
+            // Базовые полки дают 0.5 (50%), торговые витрины повышают до 1.0 - 1.5
+            let displayEfficiency = (eqCount > 0) ? (0.6 + (Math.min(eqCount, 5) * 0.1) * (eqCondition / 100)) : 0.5;
 
             // 2. ПРОДАЖА ТОВАРОВ
             if (biz.localInventory) {
@@ -115,17 +116,16 @@ const RETAIL = {
                     let b2bPrice = MARKET.getCurrentPrice(itemKey) || 1;
                     let retailPrice = (biz.prices && biz.prices[itemKey]) ? biz.prices[itemKey] : b2bPrice * 1.3;
                     
-                    let markup = retailPrice / b2bPrice; // Например, 1.5 = +50% наценка
+                    let markup = retailPrice / b2bPrice; // Например, 1.35 = +35% наценка
 
                     // 3. ЭЛАСТИЧНОСТЬ ЦЕНЫ И КОНВЕРСИЯ
-                    // Базово люди терпят +30% к опту. Реклама товара расширяет толерантность!
-                    let baseTolerance = 0.3; 
-                    let productBonus = (productBoosts[itemKey] || 0) * 0.1; 
-                    let tolerance = Math.min(1.5, baseTolerance + productBonus); // Максимум можно "продать" бренд с наценкой +150%
+                    // Базово люди терпят +35% к опту. Сила бренда и реклама расширяют толерантность!
+                    let brandTolerance = (STATE.retail.brand || 5) / 100;
+                    let baseTolerance = 0.35 + brandTolerance; 
+                    let productBonus = (productBoosts[itemKey] || 0) * 0.15; 
+                    let tolerance = Math.min(2.0, baseTolerance + productBonus); // Сильный бренд позволяет наценку до +200%
 
-                    // Штраф за жадность:
-                    // Если наценка 1.3 и Tolerance 0.3 -> (1.3-1)/0.3 = 1 -> Penalty = 0 (Никто не купит)
-                    // Если наценка 1.1 и Tolerance 0.3 -> (1.1-1)/0.3 = 0.33 -> Penalty = 0.67 (Купят 67% от базы)
+                    // Штраф за завышение цены:
                     let pricePenalty = 1.0 - ((markup - 1.0) / tolerance);
                     
                     if (pricePenalty < 0) pricePenalty = 0; // Слишком дорого

@@ -16,57 +16,63 @@ const TUTORIAL = {
     STEPS: [
         {
             target: '.topbar',
-            title: 'Добро пожаловать',
-            text: 'Добро пожаловать в бизнес. Ваш стартовый капитал — $250,000.',
+            title: 'Добро пожаловать в бизнес!',
+            text: 'Ваш стартовый капитал — $25,000. Ваша первая задача — открыть успешный розничный магазин, наладить сбыт ходовых товаров и заработать начальный капитал.',
             trigger: { type: 'manual' }
         },
         {
-            target: '[onclick*="\'tab-production\'"]',
-            title: 'Активы и склад',
-            text: 'Сначала нам нужно открыть производство. Перейдите во вкладку Активов.',
+            target: '[onclick*="\'tab-retail\'"]',
+            title: 'Торговля и Розница',
+            text: 'Перейдите во вкладку «Розница», чтобы открыть свой первый фирменный магазин.',
             trigger: { type: 'click' }
         },
         {
-            target: '[onclick*="buyBusiness(\'parts3d\')"]',
-            title: 'Первый цех',
-            text: 'Откройте базовый цех — Фабрику 3D-печати. Он производит детали из пластика.',
+            target: '[onclick*="buyBusiness(\'retail_store\')"]',
+            title: 'Открытие магазина',
+            text: 'Нажмите «+ Открыть Фирменный магазин» и выберите стартовый город.',
             trigger: {
                 type: 'condition',
-                check: (state) => state.company.businesses.some(b => b.type === 'parts3d')
+                check: (state) => state.company.businesses.some(b => b.type === 'retail_store')
             }
         },
         {
             target: '[onclick*="\'tab-hr\'"]',
             title: 'Отдел кадров',
-            text: 'Станки сами не работают. Нужны люди.',
+            text: 'Магазину требуются сотрудники: Директор магазина и Продавец-консультант. Перейдите в HR.',
             trigger: { type: 'click' }
         },
         {
-            target: '[onclick*="HR.hire(\'junior\')"]',
-            title: 'Наём персонала',
-            text: 'Наймите одного Junior (Сборщика) в кадровый резерв.',
+            target: '[onclick*="HR.hire(\'store_manager\')"]',
+            title: 'Найм персонала',
+            text: 'Наймите 1 Директора магазина (Store Manager) и Продавца (Salesman) в кадровый резерв.',
             trigger: {
                 type: 'condition',
-                check: (state) => (state.hr && state.hr.staff && (state.hr.staff.junior || 0) > 0)
+                check: (state) => (state.hr && state.hr.staff && (state.hr.staff.store_manager || 0) > 0)
             }
         },
         {
             target: '[onclick*="\'tab-market\'"]',
             title: 'Оптовая биржа',
-            text: 'Теперь закупим сырьё.',
+            text: 'Пора закупить ходовые потребительские товары для полок вашего магазина.',
             trigger: { type: 'click' }
         },
         {
-            target: '[onclick*="submitBuy(\'plastic\')"]',
-            title: 'Закупка сырья',
-            text: 'Купите партию ABS Пластика для вашего 3D-принтера.',
-            trigger: { type: 'click' } // Сместили фокус на клик
+            target: '[onclick*="submitBuy(\'bakery\')"]',
+            title: 'Закупка товаров',
+            text: 'Купите партию «Хлеб и Выпечка» (или других продуктов) с доставкой на склад в ваш город.',
+            trigger: { type: 'click' }
+        },
+        {
+            target: '[onclick*="\'tab-dashboard\'"]',
+            title: 'Квест-Центр и Стратегия',
+            text: 'На главном дашборде активен Квест-Центр. Закрывайте цели глав, забирайте гранты и развивайтесь от магазина до национальной корпорации!',
+            trigger: { type: 'click' }
         },
         {
             target: '[onclick*="GAME.nextDay()"]',
-            title: 'Финиш',
-            text: 'Всё готово! Завершите день, чтобы запустить производство и получить логистику.',
-            trigger: { type: 'click' } // Сместили фокус на клик
+            title: 'Старт бизнеса',
+            text: 'Нажмите «Следующий день», чтобы принять поставку, открыть двери магазина и получить первую выручку!',
+            trigger: { type: 'click' }
         }
     ],
 

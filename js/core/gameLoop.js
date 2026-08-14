@@ -5,6 +5,10 @@ const GAME = {
     init() {
         if (typeof LEDGER !== 'undefined') LEDGER.init();
         if (typeof WAREHOUSE !== 'undefined') WAREHOUSE.init();
+        if (typeof QUESTS !== 'undefined') {
+            QUESTS.init();
+            QUESTS.checkProgress();
+        }
         UI_DASHBOARD.update();
     },
 
@@ -39,10 +43,15 @@ const GAME = {
         // 5. Закрытие бухгалтерского дня (Перенос данных)
         LEDGER.endOfDay();
 
+        // 6. Проверка прогресса квестов и достижений
+        if (typeof QUESTS !== 'undefined') QUESTS.checkProgress();
+
         UI_DASHBOARD.update();
 
         if (STATE.finances.balance < 0) {
-            alert("Внимание! Кассовый разрыв. Счета компании ушли в минус.");
+            if (typeof NOTIFY !== 'undefined') {
+                NOTIFY.error('Кассовый разрыв! ⚠️', `Счета компании ушли в минус ($${formatMoney(Math.abs(STATE.finances.balance))}). Сократите издержки или возьмите кредит.`);
+            }
         }
     }
 };

@@ -63,6 +63,7 @@ const UI_DASHBOARD = {
     updateDashboardTab() {
         if (!document.getElementById('dash-kpi-cash')) return;
         this.initCharts();
+        this.renderQuestWidget();
 
         // 1. РАСЧЕТ КАПИТАЛИЗАЦИИ И АКТИВОВ
         let cash = Math.max(0, STATE.finances.balance);
@@ -2220,5 +2221,73 @@ const UI_DASHBOARD = {
             </div>
         `;
         document.body.appendChild(modal);
+    },
+
+    // --- КВЕСТ-ЦЕНТР И СТРАТЕГИЧЕСКИЕ МИССИИ ---
+    renderQuestWidget() {
+        let el = document.getElementById('ui-quest-widget');
+        if (!el || typeof QUESTS === 'undefined') return;
+
+        let curChId = STATE.quests ? (STATE.quests.currentChapter || 1) : 1;
+        let ch = QUESTS.CHAPTERS[curChId] || QUESTS.CHAPTERS[1];
+        let quests = QUESTS.LIST.filter(q => q.chapter === curChId);
+
+        let completedCount = quests.filter(q => STATE.quests.completed && STATE.quests.completed.includes(q.id)).length;
+        let percent = quests.length > 0 ? Math.round((completedCount / quests.length) * 100) : 0;
+
+        let questsHTML = quests.map(q => {
+            let isDone = STATE.quests.completed && STATE.quests.completed.includes(q.id);
+            let isClaimed = STATE.quests.claimed && STATE.quests.claimed.includes(q.id);
+            let prog = q.progress ? q.progress(STATE) : { label: isDone ? 'Готово' : 'В процессе' };
+
+            let actionBtn = '';
+            if (isDone && !isClaimed) {
+                actionBtn = `<button onclick="QUESTS.claimReward('${q.id}')" style="background: var(--green, #34C759); color: white; border: none; padding: 7px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(52,199,89,0.4);">🎁 Забрать награду</button>`;
+            } else if (isClaimed) {
+                actionBtn = `<span style="color: var(--text-dim, #86868B); font-size: 0.85em; font-weight: 600;">✅ Выполнено</span>`;
+            } else {
+                actionBtn = `<span style="background: var(--surface-3, #E8E8ED); color: var(--text-dim, #86868B); padding: 4px 10px; border-radius: 6px; font-size: 0.85em;">${prog.label}</span>`;
+            }
+
+            return `
+                <div style="background: var(--surface-2, #F5F5F7); border: 1px solid var(--border, rgba(0,0,0,0.08)); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 240px;">
+                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                            <span>${isDone ? '✅' : '🎯'}</span>
+                            <strong style="color: var(--text, #1D1D1F); font-size: 0.95em; text-decoration: ${isClaimed ? 'line-through' : 'none'};">${q.title}</strong>
+                        </div>
+                        <div style="color: var(--text-dim, #86868B); font-size: 0.85em; margin-bottom: 3px;">${q.desc}</div>
+                        <div style="color: var(--blue, #007AFF); font-size: 0.8em; font-weight: 500;">Награда: ${q.reward.text}</div>
+                    </div>
+                    <div style="text-align: right; min-width: 140px;">
+                        ${actionBtn}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        el.innerHTML = `
+            <div class="card" style="border-left: 4px solid var(--blue, #007AFF); background: var(--surface, #FFFFFF); margin-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.4em;">${ch.icon}</span>
+                            <h3 style="margin: 0; font-size: 1.15em; color: var(--text, #1D1D1F);">${ch.title}</h3>
+                            <span style="background: var(--blue-dim, rgba(0,122,255,0.1)); color: var(--blue, #007AFF); font-size: 0.75em; padding: 2px 8px; border-radius: 10px; font-weight: bold;">Глава ${curChId}/5</span>
+                        </div>
+                        <p style="margin: 4px 0 0 0; color: var(--text-dim, #86868B); font-size: 0.88em;">${ch.desc}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: bold; color: var(--text, #1D1D1F); font-size: 0.88em;">Прогресс: ${completedCount} / ${quests.length} (${percent}%)</div>
+                        <div style="width: 140px; height: 6px; background: var(--surface-3, #E8E8ED); border-radius: 3px; overflow: hidden; margin-top: 4px; display: inline-block;">
+                            <div style="width: ${percent}%; height: 100%; background: var(--blue, #007AFF); transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    ${questsHTML}
+                </div>
+            </div>
+        `;
     }
 };

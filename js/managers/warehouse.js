@@ -3,14 +3,10 @@ const WAREHOUSE = {
     init() {
         if (!STATE.company.warehouses) {
             STATE.company.warehouses = {};
-            // Инициализируем все города из GEO с нулевым уровнем
+            // Инициализируем все города из GEO с базовым складом в Одессе
             Object.keys(GEO.CITIES).forEach(cId => {
-                STATE.company.warehouses[cId] = { level: 0, inventory: {} };
+                STATE.company.warehouses[cId] = { level: (cId === 'odesa' ? 1 : 0), inventory: {} };
             });
-            // Спасение старого инвентаря в Одессу
-            if (STATE.company.inventory && Object.keys(STATE.company.inventory).length > 0) {
-                STATE.company.warehouses['odesa'] = { level: 1, inventory: STATE.company.inventory };
-            }
             delete STATE.company.inventory; 
         }
         

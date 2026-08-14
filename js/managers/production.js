@@ -71,7 +71,7 @@ const PRODUCTION = {
             }
             
             STATE.company.businesses.push({
-                uid: Date.now(), 
+                uid: Date.now() + Math.floor(Math.random() * 1000), 
                 type: type, 
                 level: 1,
                 name: customName,
@@ -82,6 +82,13 @@ const PRODUCTION = {
                 stats: { daily: 0, monthly: [], total: 0, lastOutput: 0 },
                 lastCogs: 0
             });
+
+            // Авто-активация склада уровня 1 в городе при открытии бизнеса
+            if (typeof WAREHOUSE !== 'undefined') WAREHOUSE.init();
+            if (STATE.company.warehouses && STATE.company.warehouses[cityId] && STATE.company.warehouses[cityId].level === 0) {
+                STATE.company.warehouses[cityId].level = 1;
+            }
+
             NOTIFY.success('Успех', `Вы открыли: ${customName}!`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {

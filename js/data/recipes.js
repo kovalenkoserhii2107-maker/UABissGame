@@ -55,6 +55,28 @@ const RECIPES = {
 
     // Матрица бизнесов
     BUSINESSES: {
+        // -- FMCG И ПОТРЕБИТЕЛЬСКИЙ СЕКТОР (Снабжение розницы) --
+        bakery_fab: { 
+            name: 'Пекарня (Хлебозавод)', area: 120, inputs: { grain: 2 }, output: 'bakery', staffReq: 2,
+            equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 30, researchCost: 0
+        },
+        canned_fab: { 
+            name: 'Мясокомбинат / Консервы', area: 180, inputs: { meat_raw: 1, vegetables: 1 }, output: 'canned_food', staffReq: 3,
+            equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 15, researchCost: 400
+        },
+        textile_fab: { 
+            name: 'Швейная фабрика (Одежда)', area: 150, inputs: { cotton: 2, chemicals: 1 }, output: 'clothing', staffReq: 4,
+            equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 10, researchCost: 300
+        },
+        detergent_fab: { 
+            name: 'Химкомбинат бытовой химии', area: 160, inputs: { chemicals: 2, plastic: 1 }, output: 'detergent', staffReq: 3,
+            equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 15, researchCost: 350
+        },
+        furniture_fab: { 
+            name: 'Мебельная фабрика', area: 250, inputs: { wood: 2, plastic: 1 }, output: 'furniture', staffReq: 4,
+            equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 4, researchCost: 500
+        },
+
         // -- TIER 2 FACTORIES --
         parts3d: { 
             name: 'Фабрика 3D-печати', area: 150, inputs: { plastic: 2 }, output: 'parts3d', staffReq: 2,
@@ -137,7 +159,7 @@ const RECIPES = {
         marketing_agency: {
             name: 'Отдел Маркетинга', area: 150, inputs: {}, output: 'none', 
             staffReq: 5, equipmentType: 'smart_pc', 
-            slotsPerLevel: 5, isMarketing: true, researchCost: 1500 
+            slotsPerLevel: 5, isMarketing: true, researchCost: 0 
         }
     }
 };
