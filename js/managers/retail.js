@@ -87,13 +87,16 @@ const RETAIL = {
             if (mgr === 0 || sales === 0) return;
             let staffEfficiency = Math.min(1.0, totalStaff / maxStaff);
 
-            // 1. ЕМКОСТЬ И ТРАФИК (Пригород - 500, Спальный - 2000, Центр - 10000)
-            let locMult = biz.locMult || 1.0;
-            let maxCapacity = locMult < 1.0 ? 500 : (locMult > 1.0 ? 10000 : 2000);
+            // 1. ЕМКОСТЬ И ТРАФИК (Гео-экономика)
+            let cityId = biz.city || 'odesa';
+            let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { population: 1000000, demandMult: 1.0 };
+            
+            // Базовая емкость рынка: 2000 человек на каждый миллион населения с учетом спроса
+            let maxCapacity = Math.floor((cityData.population / 1000000) * 2000 * cityData.demandMult);
 
-            // Органика (5%) + Буст от Агентства (каждая 1 ед. силы дает +100 человек)
+            // Органика (5%) + Буст от Агентства
             let baseTraffic = maxCapacity * 0.05; 
-            let storeBonus = (storeBoosts[biz.uid] || 0) * 100; 
+            let storeBonus = (storeBoosts[biz.uid] || 0) * 100;
             
             let potentialTraffic = (baseTraffic + storeBonus) * brandTrafficMult;
             
