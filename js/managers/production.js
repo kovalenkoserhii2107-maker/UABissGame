@@ -182,9 +182,7 @@ const PRODUCTION = {
             return Object.keys(tplA.inputs || {}).length - Object.keys(tplB.inputs || {}).length;
         });
 
-        STATE.company.businesses.forEach(biz => {
-            biz.dailyIncoming = {}; 
-        });
+        STATE.company.businesses.forEach(biz => { biz.dailyIncoming = {}; });
 
         let addToInventory = (invContainer, itemKey, qty, cost, quality) => {
             if (!invContainer[itemKey]) invContainer[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
@@ -210,53 +208,40 @@ const PRODUCTION = {
             STATE.finances.balance -= dailyAdminCost; 
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_admin', dailyAdminCost);
 
-            let localWh = STATE.company.warehouses[cityId];
+            let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { salaryMult: 1.0 };
 
-            // Логика Магазинов и Офисов
             if (tpl.isRetail || tpl.isMarketing) {
+                // (Розничная логика остается без изменений)
                 if (!biz.localInventory) biz.localInventory = {};
-                
                 if (biz.dailyIncoming) {
                     Object.keys(biz.dailyIncoming).forEach(k => {
                         let inc = biz.dailyIncoming[k];
                         if (inc.qty > 0) {
                             let currentVol = 0;
-                            Object.keys(biz.localInventory).forEach(ik => {
-                                currentVol += biz.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0);
-                            });
-                            
+                            Object.keys(biz.localInventory).forEach(ik => { currentVol += biz.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0); });
                             let maxVol = tpl.area * level * locMult * 2; 
                             let itemVol = RECIPES.RESOURCES[k].volume || 0.1;
-                            
-                            let freeSpace = maxVol - currentVol;
-                            let maxCanFit = itemVol > 0 ? Math.floor(freeSpace / itemVol) : inc.qty;
-                            
+                            let maxCanFit = itemVol > 0 ? Math.floor((maxVol - currentVol) / itemVol) : inc.qty;
                             let toStore = Math.min(inc.qty, maxCanFit);
                             let toReject = inc.qty - toStore;
                             
                             if (toStore > 0) addToInventory(biz.localInventory, k, toStore, toStore * inc.avgCost, inc.quality);
-                            
-                            // Излишки возвращаются на склад ГОРОДА
-                            if (toReject > 0 && localWh) {
-                                addToInventory(localWh.inventory, k, toReject, toReject * inc.avgCost, inc.quality);
+                            if (toReject > 0 && STATE.company.warehouses[cityId]) {
+                                addToInventory(STATE.company.warehouses[cityId].inventory, k, toReject, toReject * inc.avgCost, inc.quality);
                             }
                         }
                     });
                     biz.dailyIncoming = {}; 
                 }
-
                 if (biz.equipment.count > 0) {
-                    biz.equipment.condition -= 0.5;
-                    if (biz.equipment.condition < 0) biz.equipment.condition = 0;
+                    biz.equipment.condition = Math.max(0, biz.equipment.condition - 0.5);
                 }
                 return; 
             }
 
             let maxStaff = tpl.staffReq * level;
             let assignedTotal = biz.assigned.junior + biz.assigned.middle + biz.assigned.senior;
-            let prodPower = (biz.assigned.junior * HR.GRADES.junior.prodMult) + 
-                            (biz.assigned.middle * HR.GRADES.middle.prodMult) + 
-                            (biz.assigned.senior * HR.GRADES.senior.prodMult);
+            let prodPower = (biz.assigned.junior * HR.GRADES.junior.prodMult) + (biz.assigned.middle * HR.GRADES.middle.prodMult) + (biz.assigned.senior * HR.GRADES.senior.prodMult);
             let uiEfficiency = maxStaff > 0 ? (prodPower / maxStaff) : 1;
             if (assignedTotal === 0) uiEfficiency = 0;
 
@@ -266,12 +251,18 @@ const PRODUCTION = {
             let possibleOutput = Math.floor(maxOutByEquip * uiEfficiency * conditionMult);
 
             let inputsKeys = Object.keys(tpl.inputs);
+            
+            // --- ЛОГИСТИКА ВЫБОРА СКЛАДА ---
+            let sourceCityId = biz.sourceWh || cityId;
+            let targetCityId = biz.targetWh || cityId;
+            let sourceWh = STATE.company.warehouses[sourceCityId];
+            let targetWh = STATE.company.warehouses[targetCityId];
 
             let flushLeftovers = () => {
-                if (biz.dailyIncoming && localWh) {
+                if (biz.dailyIncoming && sourceWh) {
                     Object.keys(biz.dailyIncoming).forEach(k => {
                         let inc = biz.dailyIncoming[k];
-                        if (inc.qty > 0) addToInventory(localWh.inventory, k, inc.qty, inc.qty * inc.avgCost, inc.quality);
+                        if (inc.qty > 0) addToInventory(sourceWh.inventory, k, inc.qty, inc.qty * inc.avgCost, inc.quality);
                     });
                     biz.dailyIncoming = {}; 
                 }
@@ -283,11 +274,6 @@ const PRODUCTION = {
                 return; 
             }
 
-            let q_eq = biz.equipment.quality || 1.0; 
-            let q_hr = 1.0;
-            if (assignedTotal > 0) q_hr = ((biz.assigned.junior * 1.0) + (biz.assigned.middle * 1.2) + (biz.assigned.senior * 1.5)) / assignedTotal;
-            let q_tech = (STATE.rnd && STATE.rnd.techLevels && STATE.rnd.techLevels[biz.type]) ? STATE.rnd.techLevels[biz.type] : 1.0;
-
             let materialsCost = 0;
             let totalInputsCount = 0;
             let sumMatQuality = 0;
@@ -295,7 +281,7 @@ const PRODUCTION = {
             inputsKeys.forEach(k => {
                 let reqNum = tpl.inputs[k];
                 let incomingQty = (biz.dailyIncoming && biz.dailyIncoming[k]) ? biz.dailyIncoming[k].qty : 0;
-                let globalQty = (localWh && localWh.inventory[k]) ? localWh.inventory[k].qty : 0;
+                let globalQty = (sourceWh && sourceWh.inventory[k]) ? sourceWh.inventory[k].qty : 0;
                 let totalAvail = incomingQty + globalQty;
 
                 if (totalAvail < possibleOutput * reqNum) {
@@ -303,25 +289,29 @@ const PRODUCTION = {
                 }
             });
 
-            // Проверка вместимости склада ГОРОДА
+            // Проверка вместимости целевого склада
             let outVol = RECIPES.RESOURCES[tpl.output].volume || 0;
             let inVol = 0;
             inputsKeys.forEach(k => inVol += (RECIPES.RESOURCES[k].volume || 0) * tpl.inputs[k]);
-            let netVol = outVol - inVol;
             
-            if (netVol > 0 && typeof WAREHOUSE !== 'undefined' && localWh) {
-                let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
-                let maxBySpace = Math.floor(freeSpace / netVol);
+            // Если склады в одном городе, мы освобождаем место потреблением сырья
+            let netVolCheck = (sourceCityId === targetCityId) ? Math.max(0, outVol - inVol) : outVol;
+            
+            if (netVolCheck > 0 && targetWh) {
+                let freeSpace = WAREHOUSE.getMaxVolume(targetCityId) - WAREHOUSE.getCurrentVolume(targetCityId);
+                let maxBySpace = Math.floor(freeSpace / netVolCheck);
                 if (maxBySpace < possibleOutput) possibleOutput = maxBySpace;
             }
 
             let actualOutput = possibleOutput;
 
             if (actualOutput > 0) {
+                let inboundLogisticsCost = 0;
+
                 inputsKeys.forEach(k => {
                     let reqTotal = tpl.inputs[k] * actualOutput;
                     let incInv = (biz.dailyIncoming && biz.dailyIncoming[k]) ? biz.dailyIncoming[k] : { qty: 0, avgCost: 0, quality: 1.0 };
-                    let globalInv = (localWh && localWh.inventory[k]) ? localWh.inventory[k] : { qty: 0, avgCost: 0, quality: 1.0 };
+                    let globalInv = (sourceWh && sourceWh.inventory[k]) ? sourceWh.inventory[k] : { qty: 0, avgCost: 0, quality: 1.0 };
                     
                     let takeIncoming = Math.min(incInv.qty, reqTotal); 
                     let takeGlobal = reqTotal - takeIncoming;          
@@ -332,25 +322,36 @@ const PRODUCTION = {
                         totalInputsCount += takeIncoming;
                         incInv.qty -= takeIncoming; 
                     }
-                    if (takeGlobal > 0 && localWh) {
+                    if (takeGlobal > 0 && sourceWh) {
                         materialsCost += takeGlobal * globalInv.avgCost;
                         sumMatQuality += takeGlobal * (globalInv.quality || 1.0);
                         totalInputsCount += takeGlobal;
                         globalInv.qty -= takeGlobal; 
                         if (globalInv.qty === 0) globalInv.avgCost = 0;
+                        
+                        // Считаем входящую логистику (если берем из другого города)
+                        if (sourceCityId !== cityId && typeof GEO !== 'undefined') {
+                            let dist = GEO.getDistance(cityId, sourceCityId);
+                            let vol = takeGlobal * (RECIPES.RESOURCES[k].volume || 0.1);
+                            inboundLogisticsCost += dist * GEO.COUNTRIES['ua'].macro.logisticsBaseRate * vol;
+                        }
                     }
                 });
 
-                let q_mat = totalInputsCount > 0 ? (sumMatQuality / totalInputsCount) : 1.0;
-                let q_out = (q_eq * 0.1) + (q_mat * 0.3) + (q_hr * 0.2) + (q_tech * 0.4);
+                // Списываем входящую логистику
+                STATE.finances.balance -= inboundLogisticsCost;
+                if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', inboundLogisticsCost);
 
-                // Затраты ФОТ с учетом коэффициента региона
-                let citySalaryMult = typeof GEO !== 'undefined' ? GEO.getCity(cityId).salaryMult : 1.0;
-                let bizSalaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + 
-                                     (biz.assigned.middle * HR.GRADES.middle.salary) + 
-                                     (biz.assigned.senior * HR.GRADES.senior.salary)) * citySalaryMult;
+                let q_mat = totalInputsCount > 0 ? (sumMatQuality / totalInputsCount) : 1.0;
+                let eqQuality = biz.equipment.quality || 1.0; 
+                let q_hr = 1.0;
+                if (assignedTotal > 0) q_hr = ((biz.assigned.junior * 1.0) + (biz.assigned.middle * 1.2) + (biz.assigned.senior * 1.5)) / assignedTotal;
+                let q_tech = (STATE.rnd && STATE.rnd.techLevels && STATE.rnd.techLevels[biz.type]) ? STATE.rnd.techLevels[biz.type] : 1.0;
+                let q_out = (eqQuality * 0.1) + (q_mat * 0.3) + (q_hr * 0.2) + (q_tech * 0.4);
+
+                let bizSalaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary)) * cityData.salaryMult;
                 
-                let totalProductionCost = materialsCost + bizSalaryCost + dailyAdminCost; 
+                let totalProductionCost = materialsCost + bizSalaryCost + dailyAdminCost + inboundLogisticsCost; 
                 biz.lastCogs = totalProductionCost / actualOutput;
 
                 let remainingOutput = actualOutput;
@@ -359,7 +360,6 @@ const PRODUCTION = {
                 Object.keys(biz.routing).forEach(destId => {
                     let targetQty = biz.routing[destId];
                     if (targetQty <= 0) return;
-                    
                     let shareQty = Math.min(targetQty, remainingOutput); 
                     if (shareQty === 0) return;
                     
@@ -371,24 +371,31 @@ const PRODUCTION = {
                     if (destBiz) {
                         if (!destBiz.dailyIncoming) destBiz.dailyIncoming = {};
                         addToInventory(destBiz.dailyIncoming, tpl.output, shareQty, shareCost, q_out);
-                    } else if (localWh) {
-                        // Если получатель удален — везем на локальный склад
-                        addToInventory(localWh.inventory, tpl.output, shareQty, shareCost, q_out);
+                    } else if (targetWh) {
+                        addToInventory(targetWh.inventory, tpl.output, shareQty, shareCost, q_out);
                     }
                 });
 
-                // Все излишки (или если маршруты не заданы) идут на склад ГОРОДА
-                if (remainingOutput > 0 && localWh) {
-                    addToInventory(localWh.inventory, tpl.output, remainingOutput, Math.max(0, remainingCost), q_out);
+                // Все излишки идут на ЦЕЛЕВОЙ склад (с расчетом исходящей логистики)
+                if (remainingOutput > 0 && targetWh) {
+                    let outboundLogisticsCost = 0;
+                    if (targetCityId !== cityId && typeof GEO !== 'undefined') {
+                        let dist = GEO.getDistance(cityId, targetCityId);
+                        let vol = remainingOutput * outVol;
+                        outboundLogisticsCost = dist * GEO.COUNTRIES['ua'].macro.logisticsBaseRate * vol;
+                        
+                        STATE.finances.balance -= outboundLogisticsCost;
+                        if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', outboundLogisticsCost);
+                    }
+                    remainingCost += outboundLogisticsCost;
+                    addToInventory(targetWh.inventory, tpl.output, remainingOutput, Math.max(0, remainingCost), q_out);
                 }
 
                 let wearRate = 1.5 * (actualOutput / maxOutByEquip);
-                biz.equipment.condition -= wearRate;
-                if (biz.equipment.condition < 0) biz.equipment.condition = 0;
+                biz.equipment.condition = Math.max(0, biz.equipment.condition - wearRate);
             }
 
             flushLeftovers();
-
             biz.stats.lastOutput = actualOutput;
             biz.stats.total += actualOutput;
         });
