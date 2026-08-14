@@ -1842,23 +1842,33 @@ const UI_DASHBOARD = {
                     </div>
                     <div style="flex: 1; min-width: 250px;">
                         <p style="margin: 0 0 15px 0; font-size:1.1em;">🏢 Аренда: <strong style="color:#c0392b;">$${formatMoney(adminCost)}</strong>/дн</p>
-                        <div style="background: #fff; padding: 15px; border-radius: 6px; border: 1px dashed #bdc3c7;">
-                            <strong style="font-size: 1.1em; color: #2c3e50;">КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong><br>
-                            <small style="color:#7f8c8d; display:block; margin-bottom:12px;">Обязателен 1 директор. Остальные — продавцы.</small>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                                <span>Продавец <small style="color:#7f8c8d;">(Резерв: ${freeSales})</small></span>
+                        <div class="retail-staff-card" style="background: var(--surface, #fff); padding: 16px; border-radius: 12px; border: 1px solid var(--border, #dcdde1); box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <strong style="font-size: 1.05em; color: var(--text, #1D1D1F);">👥 КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong>
+                            </div>
+                            <small style="color: var(--text-dim, #86868B); display: block; margin-bottom: 10px;">Обязателен 1 директор. Остальные — продавцы.</small>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f2f6;">
                                 <div>
-                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
-                                    <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.salesman}</strong> 
-                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
+                                    <strong>Директор магазина</strong><br>
+                                    <small style="color: var(--text-dim, #86868B);">В резерве: <strong style="color:var(--blue, #007AFF);">${freeMgr}</strong> чел.</small>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager === 0 ? 'disabled' : ''} style="width:34px; height:34px; min-height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:#ff3b30; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer;">-</button> 
+                                    <strong style="display: inline-block; width: 24px; text-align: center; font-size:1.1rem;">${biz.assigned.store_manager}</strong> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr === 0 ? 'disabled' : ''} style="width:34px; height:34px; min-height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:#34c759; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer; box-shadow:0 2px 8px rgba(52,199,89,0.35);">+</button>
                                 </div>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                                <span>Директор <small style="color:#7f8c8d;">(Резерв: ${freeMgr})</small></span>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; margin-top: 4px;">
                                 <div>
-                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#e74c3c; border:none; color:white; cursor:pointer; border-radius:3px;">-</button> 
-                                    <strong style="display:inline-block; width:25px; text-align:center;">${biz.assigned.store_manager}</strong> 
-                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr===0?'disabled style="opacity:0.5;"':''} style="padding: 4px 10px; background:#2ecc71; border:none; color:white; cursor:pointer; border-radius:3px;">+</button>
+                                    <strong>Продавец-консультант</strong><br>
+                                    <small style="color: var(--text-dim, #86868B);">В резерве: <strong style="color:var(--blue, #007AFF);">${freeSales}</strong> чел.</small>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman === 0 ? 'disabled' : ''} style="width:34px; height:34px; min-height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:#ff3b30; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer;">-</button> 
+                                    <strong style="display: inline-block; width: 24px; text-align: center; font-size:1.1rem;">${biz.assigned.salesman}</strong> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales === 0 ? 'disabled' : ''} style="width:34px; height:34px; min-height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:#34c759; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer; box-shadow:0 2px 8px rgba(52,199,89,0.35);">+</button>
                                 </div>
                             </div>
                         </div>

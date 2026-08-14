@@ -62,9 +62,10 @@ const TUTORIAL = {
             }
         },
         {
-            target: '[onclick*="\'tab-retail\'"]',
+            target: '.retail-staff-card',
+            tab: 'tab-retail',
             title: 'Распределение персонала 🧑‍💼',
-            text: 'Штат нанят! Вернитесь во вкладку «Розница» и назначьте сотрудников в ваш магазин с помощью кнопок «+».',
+            text: 'Нажмите на зеленые кнопки «+» в блоке КАДРЫ, чтобы закрепить нанятого Директора и Продавца за магазином.',
             trigger: {
                 type: 'condition',
                 check: (state) => state.company && state.company.businesses && state.company.businesses.some(b => b.type === 'retail_store' && b.assigned && ((b.assigned.store_manager || 0) >= 1 || (b.assigned.salesman || 0) >= 1))
