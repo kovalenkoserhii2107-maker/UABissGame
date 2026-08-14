@@ -679,14 +679,16 @@ const UI_DASHBOARD = {
 
     // --- 5. СКЛАДСКАЯ ИНФРАСТРУКТУРА ---
     updateWarehouseUI() {
-        if (typeof WAREHOUSE === 'undefined' || !STATE.company.warehouses) return;
+        if (typeof WAREHOUSE === 'undefined') return;
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Принудительно создаем склады ДО отрисовки
+        WAREHOUSE.init(); 
         
         let totalCurVol = 0;
         let totalMaxVol = 0;
         let totalRent = 0;
         let activeWhs = [];
 
-        // Собираем данные только по тем городам, где уровень склада > 0
         Object.keys(STATE.company.warehouses).forEach(cId => {
             let wh = STATE.company.warehouses[cId];
             if (wh.level > 0) {
@@ -699,7 +701,7 @@ const UI_DASHBOARD = {
         });
 
         if (document.getElementById('ui-wh-lvl')) {
-            // Если складов нет, выводим красное предупреждение
+            // Если складов нет - выводим красное сообщение
             if (activeWhs.length === 0) {
                 document.getElementById('ui-wh-lvl').innerHTML = '<span style="color:#e74c3c; font-weight:bold;">Нет построенных складов</span>';
                 if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = '0';
@@ -721,7 +723,7 @@ const UI_DASHBOARD = {
             let btn = document.getElementById('ui-wh-upgrade-btn');
             if (btn) {
                 btn.style.display = 'inline-block';
-                // Кнопка меняет текст и вызывает модальное окно выбора города
+                // Перезаписываем старую HTML-кнопку на вызов карты городов
                 btn.innerText = activeWhs.length === 0 ? 'Открыть первый складской хаб' : 'Управление складами (Карта)';
                 btn.onclick = () => UI_DASHBOARD.showCityModal('warehouse');
             }
