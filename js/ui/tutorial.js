@@ -44,20 +44,30 @@ const TUTORIAL = {
         {
             target: '[onclick*="HR.hire(\'store_manager\')"]',
             tab: 'tab-hr',
-            title: 'Найм команды 💼',
-            text: 'Наймите в кадровый резерв 1 Директора магазина (Store Manager) и 1 Продавца (Salesman).',
+            title: 'Найм Директора магазина 👔',
+            text: 'Сначала наймите 1 Директора магазина (Store Manager), который будет руководить торговой точкой.',
             trigger: {
                 type: 'condition',
-                check: (state) => (state.hr && state.hr.staff && (state.hr.staff.store_manager || 0) > 0 && (state.hr.staff.salesman || 0) > 0)
+                check: (state) => (state.hr && state.hr.staff && (state.hr.staff.store_manager || 0) > 0) || (state.company && state.company.businesses && state.company.businesses.some(b => b.assigned && (b.assigned.store_manager || 0) > 0))
+            }
+        },
+        {
+            target: '[onclick*="HR.hire(\'salesman\')"]',
+            tab: 'tab-hr',
+            title: 'Найм Продавца-консультанта 🛒',
+            text: 'Отлично! Теперь нажмите на подсвеченную кнопку и наймите 1 Продавца-консультанта (Salesman).',
+            trigger: {
+                type: 'condition',
+                check: (state) => (state.hr && state.hr.staff && (state.hr.staff.salesman || 0) > 0) || (state.company && state.company.businesses && state.company.businesses.some(b => b.assigned && (b.assigned.salesman || 0) > 0))
             }
         },
         {
             target: '[onclick*="\'tab-retail\'"]',
             title: 'Распределение персонала 🧑‍💼',
-            text: 'Вернитесь во вкладку «Розница» и назначьте нанятых сотрудников в ваш магазин (кнопки «+» рядом с должностями).',
+            text: 'Штат нанят! Вернитесь во вкладку «Розница» и назначьте сотрудников в ваш магазин с помощью кнопок «+».',
             trigger: {
                 type: 'condition',
-                check: (state) => state.company && state.company.businesses && state.company.businesses.some(b => b.type === 'retail_store' && b.assigned && (b.assigned.store_manager || 0) >= 1 && (b.assigned.salesman || 0) >= 1)
+                check: (state) => state.company && state.company.businesses && state.company.businesses.some(b => b.type === 'retail_store' && b.assigned && ((b.assigned.store_manager || 0) >= 1 || (b.assigned.salesman || 0) >= 1))
             }
         },
         {
