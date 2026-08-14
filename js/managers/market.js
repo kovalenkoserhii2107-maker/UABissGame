@@ -64,7 +64,7 @@ const MARKET = {
         return STATE.market.pools[itemKey] !== undefined ? Math.floor(STATE.market.pools[itemKey]) : 0;
     },
 
-    buy(itemKey, qty) {
+    buy(itemKey, qty, cityId) {
         this.init();
         let res = RECIPES.RESOURCES[itemKey];
         if (!res) return;
@@ -77,14 +77,14 @@ const MARKET = {
             return;
         }
 
-        // ПРОВЕРКА ЛИМИТА СКЛАДА ИГРОКА
+        // ПРОВЕРКА ЛИМИТА СКЛАДА ДЛЯ КОНКРЕТНОГО ГОРОДА
         if (typeof WAREHOUSE !== 'undefined' && WAREHOUSE.getCurrentVolume) {
             let itemVol = res.volume || 1.0; 
             let totalVol = itemVol * qty;
-            let freeSpace = WAREHOUSE.getMaxVolume() - WAREHOUSE.getCurrentVolume();
+            let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
             
             if (totalVol > freeSpace) {
-                NOTIFY.error('Склад переполнен!', `Не хватает места. Свободно: ${freeSpace.toFixed(1)} м³. Требуется: ${totalVol.toFixed(1)} м³.`);
+                NOTIFY.error('Склад переполнен!', `В г. ${CITIES[cityId].name} нет места. Свободно: ${freeSpace.toFixed(1)} м³.`);
                 return;
             }
         }
@@ -97,9 +97,11 @@ const MARKET = {
             STATE.market.pools[itemKey] = Math.floor(STATE.market.pools[itemKey] - qty);
             
             if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
-            STATE.logistics.deliveries.push({ item: itemKey, qty: qty, cost: cost, daysLeft: 1 });
             
-            NOTIFY.success('Успех', `Закупка оформлена. ${qty} шт. прибудут завтра.`);
+            // ВАЖНО: Добавляем targetCity в накладную
+            STATE.logistics.deliveries.push({ item: itemKey, qty: qty, cost: cost, daysLeft: 1, targetCity: cityId });
+            
+            NOTIFY.success('Успех', `Закупка оформлена. ${qty} шт. прибудут в г. ${CITIES[cityId].name} завтра.`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {
             NOTIFY.error('Ошибка', `Недостаточно средств. Нужно $${formatMoney(cost)}`);
