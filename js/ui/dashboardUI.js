@@ -684,18 +684,22 @@ const UI_DASHBOARD = {
         let totalCurVol = 0;
         let totalMaxVol = 0;
         let totalRent = 0;
-        let mainLvl = STATE.company.warehouses['odesa'] ? STATE.company.warehouses['odesa'].level : 0;
+        let activeWhs = [];
 
         Object.keys(STATE.company.warehouses).forEach(cId => {
-            if (STATE.company.warehouses[cId].level > 0) {
+            let wh = STATE.company.warehouses[cId];
+            if (wh.level > 0) {
                 totalCurVol += WAREHOUSE.getCurrentVolume(cId);
                 totalMaxVol += WAREHOUSE.getMaxVolume(cId);
                 totalRent += WAREHOUSE.getDailyRent(cId);
+                let cityName = typeof GEO !== 'undefined' ? GEO.getCity(cId).name : cId;
+                activeWhs.push(`${cityName} (Ур. ${wh.level})`);
             }
         });
 
         if (document.getElementById('ui-wh-lvl')) {
-            document.getElementById('ui-wh-lvl').innerText = mainLvl + ' (Одесса)';
+            // Показываем все активные склады или заглушку
+            document.getElementById('ui-wh-lvl').innerText = activeWhs.length > 0 ? activeWhs.join(' | ') : 'Нет построенных складов';
             if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = formatMoney(totalRent);
             if(document.getElementById('ui-wh-current')) document.getElementById('ui-wh-current').innerText = totalCurVol.toFixed(1);
             if(document.getElementById('ui-wh-max')) document.getElementById('ui-wh-max').innerText = totalMaxVol;
@@ -709,10 +713,10 @@ const UI_DASHBOARD = {
             
             let btn = document.getElementById('ui-wh-upgrade-btn');
             if (btn) {
-                let nextCost = WAREHOUSE.getUpgradeCost('odesa');
                 btn.style.display = 'inline-block';
-                btn.innerText = `Расширить Одессу ($${formatMoney(nextCost)})`;
-                btn.onclick = () => WAREHOUSE.upgrade('odesa');
+                // Кнопка теперь динамическая и вызывает Модальное Окно
+                btn.innerText = activeWhs.length === 0 ? 'Открыть первый складской хаб' : 'Управление складами (Карта)';
+                btn.onclick = () => UI_DASHBOARD.showCityModal('warehouse');
             }
         }
     },
@@ -2061,7 +2065,7 @@ const UI_DASHBOARD = {
         modal.id = 'city-modal';
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
         
-        let title = actionType === 'warehouse' ? 'Где открываем новый складской хаб?' : 'Выберите город для инвестиций';
+        let title = actionType === 'warehouse' ? 'Где открываем или расширяем склад?' : 'Выберите город для инвестиций';
         if (bizType && typeof RECIPES !== 'undefined' && RECIPES.BUSINESSES[bizType]) {
             title = `Открытие: ${RECIPES.BUSINESSES[bizType].name}`;
         }
@@ -2070,7 +2074,6 @@ const UI_DASHBOARD = {
         Object.keys(GEO.CITIES).forEach(cId => {
             let city = GEO.CITIES[cId];
             
-            // Расчеты для превью
             let rentColor = city.rentMult > 1.1 ? '#c0392b' : (city.rentMult < 1 ? '#27ae60' : '#7f8c8d');
             let salaryColor = city.salaryMult > 1.1 ? '#c0392b' : (city.salaryMult < 1 ? '#27ae60' : '#7f8c8d');
             let demandColor = city.demandMult > 1.1 ? '#27ae60' : (city.demandMult < 1 ? '#c0392b' : '#7f8c8d');
@@ -2078,16 +2081,19 @@ const UI_DASHBOARD = {
             let actionCode = '';
             if (actionType === 'warehouse') {
                 let cost = WAREHOUSE.getUpgradeCost(cId);
+                let currentLvl = STATE.company.warehouses[cId] ? STATE.company.warehouses[cId].level : 0;
+                let lvlText = currentLvl === 0 ? 'Построить новый хаб' : `Расширить до Ур. ${currentLvl + 1}`;
+                
                 actionCode = `document.getElementById('city-modal').remove(); WAREHOUSE.upgrade('${cId}');`;
                 citiesHtml += `
                 <div onclick="${actionCode}" style="background:#fdfefe; border:2px solid #bdc3c7; border-radius:8px; padding:15px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center;">
                     <div>
                         <strong style="font-size:1.2em; color:#2c3e50;">${city.name}</strong><br>
-                        <small style="color:#7f8c8d;">Население: ${(city.population/1000000).toFixed(1)} млн</small>
+                        <small style="color:#7f8c8d;">${currentLvl > 0 ? 'Уже построен (Ур. ' + currentLvl + ')' : 'Склада в городе нет'}</small>
                     </div>
                     <div style="text-align:right;">
                         <span style="display:block; font-size:1.1em; color:#27ae60; font-weight:bold;">$${formatMoney(cost)}</span>
-                        <small style="color:${rentColor};">Аренда: x${city.rentMult}</small>
+                        <small style="color:${rentColor};">${lvlText} (Аренда: x${city.rentMult})</small>
                     </div>
                 </div>`;
             } else {
