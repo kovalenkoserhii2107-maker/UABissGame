@@ -45,7 +45,8 @@ const WAREHOUSE = {
     getUpgradeCost(cityId) {
         this.init();
         let wh = STATE.company.warehouses[cityId];
-        if (!wh || wh.level === 0) return 25000; 
+        // Если склада в городе еще нет (0 уровень), постройка обойдется в $5,000
+        if (!wh || wh.level === 0) return 5000; 
         return Math.floor(10000 * Math.pow(1.8, wh.level - 1));
     },
 
