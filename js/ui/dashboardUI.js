@@ -2193,18 +2193,33 @@ const UI_DASHBOARD = {
                 </div>`;
             } else {
                 actionCode = `document.getElementById('city-modal').remove(); PRODUCTION.buyBusiness('${bizType}', '${cId}');`;
+                
+                let recBadge = '';
+                let borderStyle = 'border:1px solid #dcdde1; background:#ffffff;';
+                
+                if (cId === 'kharkiv') {
+                    recBadge = `<div style="margin-top:3px;"><span style="background:#e8f8ee; color:#27ae60; border:1px solid #a3e9b9; padding:2px 6px; border-radius:6px; font-size:0.72em; font-weight:bold;">⭐ Рекомендуется для старта (Низкая аренда)</span></div>`;
+                    borderStyle = 'border:2px solid #27ae60; background:#f6fcf8; box-shadow:0 2px 10px rgba(39,174,96,0.15);';
+                } else if (cId === 'odesa') {
+                    recBadge = `<div style="margin-top:3px;"><span style="background:#e8f4fd; color:#2980b9; border:1px solid #a9d7f9; padding:2px 6px; border-radius:6px; font-size:0.72em; font-weight:bold;">🌊 Высокий спрос (Сбалансировано)</span></div>`;
+                    borderStyle = 'border:2px solid #2980b9; background:#f6faff; box-shadow:0 2px 10px rgba(41,128,185,0.15);';
+                } else if (cId === 'kyiv') {
+                    recBadge = `<div style="margin-top:3px;"><span style="background:#fef5e7; color:#d35400; border:1px solid #f8c471; padding:2px 6px; border-radius:6px; font-size:0.72em; font-weight:bold;">👑 Крупный рынок (Дорогая аренда x1.5)</span></div>`;
+                }
+
                 citiesHtml += `
-                <div onclick="${actionCode}" style="background:#fdfefe; border:1px solid #bdc3c7; border-radius:12px; padding:12px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                    <div style="min-width:120px;">
-                        <strong style="font-size:1.1em; color:#2c3e50;">${city.name}</strong><br>
-                        <small style="color:#7f8c8d;">Население: ${(city.population/1000000).toFixed(1)} млн</small>
+                <div onclick="${actionCode}" style="${borderStyle} border-radius:12px; padding:12px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div style="min-width:140px;">
+                        <strong style="font-size:1.15em; color:#2c3e50;">${city.name}</strong>
+                        ${recBadge}
+                        <small style="color:#7f8c8d; display:block; margin-top:2px;">Население: ${(city.population/1000000).toFixed(1)} млн</small>
                     </div>
                     <div style="font-size:0.82em; min-width:130px;">
                         <div style="color:${rentColor};">🏢 Аренда: <strong>x${city.rentMult}</strong></div>
                         <div style="color:${salaryColor};">💼 Зарплаты: <strong>x${city.salaryMult}</strong></div>
                     </div>
                     <div style="text-align:right; min-width:100px;">
-                        <div style="color:${demandColor}; font-size:1.05em;">🛒 Спрос: <strong>x${city.demandMult}</strong></div>
+                        <div style="color:${demandColor}; font-size:1.08em; font-weight:bold;">🛒 Спрос: x${city.demandMult}</div>
                     </div>
                 </div>`;
             }
@@ -2213,7 +2228,9 @@ const UI_DASHBOARD = {
         modal.innerHTML = `
             <div style="background:#fff; padding:20px 16px; border-radius:16px; width:550px; max-width:94%; box-shadow: 0 20px 50px rgba(0,0,0,0.25); max-height:85vh; display:flex; flex-direction:column;">
                 <h2 style="margin-top:0; color:#2c3e50; font-size: 1.3em; border-bottom:2px solid #ecf0f1; padding-bottom:10px;">🗺️ ${title}</h2>
-                <p style="color:#7f8c8d; margin-bottom: 12px; font-size:0.85em;">Выберите локацию. От города зависят расходы и спрос.</p>
+                <div style="background: rgba(52, 199, 89, 0.12); border-left: 4px solid #34C759; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.84em; color: #1d1d1f;">
+                    <strong>💡 Рекомендация для старта:</strong> Выбирайте <strong>Харьков</strong> (минимальная аренда x1.0) или <strong>Одессу</strong> (отличный спрос x1.25), чтобы не уйти в кассовый разрыв.
+                </div>
                 <div style="overflow-y: auto; flex: 1; padding-right: 4px;">
                     ${citiesHtml}
                 </div>
