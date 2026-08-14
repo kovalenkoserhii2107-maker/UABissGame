@@ -73,41 +73,100 @@ const MARKET = {
         let availableQty = this.getAvailablePool(itemKey);
 
         if (qty > availableQty) {
-            NOTIFY.error('Дефицит на бирже', `Невозможно купить ${qty} шт. Доступно: ${availableQty} шт.`);
+            if (typeof NOTIFY !== 'undefined') NOTIFY.error('Дефицит на бирже', `Невозможно купить ${qty} шт. Доступно: ${availableQty} шт.`);
             return;
         }
 
-        // Подтягиваем имя города из новой системы GEO
         let cityName = typeof GEO !== 'undefined' ? GEO.getCity(cityId).name : cityId;
+        let itemVol = res.volume || 1.0; 
+        let totalVol = itemVol * qty;
 
-        // ПРОВЕРКА ЛИМИТА СКЛАДА ДЛЯ КОНКРЕТНОГО ГОРОДА
+        // 1. Учитываем объем товаров, которые УЖЕ заказаны и находятся в пути в этот город
+        let pendingVol = 0;
+        if (STATE.logistics && STATE.logistics.deliveries) {
+            STATE.logistics.deliveries.forEach(d => {
+                if (d.targetCity === cityId && RECIPES.RESOURCES[d.item]) {
+                    pendingVol += d.qty * (RECIPES.RESOURCES[d.item].volume || 1.0);
+                }
+            });
+        }
+
+        // ПРОВЕРКА ЛИМИТА СКЛАДА С УЧЕТОМ ТОВАРОВ В ПУТИ
         if (typeof WAREHOUSE !== 'undefined' && WAREHOUSE.getCurrentVolume) {
-            let itemVol = res.volume || 1.0; 
-            let totalVol = itemVol * qty;
-            let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
-            
+            let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId) - pendingVol;
             if (totalVol > freeSpace) {
-                NOTIFY.error('Склад переполнен!', `В г. ${cityName} нет места. Свободно: ${freeSpace.toFixed(1)} м³.`);
+                if (typeof NOTIFY !== 'undefined') NOTIFY.error('Склад переполнен!', `В г. ${cityName} нет места (с учетом товаров в пути). Свободно: ${Math.max(0, freeSpace).toFixed(1)} м³.`);
                 return;
             }
         }
 
+        // 2. Транспортные расходы от главного оптового хаба (Киева) до целевого склада
+        let dist = typeof GEO !== 'undefined' ? Math.max(10, GEO.getDistance('kyiv', cityId)) : 10;
+        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.15;
+        let logCost = dist * logBase * totalVol;
+
         let price = this.getCurrentPrice(itemKey);
-        let cost = price * qty;
+        let itemCost = price * qty;
+        let totalCost = itemCost + logCost; // Конечная стоимость партии с учетом доставки
         
-        if (STATE.finances.balance >= cost) {
-            STATE.finances.balance -= cost; 
+        if (STATE.finances.balance >= totalCost) {
+            STATE.finances.balance -= totalCost; 
             STATE.market.pools[itemKey] = Math.floor(STATE.market.pools[itemKey] - qty);
+            
+            // Списываем логистику в P&L
+            if (typeof LEDGER !== 'undefined' && logCost > 0) {
+                LEDGER.record('exp_logistics', logCost);
+            }
             
             if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
             
-            // ВАЖНО: Добавляем targetCity в накладную
-            STATE.logistics.deliveries.push({ item: itemKey, qty: qty, cost: cost, daysLeft: 1, targetCity: cityId });
+            STATE.logistics.deliveries.push({ 
+                id: Date.now() + Math.random().toString(36).substr(2, 5), // Уникальный ID ордера
+                item: itemKey, 
+                qty: qty, 
+                cost: itemCost,       // Стоимость самого товара (пойдет в себестоимость на складе)
+                logCost: logCost,     // Транспортные расходы (для отображения)
+                totalCost: totalCost, // Сколько всего списано
+                daysLeft: 1, 
+                targetCity: cityId,
+                isMarketOrder: true,  // Флаг того, что это прямой заказ с биржи
+                quality: 1.0,
+                brand: 0
+            });
             
-            NOTIFY.success('Успех', `Закупка оформлена. ${qty} шт. прибудут в г. ${cityName} завтра.`);
+            if (typeof NOTIFY !== 'undefined') NOTIFY.success('Ордер размещен', `Закупка оформлена. ${qty} шт. прибудут в г. ${cityName} завтра.`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {
-            NOTIFY.error('Ошибка', `Недостаточно средств. Нужно $${formatMoney(cost)}`);
+            if (typeof NOTIFY !== 'undefined') NOTIFY.error('Ошибка', `Недостаточно средств. С учетом доставки требуется $${formatMoney(totalCost)}`);
+        }
+    },
+
+    // НОВЫЙ МЕТОД: Отмена оформленного ордера
+    cancelOrder(orderId) {
+        if (!STATE.logistics || !STATE.logistics.deliveries) return;
+        
+        let idx = STATE.logistics.deliveries.findIndex(d => d.id === orderId && d.isMarketOrder);
+        if (idx !== -1) {
+            let d = STATE.logistics.deliveries[idx];
+            
+            // Возвращаем общую стоимость ордера на счет
+            STATE.finances.balance += d.totalCost;
+            
+            // Возвращаем товар на биржу
+            if (STATE.market && STATE.market.pools[d.item] !== undefined) {
+                STATE.market.pools[d.item] += d.qty;
+            }
+
+            // Откатываем логистические расходы в бухгалтерии, чтобы они не дублировались в P&L
+            if (typeof LEDGER !== 'undefined' && STATE.ledger && STATE.ledger.today && d.logCost > 0) {
+                STATE.ledger.today.exp_logistics = Math.max(0, STATE.ledger.today.exp_logistics - d.logCost);
+                STATE.ledger.total.exp_logistics = Math.max(0, STATE.ledger.total.exp_logistics - d.logCost);
+            }
+
+            STATE.logistics.deliveries.splice(idx, 1);
+            
+            if (typeof NOTIFY !== 'undefined') NOTIFY.success('Отмена сделки', `Ордер аннулирован. Товар возвращен на биржу, средства компенсированы.`);
+            if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         }
     },
 
