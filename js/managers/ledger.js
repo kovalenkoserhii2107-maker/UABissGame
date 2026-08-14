@@ -10,6 +10,7 @@ const LEDGER = {
         exp_hr: 0,        // OPEX: Обучение, найм, увольнения
         exp_admin: 0,     // OPEX: Аренда и обслуживание зданий
         exp_materials: 0, // OPEX: Закупка сырья
+        exp_logistics: 0, // OPEX: Межгородская логистика
         exp_fines: 0,     // OPEX: Случайные события (Штрафы)
         exp_marketing: 0, // OPEX: Рекламные кампании
         exp_repair: 0,    // OPEX: Ремонт оборудования
@@ -20,17 +21,15 @@ const LEDGER = {
         fin_fees: 0       // Финансы: Разовые банковские комиссии
     },
 
-    init() {
-        if (!STATE.ledger || !STATE.ledger.total.hasOwnProperty('fin_fees')) {
+init() {
+        if (!STATE.ledger || !STATE.ledger.total.hasOwnProperty('exp_logistics')) {
             STATE.ledger = {
                 today: JSON.parse(JSON.stringify(this.categories)),
                 yesterday: JSON.parse(JSON.stringify(this.categories)),
                 total: JSON.parse(JSON.stringify(this.categories)),
-                history: [] // История за последние 7 дней для графиков
+                history: (STATE.ledger && STATE.ledger.history) ? STATE.ledger.history : []
             };
         }
-        // Защита для старых сохранений
-        if (!STATE.ledger.history) STATE.ledger.history = [];
     },
 
     record(category, amount) {
@@ -44,13 +43,8 @@ const LEDGER = {
     endOfDay() {
         this.init();
         STATE.ledger.yesterday = JSON.parse(JSON.stringify(STATE.ledger.today));
-        
-        // Добавляем вчерашний день в историю
         STATE.ledger.history.unshift(JSON.parse(JSON.stringify(STATE.ledger.yesterday)));
-        if (STATE.ledger.history.length > 7) {
-            STATE.ledger.history.pop(); // Храним строго 7 дней
-        }
-
+        if (STATE.ledger.history.length > 7) STATE.ledger.history.pop();
         STATE.ledger.today = JSON.parse(JSON.stringify(this.categories));
     }
 };
