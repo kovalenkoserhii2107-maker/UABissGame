@@ -688,6 +688,7 @@
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-hr')">👥 HR</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-bank')">🏦 Банк</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-finance')">📉 Отчетность</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-wiki')">📖 База знаний</div>
         </div>
     </nav>
 
@@ -955,12 +956,14 @@
             </div>
         </div>
 
-        <!-- ВКЛАДКА: ФИНАНСОВАЯ ОТЧЕТНОСТЬ -->
+        <!-- ВКЛАДКА: ФИНАНСОВАЯ ОТЧЕТНОСТЬ (МСФО / GAAP) -->
         <div id="tab-finance" class="tab-content">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
-                <div class="card" id="ui-balance-sheet"></div>
-                <div class="card" id="ui-pnl-statement"></div>
-            </div>
+            <div id="ui-finance-dashboard"></div>
+        </div>
+
+        <!-- ВКЛАДКА: ВНУТРЕННЯЯ БАЗА ЗНАНИЙ (WIKI) -->
+        <div id="tab-wiki" class="tab-content">
+            <div id="ui-wiki-container"></div>
         </div>
 
     </main>
@@ -985,6 +988,7 @@
 <script src="js/managers/taxes.js"></script>
 <script src="js/managers/logistics.js"></script>
 <script src="js/managers/quests.js"></script>
+<script src="js/ui/wikiUI.js"></script>
 <script src="js/ui/dashboardUI.js"></script>
 <script src="js/ui/tutorial.js"></script>
 <script src="js/core/gameLoop.js"></script>

@@ -37,6 +37,7 @@ const UI_DASHBOARD = {
             this.updateHRTab();
             this.updateBankTab();
             this.updateFinanceTab();
+            if (typeof WIKI !== 'undefined') WIKI.render();
             
         } catch (err) {
             this.showError(err);
@@ -1299,24 +1300,27 @@ const UI_DASHBOARD = {
         }
     },
 
-    // --- 9. ФИНАНСОВАЯ ОТЧЕТНОСТЬ (МСФО) ---
+    switchFinanceTab(tabId) {
+        STATE.financeTab = tabId;
+        this.updateFinanceTab();
+    },
+
+    // --- 9. ФИНАНСОВАЯ ОТЧЕТНОСТЬ (МСФО / IFRS / GAAP) ---
     updateFinanceTab() {
-        if (!document.getElementById('ui-balance-sheet') || typeof LEDGER === 'undefined') return;
+        let container = document.getElementById('ui-finance-dashboard');
+        if (!container || typeof LEDGER === 'undefined') return;
         LEDGER.init();
         
-        // --- РАСЧЕТ БАЛАНСА ---
-        
-        // 1. Текущие активы (Деньги + Инвестиции)
+        if (!STATE.financeTab) STATE.financeTab = 'all';
+
+        // 1. Расчет активов (Balance Sheet - Assets)
         let cash = Math.max(0, STATE.finances.balance);
         let depositsValue = 0;
         if (STATE.finances.deposits) {
-            STATE.finances.deposits.forEach(d => { depositsValue += d.amount + d.accrued; });
+            STATE.finances.deposits.forEach(d => { depositsValue += d.amount + (d.accrued || 0); });
         }
 
-        // 1.1. Инвентаризация (Мульти-склады + Полки магазинов)
         let inventoryValue = 0;
-        
-        // Считаем товары на складах всех городов
         if (STATE.company.warehouses) {
             Object.keys(STATE.company.warehouses).forEach(cId => {
                 let wh = STATE.company.warehouses[cId];
@@ -1327,8 +1331,6 @@ const UI_DASHBOARD = {
                 }
             });
         }
-        
-        // Считаем товары на полках магазинов
         STATE.company.businesses.forEach(b => {
             if (b.localInventory) {
                 Object.keys(b.localInventory).forEach(k => {
@@ -1337,7 +1339,6 @@ const UI_DASHBOARD = {
             }
         });
 
-        // 1.2. ЛОГИСТИКА: Товары и деньги в пути (Дебиторка и Авансы)
         let logisticsValue = 0;
         let receivablesValue = 0;
         if (STATE.logistics) {
@@ -1349,30 +1350,25 @@ const UI_DASHBOARD = {
             }
         }
 
-        // Теперь текущие активы включают товары в пути и ожидаемую выручку!
         let currentAssets = cash + inventoryValue + depositsValue + logisticsValue + receivablesValue;
 
-        // 2. Внеоборотные активы (Основные средства)
-        let realEstateValue = 0; 
-        let equipmentValue = 0;  
+        let realEstateValue = 0;
+        let equipmentValue = 0;
 
-        // 2.1. Предприятия (Заводы, Магазины, Офисы)
         STATE.company.businesses.forEach(b => {
             let tpl = RECIPES.BUSINESSES[b.type];
-            let locMult = b.locMult || 1.0; 
-            
+            let locMult = b.locMult || 1.0;
             let baseCost = tpl.area * 50 * locMult;
             realEstateValue += baseCost;
-            for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult); 
+            for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult);
 
             if (b.equipment && b.equipment.count > 0) {
-                let eqPrice = RECIPES.RESOURCES[tpl.equipmentType].basePrice;
+                let eqPrice = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 500;
                 let cond = b.equipment.condition || 0;
                 equipmentValue += (b.equipment.count * eqPrice) * (cond / 100);
             }
         });
 
-        // 2.2. Мульти-Склады
         if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouses) {
             Object.keys(STATE.company.warehouses).forEach(cId => {
                 let wh = STATE.company.warehouses[cId];
@@ -1383,23 +1379,25 @@ const UI_DASHBOARD = {
                 }
             });
         }
-        
-        // 2.3. НИИ
+
+        let rndIpValue = 0;
         if (STATE.rnd && STATE.rnd.facility) {
             let rndLvl = STATE.rnd.facility.level || 0;
             for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
-            
             if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
-                let pcPrice = RECIPES.RESOURCES['smart_pc'] ? RECIPES.RESOURCES['smart_pc'].basePrice : (RECIPES.RESOURCES['pc_workstation'] ? RECIPES.RESOURCES['pc_workstation'].basePrice : 800);
+                let pcPrice = RECIPES.RESOURCES['smart_pc'] ? RECIPES.RESOURCES['smart_pc'].basePrice : 800;
                 let rndCond = STATE.rnd.facility.equipment.condition || 0;
                 equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * (rndCond / 100);
             }
+            if (STATE.rnd.unlockedTechs) {
+                rndIpValue += STATE.rnd.unlockedTechs.length * 5000;
+            }
         }
-        
-        let fixedAssets = realEstateValue + equipmentValue;
-        let totalAssets = currentAssets + fixedAssets;
 
-        // 3. Пассивы и Капитал
+        let nonCurrentAssets = realEstateValue + equipmentValue + rndIpValue;
+        let totalAssets = currentAssets + nonCurrentAssets;
+
+        // Пассивы и Капитал
         let totalLiabilities = 0;
         if (STATE.finances.loans) {
             STATE.finances.loans.forEach(l => { totalLiabilities += l.remainingPrincipal; });
@@ -1410,76 +1408,64 @@ const UI_DASHBOARD = {
         let retainedEarnings = totalAssets - totalLiabilities - startCapital;
         let totalEquity = startCapital + retainedEarnings;
 
-        // ОТРИСОВКА БАЛАНСА
-        document.getElementById('ui-balance-sheet').innerHTML = `
-            <h3>Отчет о финансовом положении (Баланс)</h3>
-            <table style="width:100%; font-size:0.9em;">
-                <tr style="background:#2c3e50; color:white;"><th colspan="2" style="padding:5px; text-align:center;">АКТИВЫ (Имущество)</th></tr>
-                <tr><td>Денежные средства:</td><td style="text-align:right;">$${formatMoney(cash)}</td></tr>
-                <tr><td>Запасы продукции (Склады и Магазины):</td><td style="text-align:right; color:#2980b9;">$${formatMoney(inventoryValue)}</td></tr>
-                <tr><td>Товары в пути (Оплаченные поставки):</td><td style="text-align:right; color:#8e44ad;">$${formatMoney(logisticsValue)}</td></tr>
-                <tr><td>Дебиторская задолженность (Выручка в пути):</td><td style="text-align:right; color:#f39c12;">$${formatMoney(receivablesValue)}</td></tr>
-                <tr><td>Краткосрочные инвестиции:</td><td style="text-align:right;">$${formatMoney(depositsValue)}</td></tr>
-                <tr style="font-weight:bold; background:#fdfefe; border-bottom: 2px solid #bdc3c7;"><td>Итого Текущие Активы:</td><td style="text-align:right;">$${formatMoney(currentAssets)}</td></tr>
-                
-                <tr><td>Недвижимость (Цехи, Магазины, Склады):</td><td style="text-align:right;">$${formatMoney(realEstateValue)}</td></tr>
-                <tr><td>Оборудование (Остаточная стоимость):</td><td style="text-align:right;">$${formatMoney(equipmentValue)}</td></tr>
-                <tr style="font-weight:bold; background:#fdfefe; border-bottom: 1px dashed #bdc3c7;"><td>Итого Внеоборотные Активы:</td><td style="text-align:right;">$${formatMoney(fixedAssets)}</td></tr>
-                
-                <tr style="font-weight:bold; font-size:1.1em; border-top:2px solid #333;">
-                    <td>ИТОГО АКТИВОВ:</td><td style="text-align:right; color:#27ae60;">$${formatMoney(totalAssets)}</td>
-                </tr>
-                
-                <tr><td colspan="2">&nbsp;</td></tr>
-                <tr style="background:#2c3e50; color:white;"><th colspan="2" style="padding:5px; text-align:center;">ПАССИВЫ (Источники средств)</th></tr>
-                
-                <tr><td>Кредиты и займы:</td><td style="text-align:right; color:#c0392b;">$${formatMoney(totalLiabilities)}</td></tr>
-                <tr style="font-weight:bold; background:#fdfefe; border-bottom: 1px dashed #bdc3c7;"><td>Итого Обязательства:</td><td style="text-align:right; color:#c0392b;">$${formatMoney(totalLiabilities)}</td></tr>
-                
-                <tr><td>Уставной капитал:</td><td style="text-align:right;">$${formatMoney(startCapital)}</td></tr>
-                <tr><td>Нераспределенная прибыль:</td><td style="text-align:right; color:${retainedEarnings >= 0 ? '#27ae60' : '#c0392b'};">$${formatMoney(retainedEarnings)}</td></tr>
-                <tr style="font-weight:bold; background:#fdfefe;"><td>Итого Капитал:</td><td style="text-align:right;">$${formatMoney(totalEquity)}</td></tr>
-                
-                <tr style="font-weight:bold; font-size:1.1em; border-top:2px solid #333;">
-                    <td>ИТОГО ПАССИВОВ:</td><td style="text-align:right;">$${formatMoney(totalLiabilities + totalEquity)}</td>
-                </tr>
-            </table>
-        `;
+        // 2. Расчет P&L (Yesterday & Total)
+        let y = STATE.ledger.yesterday || {};
+        let t = STATE.ledger.total || {};
 
-        // --- РАСЧЕТ И ОТРИСОВКА P&L ---
-        let y = STATE.ledger.yesterday;
-        let t = STATE.ledger.total;
-        
-        let yFinFees = y.fin_fees || 0; let tFinFees = t.fin_fees || 0;
-        let yExpFines = y.exp_fines || 0; let tExpFines = t.exp_fines || 0;
-        let yExpRepair = y.exp_repair || 0; let tExpRepair = t.exp_repair || 0; 
-        
+        let yRevB2C = y.rev_b2c || 0; let tRevB2C = t.rev_b2c || 0;
+        let yRevB2B = y.rev_b2b || 0; let tRevB2B = t.rev_b2b || 0;
+        let yRevB2G = y.rev_b2g || 0; let tRevB2G = t.rev_b2g || 0;
+        let yRevOther = y.rev_other || 0; let tRevOther = t.rev_other || 0;
+
+        let yRev = yRevB2B + yRevB2G + yRevB2C + yRevOther;
+        let tRev = tRevB2B + tRevB2G + tRevB2C + tRevOther;
+
+        let yCogs = y.exp_materials || 0;
+        let tCogs = t.exp_materials || 0;
+
+        let yGross = yRev - yCogs;
+        let tGross = tRev - tCogs;
+
         let yTaxPayroll = y.exp_taxes_payroll || 0; let tTaxPayroll = t.exp_taxes_payroll || 0;
         let yTaxCorp = y.exp_taxes_corp || 0; let tTaxCorp = t.exp_taxes_corp || 0;
-        
-        let yRevB2C = y.rev_b2c || 0; let tRevB2C = t.rev_b2c || 0;
-        let yRevOther = y.rev_other || 0; let tRevOther = t.rev_other || 0; 
         let yExpMarketing = y.exp_marketing || 0; let tExpMarketing = t.exp_marketing || 0;
         let yExpLogistics = y.exp_logistics || 0; let tExpLogistics = t.exp_logistics || 0;
-        
-        let yRev = y.rev_b2b + y.rev_b2g + yRevB2C + yRevOther;
-        let tRev = t.rev_b2b + t.rev_b2g + tRevB2C + tRevOther;
-        
-        let yOpex = y.exp_salary + y.exp_admin + y.exp_hr + yExpFines + yExpRepair + yTaxPayroll + yExpMarketing + yExpLogistics;
-        let tOpex = t.exp_salary + t.exp_admin + t.exp_hr + tExpFines + tExpRepair + tTaxPayroll + tExpMarketing + tExpLogistics;
-        
-        let yEbitda = yRev - y.exp_materials - yOpex;
-        let tEbitda = tRev - t.exp_materials - tOpex;
-        
-        let yFin = y.fin_income - y.fin_expense - yFinFees;
-        let tFin = t.fin_income - t.fin_expense - tFinFees;
-        
-        let yEbt = yEbitda + yFin;
-        let tEbt = tEbitda + tFin;
-        
+        let yExpRepair = y.exp_repair || 0; let tExpRepair = t.exp_repair || 0;
+        let yExpFines = y.exp_fines || 0; let tExpFines = t.exp_fines || 0;
+
+        let yOpex = (y.exp_salary || 0) + (y.exp_admin || 0) + (y.exp_hr || 0) + yTaxPayroll + yExpMarketing + yExpLogistics + yExpRepair + yExpFines;
+        let tOpex = (t.exp_salary || 0) + (t.exp_admin || 0) + (t.exp_hr || 0) + tTaxPayroll + tExpMarketing + tExpLogistics + tExpRepair + tExpFines;
+
+        let yEbitda = yGross - yOpex;
+        let tEbitda = tGross - tOpex;
+
+        let yDepr = Math.round(yExpRepair * 0.5);
+        let tDepr = Math.round(tExpRepair * 0.5);
+
+        let yEbit = yEbitda - yDepr;
+        let tEbit = tEbitda - tDepr;
+
+        let yFin = (y.fin_income || 0) - (y.fin_expense || 0) - (y.fin_fees || 0);
+        let tFin = (t.fin_income || 0) - (t.fin_expense || 0) - (t.fin_fees || 0);
+
+        let yEbt = yEbit + yFin;
+        let tEbt = tEbit + tFin;
+
         let yNet = yEbt - yTaxCorp;
         let tNet = tEbt - tTaxCorp;
 
+        // 3. Финансовые показатели
+        let netMargin = tRev > 0 ? ((tNet / tRev) * 100).toFixed(1) : '0.0';
+        let grossMargin = tRev > 0 ? ((tGross / tRev) * 100).toFixed(1) : '0.0';
+        let ebitdaMargin = tRev > 0 ? ((tEbitda / tRev) * 100).toFixed(1) : '0.0';
+        let roe = totalEquity > 0 ? ((tNet / totalEquity) * 100).toFixed(1) : '0.0';
+        let roa = totalAssets > 0 ? ((tNet / totalAssets) * 100).toFixed(1) : '0.0';
+
+        let currentLiabDiv = totalLiabilities > 0 ? totalLiabilities : 1;
+        let currentRatio = (currentAssets / currentLiabDiv).toFixed(2);
+        let debtEquityRatio = totalEquity > 0 ? (totalLiabilities / totalEquity).toFixed(2) : '0.00';
+
+        // 4. Налоговый календарь
         let taxInfoHTML = '';
         if (STATE.taxes) {
             let tb = STATE.taxes.taxableBase || 0;
@@ -1488,65 +1474,304 @@ const UI_DASHBOARD = {
             let estimatedTax = tb > 0 ? tb * corpRate : 0;
             
             taxInfoHTML = `
-                <div style="background: #e8f8f5; border: 1px solid #1abc9c; padding: 15px; margin-bottom: 20px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="background: rgba(0,122,255,0.05); border: 1px solid rgba(0,122,255,0.15); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                     <div>
-                        <h4 style="margin: 0 0 8px 0; color: #16a085; font-size: 1.1em;">🏛 Налоговый календарь (Отчетный период)</h4>
-                        Дней до подачи декларации: <strong style="font-size: 1.1em;">${dtr} дн.</strong><br>
-                        Текущая база (Накопленная прибыль): <strong style="color: ${tb >= 0 ? '#27ae60' : '#c0392b'};">$${formatMoney(tb)}</strong> ${tb < 0 ? '<small>(Убыток — налог 0)</small>' : ''}
+                        <div style="color: var(--blue, #007AFF); font-weight: bold; font-size: 0.95em;">🏛 Налоговый календарь (Отчетный период ДФС)</div>
+                        <small style="color: var(--text-dim, #86868B);">Дней до подачи декларации: <strong>${dtr} дн.</strong> | Налоговая база прибыли: <strong style="color:${tb >= 0 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'};">$${formatMoney(tb)}</strong></small>
                     </div>
-                    <div style="text-align: right; background: #fff; padding: 10px; border-radius: 4px; border: 1px solid #bdc3c7;">
-                        <small style="color: #7f8c8d; display: block; margin-bottom: 5px;">Резерв под налог (18%):</small>
-                        <strong style="font-size: 1.3em; color: #c0392b;">$${formatMoney(estimatedTax)}</strong>
+                    <div style="text-align: right; background: var(--surface, #fff); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border, #dcdde1);">
+                        <small style="color: var(--text-dim, #86868B); display: block;">Резерв налога на прибыль (18%):</small>
+                        <strong style="font-size: 1.15em; color: var(--red, #FF3B30); font-family: var(--font-mono);">$${formatMoney(estimatedTax)}</strong>
                     </div>
                 </div>
             `;
         }
 
-        document.getElementById('ui-pnl-statement').innerHTML = `
+        // РАСЧЕТ CASH FLOW (Движение Денежных Средств)
+        let cfo = yRev - yCogs - yOpex - yTaxCorp; // Поток от операционной деятельности
+        let cfi = -(yExpRepair + (y.exp_materials || 0) * 0.1); // Поток от инвестиций
+        let cff = yFin; // Поток от фин. операций
+        let netCashFlow = cfo + cfi + cff;
+
+        // Навигация под-вкладок отчетности
+        let tabPnlActive = (STATE.financeTab === 'all' || STATE.financeTab === 'pnl') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
+        let tabBalActive = (STATE.financeTab === 'all' || STATE.financeTab === 'balance') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
+        let tabCfActive = (STATE.financeTab === 'all' || STATE.financeTab === 'cashflow') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
+        let tabRatActive = (STATE.financeTab === 'all' || STATE.financeTab === 'ratios') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
+
+        container.innerHTML = `
+            <!-- ВЕРХНЯЯ KPI ПАНЕЛЬ ФИНАНСОВОГО ЗДОРОВЬЯ -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--green, #34C759);">
+                    <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Чистая прибыль (Кумулятивно)</small>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: ${tNet >= 0 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(tNet)}</div>
+                    <small style="color: var(--text-dim);">Рентабельность (ROS): <strong style="color:var(--text);">${netMargin}%</strong></small>
+                </div>
+
+                <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--blue, #007AFF);">
+                    <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">EBITDA (Операционная прибыль)</small>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: ${tEbitda >= 0 ? 'var(--blue, #007AFF)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(tEbitda)}</div>
+                    <small style="color: var(--text-dim);">EBITDA Margin: <strong style="color:var(--text);">${ebitdaMargin}%</strong></small>
+                </div>
+
+                <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--orange, #FF9500);">
+                    <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Ликвидность (Current Ratio)</small>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: ${currentRatio >= 1.2 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">${currentRatio}x</div>
+                    <small style="color: var(--text-dim);">Норма: ≥ 1.50 (Покрытие долга)</small>
+                </div>
+
+                <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid #8e44ad;">
+                    <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Капитализация (Net Worth)</small>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: var(--text); margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(totalEquity)}</div>
+                    <small style="color: var(--text-dim);">ROE: <strong style="color:var(--text);">${roe}%</strong> | ROA: <strong style="color:var(--text);">${roa}%</strong></small>
+                </div>
+            </div>
+
             ${taxInfoHTML}
-            <h3>Отчет о прибылях и убытках (P&L)</h3>
-            <table style="width:100%; font-size:0.85em; text-align:right; border-collapse: collapse;">
-                <tr style="border-bottom:2px solid #333; text-align:right;">
-                    <th style="text-align:left; padding-bottom:5px;">Статья (Метод начисления / МСФО)</th><th>Вчера</th><th>За всё время</th>
-                </tr>
-                <tr style="font-weight:bold; background:#ecf0f1;"><td style="text-align:left; padding: 3px 0;">Операционные Доходы</td><td>$${formatMoney(yRev)}</td><td>$${formatMoney(tRev)}</td></tr>
-                <tr><td style="text-align:left; color:#7f8c8d;">- B2B (Свободный рынок)</td><td>$${formatMoney(y.rev_b2b)}</td><td>$${formatMoney(t.rev_b2b)}</td></tr>
-                <tr><td style="text-align:left; color:#7f8c8d;">- B2G (Тендеры)</td><td>$${formatMoney(y.rev_b2g)}</td><td>$${formatMoney(t.rev_b2g)}</td></tr>
-                <tr><td style="text-align:left; color:#2980b9; font-weight:bold;">- B2C (Розничная сеть)</td><td style="color:#2980b9;">$${formatMoney(yRevB2C)}</td><td style="color:#2980b9;">$${formatMoney(tRevB2C)}</td></tr>
-                <tr><td style="text-align:left; color:#16a085;">- Прочие доходы (События, Гранты)</td><td style="color:#16a085;">$${formatMoney(yRevOther)}</td><td style="color:#16a085;">$${formatMoney(tRevOther)}</td></tr>
-                
-                <tr style="font-weight:bold; background:#ecf0f1; border-top:1px solid #ccc;"><td style="text-align:left; padding: 3px 0;">Операционные Расходы (OPEX)</td><td>$${formatMoney(y.exp_materials + yOpex)}</td><td>$${formatMoney(t.exp_materials + tOpex)}</td></tr>
-                <tr><td style="text-align:left; color:#7f8c8d;">- Закупка сырья и оборудования</td><td>$${formatMoney(y.exp_materials)}</td><td>$${formatMoney(t.exp_materials)}</td></tr>
-                <tr><td style="text-align:left; color:#7f8c8d;">- Фонд оплаты труда</td><td>$${formatMoney(y.exp_salary)}</td><td>$${formatMoney(t.exp_salary)}</td></tr>
-                <tr><td style="text-align:left; color:#e67e22;">- Социальные взносы (20% на ФОТ)</td><td style="color:#e67e22;">$${formatMoney(yTaxPayroll)}</td><td style="color:#e67e22;">$${formatMoney(tTaxPayroll)}</td></tr>
-                <tr><td style="text-align:left; color:#7f8c8d;">- Аренда (Магазины, Офисы, Цехи)</td><td>$${formatMoney(y.exp_admin)}</td><td>$${formatMoney(t.exp_admin)}</td></tr>
-                <tr><td style="text-align:left; color:#8e44ad; font-weight:bold;">- Маркетинг и Реклама</td><td style="color:#8e44ad;">$${formatMoney(yExpMarketing)}</td><td style="color:#8e44ad;">$${formatMoney(tExpMarketing)}</td></tr>
-                <tr><td style="text-align:left; color:#f39c12;">- Логистика (Доставка)</td><td style="color:#f39c12;">$${formatMoney(yExpLogistics)}</td><td style="color:#f39c12;">$${formatMoney(tExpLogistics)}</td></tr>
-                <tr><td style="text-align:left; color:#7f8c8d;">- ТО и Ремонт</td><td>$${formatMoney(yExpRepair)}</td><td>$${formatMoney(tExpRepair)}</td></tr>
-                <tr><td style="text-align:left; color:#c0392b;">- Прочие расходы (Штрафы, ЧП)</td><td style="color:#c0392b;">$${formatMoney(yExpFines)}</td><td style="color:#c0392b;">$${formatMoney(tExpFines)}</td></tr>
-                
-                <tr style="font-weight:bold; font-size:1.1em; border-top:1px solid #333;"><td style="text-align:left; padding: 5px 0;">EBITDA</td>
-                    <td style="color:${yEbitda>=0?'#27ae60':'#c0392b'}">$${formatMoney(yEbitda)}</td>
-                    <td style="color:${tEbitda>=0?'#27ae60':'#c0392b'}">$${formatMoney(tEbitda)}</td>
-                </tr>
-                
-                <tr style="background:#fdfefe;"><td style="text-align:left; font-weight:bold; padding: 3px 0;">Финансовые операции</td><td>$${formatMoney(yFin)}</td><td>$${formatMoney(tFin)}</td></tr>
-                <tr><td style="text-align:left; color:#7f8c8d;">+ Проценты по вкладам</td><td>$${formatMoney(y.fin_income)}</td><td>$${formatMoney(t.fin_income)}</td></tr>
-                <tr><td style="text-align:left; color:#7f8c8d;">- Проценты по кредитам</td><td>$${formatMoney(y.fin_expense)}</td><td>$${formatMoney(t.fin_expense)}</td></tr>
-                
-                <tr style="font-weight:bold; font-size:1.1em; border-top:2px solid #333;"><td style="text-align:left; padding: 5px 0;">ПРИБЫЛЬ ДО НАЛОГОВ (EBT)</td>
-                    <td style="color:${yEbt>=0?'#27ae60':'#c0392b'}">$${formatMoney(yEbt)}</td>
-                    <td style="color:${tEbt>=0?'#27ae60':'#c0392b'}">$${formatMoney(tEbt)}</td>
-                </tr>
-                <tr><td style="text-align:left; color:#c0392b; font-weight:bold;">- Налог на прибыль корпораций</td><td style="color:#c0392b;">$${formatMoney(yTaxCorp)}</td><td style="color:#c0392b;">$${formatMoney(tTaxCorp)}</td></tr>
-                
-                <tr style="font-weight:bold; font-size:1.2em; border-top:3px double #333; background:#fff3cd;">
-                    <td style="text-align:left; padding: 8px 0;">ЧИСТАЯ ПРИБЫЛЬ</td>
-                    <td style="color:${yNet>=0?'#27ae60':'#c0392b'}">$${formatMoney(yNet)}</td>
-                    <td style="color:${tNet>=0?'#27ae60':'#c0392b'}">$${formatMoney(tNet)}</td>
-                </tr>
-            </table>
+
+            <!-- ПЕРЕКЛЮЧАТЕЛЬ ОТЧЕТОВ -->
+            <div style="display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap;">
+                <button onclick="UI_DASHBOARD.switchFinanceTab('all')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'all' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">📋 Все отчеты (Сводный вид)</button>
+                <button onclick="UI_DASHBOARD.switchFinanceTab('pnl')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'pnl' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">📊 Прибыли и Убытки (P&L)</button>
+                <button onclick="UI_DASHBOARD.switchFinanceTab('balance')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'balance' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">⚖️ Баланс (Balance Sheet)</button>
+                <button onclick="UI_DASHBOARD.switchFinanceTab('cashflow')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'cashflow' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">🌊 Движение средств (Cash Flow)</button>
+                <button onclick="UI_DASHBOARD.switchFinanceTab('ratios')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'ratios' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">📈 Финансовые коэффициенты</button>
+            </div>
+
+            <!-- ГРИД ОСНОВНЫХ ОТЧЕТОВ -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px;">
+
+                <!-- 1. ОТЧЕТ О ПРИБЫЛЯХ И УБЫТКАХ (P&L) -->
+                ${(STATE.financeTab === 'all' || STATE.financeTab === 'pnl') ? `
+                <div class="card" style="padding: 20px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">📊 Отчет о прибылях и убытках (P&L)</h3>
+                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 1) • Метод начисления</small>
+                        </div>
+                    </div>
+                    
+                    <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
+                        <tr style="border-bottom: 1px solid var(--border); color: var(--text-dim); text-align: right;">
+                            <th style="text-align:left; padding: 6px 0;">Статья отчета</th>
+                            <th style="padding: 6px;">Вчера</th>
+                            <th style="padding: 6px;">Всего</th>
+                        </tr>
+                        
+                        <tr style="font-weight:bold; background: var(--surface-2);"><td style="text-align:left; padding:6px 4px;">1. ВЫРУЧКА (REVENUE)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRev)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRev)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2C Розничные продажи</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(yRevB2C)}</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(tRevB2C)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2B Оптовая биржа</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRevB2B)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRevB2B)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2G Госзакупки и Тендеры</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yRevB2G)}</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(tRevB2G)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Прочие доходы (Гранты)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRevOther)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRevOther)}</td></tr>
+                        
+                        <tr style="border-top:1px dashed var(--border);"><td style="text-align:left; padding:4px 0; color:var(--red); font-weight:600;">2. Себестоимость продаж (COGS)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yCogs)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tCogs)}</td></tr>
+                        
+                        <tr style="font-weight:bold; background: rgba(52,199,89,0.06); border-top:1px solid var(--border);"><td style="text-align:left; padding:6px 4px; color:var(--green);">ВАЛОВАЯ ПРИБЫЛЬ (GROSS PROFIT)</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yGross)}</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(tGross)}</td></tr>
+                        
+                        <tr style="font-weight:bold; background: var(--surface-2); border-top:1px solid var(--border);"><td style="text-align:left; padding:6px 4px;">3. ОПЕРАЦИОННЫЕ РАСХОДЫ (OPEX)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yOpex)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tOpex)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Фонд оплаты труда (ЗП)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(y.exp_salary || 0)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(t.exp_salary || 0)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Социальный взнос ЕСВ (22%)</td><td style="text-align:right; color:var(--orange); font-family:var(--font-mono);">$${formatMoney(yTaxPayroll)}</td><td style="text-align:right; color:var(--orange); font-family:var(--font-mono);">$${formatMoney(tTaxPayroll)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Аренда недвижимости</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(y.exp_admin || 0)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(t.exp_admin || 0)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Межгородская логистика</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpLogistics)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpLogistics)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Маркетинг и бренд</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpMarketing)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpMarketing)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- ТО и ремонт оборудования</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpRepair)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpRepair)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Штрафы и непредвиденные</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpFines)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpFines)}</td></tr>
+                        
+                        <tr style="font-weight:bold; border-top:1px solid var(--border); background: var(--surface-3);"><td style="text-align:left; padding:6px 4px;">4. EBITDA</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbitda>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbitda)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbitda>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbitda)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Амортизация станков (D&A)</td><td style="text-align:right; font-family:var(--font-mono);">-$${formatMoney(yDepr)}</td><td style="text-align:right; font-family:var(--font-mono);">-$${formatMoney(tDepr)}</td></tr>
+                        
+                        <tr style="font-weight:bold;"><td style="text-align:left; padding:4px 0;">5. ОПЕРАЦИОННАЯ ПРИБЫЛЬ (EBIT)</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbit>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbit)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbit>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbit)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">+/- Финансовые доходы/расходы</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yFin)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tFin)}</td></tr>
+                        
+                        <tr style="font-weight:bold; border-top:1px solid var(--border);"><td style="text-align:left; padding:4px 0;">6. ПРИБЫЛЬ ДО НАЛОГОВ (EBT)</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbt>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbt)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbt>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbt)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--red);">- Налог на прибыль (18%)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yTaxCorp)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tTaxCorp)}</td></tr>
+                        
+                        <tr style="font-weight:bold; font-size:1.05rem; background: rgba(0,122,255,0.08); border-top: 2px solid var(--blue);"><td style="text-align:left; padding:8px 4px; color:var(--blue);">7. ЧИСТАЯ ПРИБЫЛЬ (NET INCOME)</td><td style="text-align:right; font-family:var(--font-mono); color:${yNet>=0?'var(--green)':'var(--red)'};">$${formatMoney(yNet)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tNet>=0?'var(--green)':'var(--red)'};">$${formatMoney(tNet)}</td></tr>
+                    </table>
+                </div>
+                ` : ''}
+
+                <!-- 2. БАЛАНСОВЫЙ ОТЧЕТ (BALANCE SHEET) -->
+                ${(STATE.financeTab === 'all' || STATE.financeTab === 'balance') ? `
+                <div class="card" style="padding: 20px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">⚖️ Отчет о финансовом положении (Баланс)</h3>
+                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 1) • Активы = Пассивы + Капитал</small>
+                        </div>
+                    </div>
+                    
+                    <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
+                        <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">I. ОБОРОТНЫЕ АКТИВЫ (CURRENT ASSETS)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Денежные средства на расчетном счете:</td><td style="text-align:right; font-family:var(--font-mono); font-weight:600;">$${formatMoney(cash)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Запасы сырья и товаров (Склады и Магазины):</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(inventoryValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Товары в пути (Оплаченная логистика):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(logisticsValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Дебиторская задолженность (Выручка в пути):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(receivablesValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Банковские депозиты (Краткосрочные):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(depositsValue)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Оборотные активы:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(currentAssets)}</td></tr>
+                        
+                        <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">II. ВНЕОБОРОТНЫЕ АКТИВЫ (NON-CURRENT ASSETS)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Основные средства: Недвижимость (Цеха, Магазины, Склады):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(realEstateValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Машины и оборудование (Остаточная стоимость):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(equipmentValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Нематериальные активы (Патенты и R&D разработки):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(rndIpValue)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Внеоборотные активы:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(nonCurrentAssets)}</td></tr>
+                        
+                        <tr style="font-weight:bold; font-size:1.02rem; background: rgba(52,199,89,0.08); border-top:2px solid var(--green);"><td style="padding:6px 0; color:var(--green);">ИТОГО АКТИВОВ:</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(totalAssets)}</td></tr>
+                        
+                        <tr><td colspan="2" style="padding:6px 0;">&nbsp;</td></tr>
+                        
+                        <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--red);">III. ОБЯЗАТЕЛЬСТВА (LIABILITIES)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Краткосрочные кредиты и займы банка:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">$${formatMoney(totalLiabilities)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Обязательства:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">$${formatMoney(totalLiabilities)}</td></tr>
+                        
+                        <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">IV. СОБСТВЕННЫЙ КАПИТАЛ (EQUITY)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Уставный капитал:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(startCapital)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Нераспределенная прибыль (Retained Earnings):</td><td style="text-align:right; font-family:var(--font-mono); color:${retainedEarnings>=0?'var(--green)':'var(--red)'};">$${formatMoney(retainedEarnings)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Капитал:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(totalEquity)}</td></tr>
+                        
+                        <tr style="font-weight:bold; font-size:1.02rem; background: rgba(0,122,255,0.08); border-top:2px solid var(--blue);"><td style="padding:6px 0; color:var(--blue);">ИТОГО ПАССИВОВ И КАПИТАЛА:</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(totalLiabilities + totalEquity)}</td></tr>
+                    </table>
+                </div>
+                ` : ''}
+
+                <!-- 3. ДВИЖЕНИЕ ДЕНЕЖНЫХ СРЕДСТВ (CASH FLOW) -->
+                ${(STATE.financeTab === 'all' || STATE.financeTab === 'cashflow') ? `
+                <div class="card" style="padding: 20px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">🌊 Отчет о движении денежных средств (Cash Flow)</h3>
+                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 7) • Прямой метод</small>
+                        </div>
+                    </div>
+                    
+                    <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
+                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">1. ОПЕРАЦИОННЫЙ ПОТОК (CFO)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">+ Поступления от продаж (B2C, B2B, B2G):</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yRev)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Оплата сырья и поставщиков:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yCogs)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Выплата заработной платы и налогов на ФОТ:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney((y.exp_salary || 0) + yTaxPayroll)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Оплата аренды, логистики и маркетинга:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney((y.exp_admin || 0) + yExpLogistics + yExpMarketing)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый операционный поток (CFO):</td><td style="text-align:right; font-family:var(--font-mono); color:${cfo>=0?'var(--green)':'var(--red)'};">$${formatMoney(cfo)}</td></tr>
+                        
+                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">2. ИНВЕСТИЦИОННЫЙ ПОТОК (CFI)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Приобретение оборудования и ремонт станков:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yExpRepair)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый инвестиционный поток (CFI):</td><td style="text-align:right; font-family:var(--font-mono); color:${cfi>=0?'var(--green)':'var(--red)'};">$${formatMoney(cfi)}</td></tr>
+                        
+                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">3. ФИНАНСОВЫЙ ПОТОК (CFF)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">+/- Проценты и операции по вкладам/кредитам:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(cff)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый финансовый поток (CFF):</td><td style="text-align:right; font-family:var(--font-mono); color:${cff>=0?'var(--green)':'var(--red)'};">$${formatMoney(cff)}</td></tr>
+                        
+                        <tr style="font-weight:bold; font-size:1.02rem; background: rgba(0,122,255,0.08); border-top:2px solid var(--blue);"><td style="padding:6px 0; color:var(--blue);">ЧИСТОЕ ИЗМЕНЕНИЕ ДЕНЕГ (NET CASH FLOW):</td><td style="text-align:right; color:${netCashFlow>=0?'var(--green)':'var(--red)'}; font-family:var(--font-mono);">$${formatMoney(netCashFlow)}</td></tr>
+                    </table>
+                </div>
+                ` : ''}
+
+                <!-- 4. ФИНАНСОВЫЕ КОЭФФИЦИЕНТЫ И РЕНТАБЕЛЬНОСТЬ -->
+                ${(STATE.financeTab === 'all' || STATE.financeTab === 'ratios') ? `
+                <div class="card" style="padding: 20px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">📈 Финансовый анализ и Коэффициенты</h3>
+                            <small style="color: var(--text-dim);">Международные бенчмарки корпоративной устойчивости</small>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Рентабельность продаж (ROS)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--blue); font-family: var(--font-mono);">${netMargin}%</div>
+                            <small style="color: var(--text-dim);">Чистая прибыль / Выручка</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Валовая маржинальность (Gross Margin)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--green); font-family: var(--font-mono);">${grossMargin}%</div>
+                            <small style="color: var(--text-dim);">Валовая прибыль / Выручка</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Рентабельность капитала (ROE)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: #8e44ad; font-family: var(--font-mono);">${roe}%</div>
+                            <small style="color: var(--text-dim);">Прибыль / Собственный капитал</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Рентабельность активов (ROA)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--orange); font-family: var(--font-mono);">${roa}%</div>
+                            <small style="color: var(--text-dim);">Прибыль / Все активы</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Коэффициент автономии (Debt/Equity)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--text); font-family: var(--font-mono);">${debtEquityRatio}x</div>
+                            <small style="color: var(--text-dim);">Обязательства / Капитал (Норма: <1.0)</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Коэффициент ликвидности</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: ${currentRatio>=1.2?'var(--green)':'var(--red)'}; font-family: var(--font-mono);">${currentRatio}x</div>
+                            <small style="color: var(--text-dim);">Оборотные активы / Обязательства</small>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+
+            </div>
         `;
+    },
+
+    // --- 7. HR И КАДРЫ ---
+    updateHRTab() {
+        if (typeof HR === 'undefined' || !document.getElementById('ui-staff-total')) return;
+        HR.init();
+        
+        document.getElementById('ui-staff-total').innerText = HR.getTotalStaff();
+        if(document.getElementById('ui-staff-salary')) document.getElementById('ui-staff-salary').innerText = formatMoney(HR.getDailySalaryFund());
+        
+        let breakdownDiv = document.getElementById('ui-hr-breakdown');
+        if (breakdownDiv) {
+            let html = '<strong>В штате числятся:</strong> ';
+            let parts = [];
+            Object.keys(HR.GRADES).forEach(grade => {
+                let total = STATE.hr && STATE.hr.staff ? (STATE.hr.staff[grade] || 0) : 0;
+                if (total > 0) parts.push(`<strong>${HR.GRADES[grade].name.split(' ')[0]}:</strong> ${total} чел.`);
+            });
+            
+            let trainingCount = STATE.hr.trainingQueue.length;
+            if (trainingCount > 0) parts.push(`<strong>На учебе:</strong> ${trainingCount} чел.`);
+            
+            breakdownDiv.innerHTML = parts.join(' | ');
+        }
+        
+        let poolDiv = document.getElementById('ui-hr-pool');
+        if (poolDiv) {
+            poolDiv.innerHTML = '';
+            Object.keys(HR.GRADES).forEach(grade => {
+                let unassigned = HR.getUnassigned(grade);
+                let gTpl = HR.GRADES[grade];
+                
+                let trainBtn = '';
+                if (gTpl.canTrainTo && unassigned > 0) {
+                    let nextTpl = HR.GRADES[gTpl.canTrainTo];
+                    trainBtn = `<button onclick="HR.startTraining('${grade}')" style="background:#2980b9; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; margin-right:5px;">Начать обучение до ${nextTpl.name.split(' ')[0]} ($${gTpl.trainingCost} / ${gTpl.trainingDays} дн.)</button>`;
+                }
+                
+                let fireBtn = '';
+                if (unassigned > 0) {
+                    fireBtn = `<button onclick="HR.fire('${grade}')" style="background:#c0392b; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer;">Уволить</button>`;
+                }
+                
+                poolDiv.innerHTML += `
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ecf0f1; padding:8px 0;">
+                    <div>
+                        <strong>${gTpl.name}</strong> <span style="color:#7f8c8d;">(Свободно: ${unassigned})</span>
+                    </div>
+                    <div>
+                        ${trainBtn}
+                        ${fireBtn}
+                    </div>
+                </div>`;
+            });
+        }
     },
 
     // --- 7. HR И КАДРЫ ---
@@ -1656,8 +1881,11 @@ const UI_DASHBOARD = {
     switchTab(event, tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-        document.getElementById(tabId).classList.add('active');
-        event.currentTarget.classList.add('active');
+        let targetEl = document.getElementById(tabId);
+        if (targetEl) targetEl.classList.add('active');
+        if (event && event.currentTarget) event.currentTarget.classList.add('active');
+        if (tabId === 'tab-wiki' && typeof WIKI !== 'undefined') WIKI.render();
+        if (tabId === 'tab-finance') this.updateFinanceTab();
     },
 
     submitLoan() {
