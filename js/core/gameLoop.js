@@ -10,6 +10,9 @@ const GAME = {
             QUESTS.checkProgress();
         }
         UI_DASHBOARD.update();
+        if (typeof TUTORIAL !== 'undefined') {
+            TUTORIAL.init();
+        }
     },
 
     // Логика завершения хода

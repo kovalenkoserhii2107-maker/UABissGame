@@ -38,5 +38,9 @@ const STATE = {
         completed: [],
         claimed: []
     },
+    tutorial: {
+        isActive: true,
+        step: 0
+    },
     ledger: null // Инициализируется менеджером
 };
