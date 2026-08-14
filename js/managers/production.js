@@ -1,4 +1,4 @@
-// Модуль управления производством (Региональная экономика)
+// Модуль управления производством (Интеграция с Региональной Экономикой)
 const PRODUCTION = {
     init() {
         if (!STATE.company.businesses) STATE.company.businesses = [];
@@ -11,16 +11,15 @@ const PRODUCTION = {
                     quality: 1.0
                 };
             }
-            // Обратная совместимость для старых сохранений
+            // Заглушка для совместимости старых сохранений
             if (!biz.city) biz.city = 'odesa'; 
         });
     },
 
-    // Покупка бизнеса с привязкой к конкретному городу
     buyBusiness(type, cityId = null) {
         let tpl = RECIPES.BUSINESSES[type];
         
-        // Если город не выбран — вызываем красивое окно с картой (из dashboardUI)
+        // Вызов универсального окна выбора города из dashboardUI
         if (!cityId) {
             if (typeof UI_DASHBOARD !== 'undefined') {
                 UI_DASHBOARD.showCityModal('business', type);
@@ -28,9 +27,9 @@ const PRODUCTION = {
             return;
         }
 
-        // Берем мультипликаторы из гео-справочника
-        let city = GEO.getCity(cityId);
-        let costMult = city.rentMult;
+        // Подтягиваем данные региона из GEO
+        let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { name: 'Одесса', rentMult: 1.0 };
+        let costMult = cityData.rentMult || 1.0;
         
         let cost = tpl.area * 50 * costMult; 
         
@@ -39,7 +38,17 @@ const PRODUCTION = {
             
             const UKR_NAMES = ['Мрія', 'Сокіл', 'Скіф', 'Булава', 'Грім', 'Січ', 'Воля'];
             const RETAIL_NAMES = ['Сільпо', 'АТБ', 'Аврора', 'Епіцентр', 'ФОРА', 'VARUS', 'КОСМО', 'Fozzy', 'EVA'];
-            const MARKETING_NAMES = ['Banda Agency', 'Fedoriv Group', 'Gres Todorchuk', 'Republik', 'IAMIDEA', 'Postmen'];
+            const MARKETING_NAMES = [
+                'Banda Agency', 
+                'Fedoriv Group', 
+                'Gres Todorchuk', 
+                'Republik', 
+                'Katsman Communications', 
+                'IAMIDEA', 
+                'Sushka', 
+                'Postmen', 
+                'Arriba!'
+            ];
             
             let randomName = '';
             if (tpl.isRetail) {
@@ -54,11 +63,11 @@ const PRODUCTION = {
             
             let customName = '';
             if (tpl.isRetail) {
-                customName = `Магазин "${randomName}" (${city.name})`;
+                customName = `Магазин "${randomName}" (${cityData.name})`;
             } else if (tpl.isMarketing) {
-                customName = `Агентство "${randomName}" (${city.name})`;
+                customName = `Агентство "${randomName}" (${cityData.name})`;
             } else {
-                customName = `${tpl.name} "${randomName}-${countOfThisType}" (${city.name})`;
+                customName = `${tpl.name} "${randomName}-${countOfThisType}" (${cityData.name})`;
             }
             
             STATE.company.businesses.push({
@@ -66,14 +75,13 @@ const PRODUCTION = {
                 type: type, 
                 level: 1,
                 name: customName,
-                city: cityId,            // СОХРАНЯЕМ ИДЕНТИФИКАТОР ГОРОДА
-                locMult: costMult,       // СОХРАНЯЕМ СТОИМОСТЬ АРЕНДЫ ГОРОДА
+                city: cityId,            // Привязка к городу
+                locMult: costMult,       // Фиксация стоимости аренды
                 assigned: { junior: 0, middle: 0, senior: 0 }, 
                 equipment: { count: 0, condition: 100, quality: 1.0 },
                 stats: { daily: 0, monthly: [], total: 0, lastOutput: 0 },
                 lastCogs: 0
             });
-            
             NOTIFY.success('Успех', `Вы открыли: ${customName}!`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {
@@ -85,9 +93,8 @@ const PRODUCTION = {
         let biz = STATE.company.businesses.find(b => b.uid === uid);
         if (biz) {
             let tpl = RECIPES.BUSINESSES[biz.type];
-            let city = GEO.getCity(biz.city || 'odesa');
-            // При расширении учитываем региональный коэффициент аренды земли
-            let cost = tpl.area * 50 * (biz.level || 1) * city.rentMult;
+            // Стоимость расширения зависит от изначального коэффициента города
+            let cost = tpl.area * 50 * (biz.level || 1) * (biz.locMult || 1.0);
             
             if (STATE.finances.balance >= cost) {
                 STATE.finances.balance -= cost;
@@ -119,10 +126,11 @@ const PRODUCTION = {
 
         let cityId = biz.city || 'odesa';
         let localWh = STATE.company.warehouses[cityId];
-        
-        // Оборудование берется со склада того города, где стоит завод
+
+        // Оборудование списывается со склада того города, где расположен цех
         if (!localWh || !localWh.inventory[eqType] || localWh.inventory[eqType].qty < qty) { 
-            NOTIFY.error('Ошибка', `Нет оборудования на складе города ${GEO.getCity(cityId).name}.`); 
+            let cName = typeof GEO !== 'undefined' ? GEO.getCity(cityId).name : 'Одесса';
+            NOTIFY.error('Ошибка', `Нет оборудования на складе г. ${cName}.`); 
             return; 
         }
 
@@ -196,14 +204,15 @@ const PRODUCTION = {
             let tpl = RECIPES.BUSINESSES[biz.type];
             let level = biz.level || 1;
             let cityId = biz.city || 'odesa';
-            let cityData = GEO.getCity(cityId);
-            let locMult = cityData.rentMult; 
+            let locMult = biz.locMult || 1.0; 
             
             let dailyAdminCost = tpl.area * 2 * level * locMult; 
             STATE.finances.balance -= dailyAdminCost; 
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_admin', dailyAdminCost);
 
-            // Обработка магазинов и офисов маркетинга (им не нужен производственный цикл)
+            let localWh = STATE.company.warehouses[cityId];
+
+            // Логика Магазинов и Офисов
             if (tpl.isRetail || tpl.isMarketing) {
                 if (!biz.localInventory) biz.localInventory = {};
                 
@@ -227,9 +236,9 @@ const PRODUCTION = {
                             
                             if (toStore > 0) addToInventory(biz.localInventory, k, toStore, toStore * inc.avgCost, inc.quality);
                             
-                            // Излишки возвращаются на склад того города, где находится магазин
-                            if (toReject > 0 && STATE.company.warehouses[cityId]) {
-                                addToInventory(STATE.company.warehouses[cityId].inventory, k, toReject, toReject * inc.avgCost, inc.quality);
+                            // Излишки возвращаются на склад ГОРОДА
+                            if (toReject > 0 && localWh) {
+                                addToInventory(localWh.inventory, k, toReject, toReject * inc.avgCost, inc.quality);
                             }
                         }
                     });
@@ -257,7 +266,6 @@ const PRODUCTION = {
             let possibleOutput = Math.floor(maxOutByEquip * uiEfficiency * conditionMult);
 
             let inputsKeys = Object.keys(tpl.inputs);
-            let localWh = STATE.company.warehouses[cityId];
 
             let flushLeftovers = () => {
                 if (biz.dailyIncoming && localWh) {
@@ -295,7 +303,7 @@ const PRODUCTION = {
                 }
             });
 
-            // Проверка вместимости локального склада для готовой продукции
+            // Проверка вместимости склада ГОРОДА
             let outVol = RECIPES.RESOURCES[tpl.output].volume || 0;
             let inVol = 0;
             inputsKeys.forEach(k => inVol += (RECIPES.RESOURCES[k].volume || 0) * tpl.inputs[k]);
@@ -324,7 +332,7 @@ const PRODUCTION = {
                         totalInputsCount += takeIncoming;
                         incInv.qty -= takeIncoming; 
                     }
-                    if (takeGlobal > 0) {
+                    if (takeGlobal > 0 && localWh) {
                         materialsCost += takeGlobal * globalInv.avgCost;
                         sumMatQuality += takeGlobal * (globalInv.quality || 1.0);
                         totalInputsCount += takeGlobal;
@@ -336,8 +344,11 @@ const PRODUCTION = {
                 let q_mat = totalInputsCount > 0 ? (sumMatQuality / totalInputsCount) : 1.0;
                 let q_out = (q_eq * 0.1) + (q_mat * 0.3) + (q_hr * 0.2) + (q_tech * 0.4);
 
-                let citySalaryMult = cityData.salaryMult || 1.0;
-                let bizSalaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary)) * citySalaryMult;
+                // Затраты ФОТ с учетом коэффициента региона
+                let citySalaryMult = typeof GEO !== 'undefined' ? GEO.getCity(cityId).salaryMult : 1.0;
+                let bizSalaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + 
+                                     (biz.assigned.middle * HR.GRADES.middle.salary) + 
+                                     (biz.assigned.senior * HR.GRADES.senior.salary)) * citySalaryMult;
                 
                 let totalProductionCost = materialsCost + bizSalaryCost + dailyAdminCost; 
                 biz.lastCogs = totalProductionCost / actualOutput;
@@ -361,11 +372,12 @@ const PRODUCTION = {
                         if (!destBiz.dailyIncoming) destBiz.dailyIncoming = {};
                         addToInventory(destBiz.dailyIncoming, tpl.output, shareQty, shareCost, q_out);
                     } else if (localWh) {
+                        // Если получатель удален — везем на локальный склад
                         addToInventory(localWh.inventory, tpl.output, shareQty, shareCost, q_out);
                     }
                 });
 
-                // Все излишки летят на локальный склад города
+                // Все излишки (или если маршруты не заданы) идут на склад ГОРОДА
                 if (remainingOutput > 0 && localWh) {
                     addToInventory(localWh.inventory, tpl.output, remainingOutput, Math.max(0, remainingCost), q_out);
                 }
