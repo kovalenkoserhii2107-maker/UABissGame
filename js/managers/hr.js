@@ -199,14 +199,45 @@ const HR = {
     getDailySalaryFund() {
         this.init();
         let total = 0;
-        // ЗП рабочих
+        let assignedCounts = {};
+        Object.keys(this.GRADES).forEach(g => assignedCounts[g] = 0);
+
+        // ЗП сотрудников на объектах (с учетом регионального коэффициента)
+        STATE.company.businesses.forEach(biz => {
+            if (!biz.assigned) return;
+            let cityId = biz.city || 'odesa';
+            let cityMult = typeof GEO !== 'undefined' ? GEO.getCity(cityId).salaryMult : 1.0;
+            
+            Object.keys(biz.assigned).forEach(grade => {
+                let count = biz.assigned[grade] || 0;
+                if (count > 0 && this.GRADES[grade]) {
+                    assignedCounts[grade] += count;
+                    total += count * this.GRADES[grade].salary * cityMult;
+                }
+            });
+        });
+
+        // Ученые в НИИ (пока НИИ глобальный, считаем по базе или столице)
+        if (STATE.rnd && STATE.rnd.staff) {
+            Object.keys(STATE.rnd.staff).forEach(grade => {
+                let count = STATE.rnd.staff[grade] || 0;
+                if (count > 0 && this.GRADES[grade]) {
+                    assignedCounts[grade] += count;
+                    total += count * this.GRADES[grade].salary;
+                }
+            });
+        }
+
+        // ЗП резерва (свободные сотрудники сидят на базовой ставке)
         Object.keys(this.GRADES).forEach(g => {
-            if (STATE.hr.staff[g]) total += STATE.hr.staff[g] * this.GRADES[g].salary;
+            let totalOfGrade = STATE.hr.staff[g] || 0;
+            let unassigned = totalOfGrade - assignedCounts[g];
+            if (unassigned > 0) total += unassigned * this.GRADES[g].salary;
         });
-        // ЗП студентов (сохраняется старая ЗП во время учебы)
-        STATE.hr.trainingQueue.forEach(trainee => {
-            total += trainee.salary;
-        });
+
+        // ЗП студентов
+        STATE.hr.trainingQueue.forEach(trainee => total += trainee.salary);
+
         return total;
     }
 };
