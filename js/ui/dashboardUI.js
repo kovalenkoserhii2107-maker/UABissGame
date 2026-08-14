@@ -677,11 +677,9 @@ const UI_DASHBOARD = {
         }
     },
 
-    // --- 5. СКЛАДСКАЯ ИНФРАСТРУКТУРА ---
+    // --- 5. СКЛАДСКАЯ ИНФРАСТРУКТУРА (ТЕПЕРЬ ПОЛНОЦЕННАЯ ВКЛАДКА) ---
     updateWarehouseUI() {
         if (typeof WAREHOUSE === 'undefined') return;
-        
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Принудительно создаем склады ДО отрисовки
         WAREHOUSE.init(); 
         
         let totalCurVol = 0;
@@ -701,7 +699,6 @@ const UI_DASHBOARD = {
         });
 
         if (document.getElementById('ui-wh-lvl')) {
-            // Если складов нет - выводим красное сообщение
             if (activeWhs.length === 0) {
                 document.getElementById('ui-wh-lvl').innerHTML = '<span style="color:#e74c3c; font-weight:bold;">Нет построенных складов</span>';
                 if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = '0';
@@ -723,26 +720,26 @@ const UI_DASHBOARD = {
             let btn = document.getElementById('ui-wh-upgrade-btn');
             if (btn) {
                 btn.style.display = 'inline-block';
-                // Перезаписываем старую HTML-кнопку на вызов карты городов
                 btn.innerText = activeWhs.length === 0 ? 'Открыть первый складской хаб' : 'Управление складами (Карта)';
                 btn.onclick = () => UI_DASHBOARD.showCityModal('warehouse');
             }
         }
-    },
 
-    // --- 6. ПРОИЗВОДСТВО И СКЛАД ---
-    updateProductionTab() {
+        // Рендер таблицы остатков (перенесено из ProductionTab)
         let warehouseBody = document.getElementById('ui-warehouse-body');
         if (warehouseBody && STATE.company.warehouses) {
             warehouseBody.innerHTML = '';
             let isEmpty = true;
             
-            Object.keys(CITIES).forEach(cId => {
+            Object.keys(GEO.CITIES).forEach(cId => {
                 let wh = STATE.company.warehouses[cId];
                 if (wh && wh.level > 0) {
-                    warehouseBody.innerHTML += `<tr style="background:#ecf0f1; border-top: 2px solid #bdc3c7;"><td colspan="5" style="text-align:left; font-weight:bold; padding:8px 10px; color:#2c3e50;">📍 Склад: ${CITIES[cId].name} (Ур. ${wh.level})</td></tr>`;
+                    let city = GEO.getCity(cId);
+                    warehouseBody.innerHTML += `<tr style="background:#ecf0f1; border-top: 2px solid #bdc3c7;"><td colspan="5" style="text-align:left; font-weight:bold; padding:8px 10px; color:#2c3e50;">📍 Склад: ${city.name} (Ур. ${wh.level})</td></tr>`;
                     
                     let cityEmpty = true;
+                    if (!wh.inventory) wh.inventory = {}; 
+                    
                     Object.keys(RECIPES.RESOURCES).forEach(key => {
                         let inv = wh.inventory[key];
                         if (inv && inv.qty > 0) {
@@ -755,16 +752,18 @@ const UI_DASHBOARD = {
                             let storeOptions = '';
                             STATE.company.businesses.forEach(b => {
                                 let bTpl = RECIPES.BUSINESSES[b.type];
-                                let bCity = b.city || 'odesa';
-                                if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key) && bCity === cId) {
-                                    storeOptions += `<option value="${b.uid}">${b.name}</option>`;
+                                // Можно отправлять товары в магазины
+                                if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key)) {
+                                    let storeCityName = typeof GEO !== 'undefined' ? GEO.getCity(b.city || 'odesa').name : '';
+                                    let extraCost = (b.city || 'odesa') !== cId ? ' (Платная логистика)' : '';
+                                    storeOptions += `<option value="${b.uid}">${b.name} - ${storeCityName}${extraCost}</option>`;
                                 }
                             });
                             
                             let transferHtml = '';
                             if (storeOptions !== '') {
                                 transferHtml = `<div style="margin-top: 8px; display: flex; gap: 5px; align-items:center;">
-                                    <select id="trans-store-${cId}-${key}" style="font-size:0.85em; padding:4px; max-width:130px; border-radius:3px; border:1px solid #bdc3c7;">
+                                    <select id="trans-store-${cId}-${key}" style="font-size:0.85em; padding:4px; max-width:140px; border-radius:3px; border:1px solid #bdc3c7;">
                                         <option value="">В магазин...</option>${storeOptions}
                                     </select>
                                     <input type="number" id="trans-qty-${cId}-${key}" value="${inv.qty}" max="${inv.qty}" style="width:60px; font-size:0.85em; padding:4px; border-radius:3px; border:1px solid #bdc3c7;">
@@ -788,9 +787,12 @@ const UI_DASHBOARD = {
                     if (cityEmpty) warehouseBody.innerHTML += '<tr><td colspan="5" style="text-align:center; padding: 15px; color:#7f8c8d;">В этом городе склад пуст.</td></tr>';
                 }
             });
-            if (isEmpty) warehouseBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#7f8c8d;">Ваши логистические хабы абсолютно пусты.</td></tr>';
+            if (isEmpty) warehouseBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#7f8c8d;">Ваши логистические хабы абсолютно пусты. Закупите сырье на бирже или запустите производство.</td></tr>';
         }
+    },
 
+    // --- 6. ПРОИЗВОДСТВО ---
+    updateProductionTab() {
         let bizList = document.getElementById('ui-active-businesses');
         if (bizList) {
             bizList.innerHTML = '';
@@ -799,7 +801,7 @@ const UI_DASHBOARD = {
             STATE.company.businesses.forEach(biz => {
                 let tpl = RECIPES.BUSINESSES[biz.type];
                 
-                // ИГНОРИРУЕМ МАГАЗИНЫ И ОФИСЫ В ЭТОЙ ВКЛАДКЕ
+                // ИГНОРИРУЕМ МАГАЗИНЫ И ОФИСЫ
                 if (tpl.isRetail || tpl.isMarketing) return; 
                 hasFactories = true;
 
@@ -825,12 +827,19 @@ const UI_DASHBOARD = {
                 let effPercent = (uiEfficiency * conditionMult * 100).toFixed(0);
                 let statusColor = (uiEfficiency * conditionMult) >= 1 ? 'color: #8e44ad; font-weight: bold;' : ((uiEfficiency * conditionMult) > 0 ? 'color: #27ae60;' : 'color: #c0392b;');
                 
-                let salaryCost = (biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary);
-                let adminCost = tpl.area * 2 * level; 
-                let upgradeCost = tpl.area * 50 * level;
+                let cityId = biz.city || 'odesa';
+                let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { name: cityId, rentMult: 1.0, salaryMult: 1.0 };
+                
+                let salaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary)) * cityData.salaryMult;
+                let adminCost = tpl.area * 2 * level * cityData.rentMult; 
+                let upgradeCost = tpl.area * 50 * level * cityData.rentMult;
+
+                let localWh = STATE.company.warehouses[cityId];
+                if (localWh && !localWh.inventory) localWh.inventory = {};
+                let localInv = localWh ? localWh.inventory : {};
 
                 let outRes = RECIPES.RESOURCES[tpl.output] || { name: 'Услуги' };
-                let outInvData = STATE.company.inventory[tpl.output] || { qty: 0, quality: 1.0 };
+                let outInvData = localInv[tpl.output] || { qty: 0, quality: 1.0 };
                 let outInv = outInvData.qty;
                 
                 let capacityOutput = Math.floor(maxOutByEquip * uiEfficiency * conditionMult);
@@ -852,7 +861,8 @@ const UI_DASHBOARD = {
                     inputsKeys.forEach(k => {
                         let reqNum = tpl.inputs[k];
                         let inName = RECIPES.RESOURCES[k].name;
-                        let invMat = STATE.company.inventory[k];
+                        
+                        let invMat = localInv[k];
                         let inQty = invMat ? invMat.qty : 0;
                         let matQ = (invMat && invMat.qty > 0) ? (invMat.quality || 1.0) : 1.0;
                         
@@ -873,7 +883,6 @@ const UI_DASHBOARD = {
                 let freeMid = typeof HR !== 'undefined' ? HR.getUnassigned('middle') : 0;
                 let freeSen = typeof HR !== 'undefined' ? HR.getUnassigned('senior') : 0;
 
-                // --- ЛОГИКА МАРШРУТИЗАЦИИ (ЗАВОД -> ЗАВОД ИЛИ МАГАЗИН) ---
                 if (!biz.routing) biz.routing = {};
                 let viableRoutes = [];
                 
@@ -881,11 +890,9 @@ const UI_DASHBOARD = {
                     if (other.uid === biz.uid) return;
                     let otherTpl = RECIPES.BUSINESSES[other.type];
                     
-                    // Если это Завод и ему нужно наше сырье
                     if (otherTpl.inputs && otherTpl.inputs[tpl.output] !== undefined) {
                         viableRoutes.push({ id: other.uid, name: `🏭 ${other.name || otherTpl.name}` });
                     }
-                    // Если это Магазин и он продает наш товар
                     else if (otherTpl.isRetail && otherTpl.accepts && otherTpl.accepts.includes(tpl.output)) {
                         viableRoutes.push({ id: other.uid, name: `🏪 ${other.name}` });
                     }
@@ -895,7 +902,7 @@ const UI_DASHBOARD = {
                     <strong style="font-size: 0.9em; color: #b9770e;">АВТО-ПОСТАВКИ (ШТУК В ДЕНЬ):</strong><br>`;
                 
                 if (viableRoutes.length === 0) {
-                    routingHtml += `<div style="font-size:0.85em; color:#7f8c8d;">Нет потребителей. 100% уходит на Общий склад.</div>`;
+                    routingHtml += `<div style="font-size:0.85em; color:#7f8c8d;">Нет потребителей. 100% уходит на Склад города.</div>`;
                 } else {
                     viableRoutes.forEach(route => {
                         let val = biz.routing[route.id] || 0;
@@ -922,12 +929,12 @@ const UI_DASHBOARD = {
                     
                     <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                         <div style="flex: 1; min-width: 250px;">
-                            <p style="margin: 0 0 5px 0;"><strong>📦 Выпуск:</strong> ${outRes.name} <span style="color:#2980b9; margin-left:10px;">(Общий Склад: <strong>${outInv} шт.</strong>)</span></p>
+                            <p style="margin: 0 0 5px 0;"><strong>📦 Выпуск:</strong> ${outRes.name} <span style="color:#2980b9; margin-left:10px;">(Склад ${cityData.name}: <strong>${outInv} шт.</strong>)</span></p>
                             <p style="margin: 0 0 5px 0;"><small>План (Мощность) на сегодня: <strong style="color:#27ae60; font-size: 1.2em;">${capacityOutput} шт.</strong> / Лимит станков: ${maxOutByEquip}</small></p>
                             <p style="margin: 0 0 10px 0;"><small>✨ Ожидаемое качество: <strong style="color:#8e44ad; font-size: 1.1em;">★ ${expectedQuality.toFixed(2)}</strong></small></p>
                             
                             <div style="background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.85em; border: 1px dashed #ccc;">
-                                <strong style="color:#7f8c8d;">ПОТРЕБНОСТЬ В СЫРЬЕ:</strong><br>
+                                <strong style="color:#7f8c8d;">ПОТРЕБНОСТЬ В СЫРЬЕ (Склад ${cityData.name}):</strong><br>
                                 ${inputsHtml}
                             </div>
                             ${routingHtml}
@@ -980,16 +987,15 @@ const UI_DASHBOARD = {
                     </div>
                 </li>`;
             });
-            if (!hasFactories) bizList.innerHTML = '<li>У вас пока нет заводов.</li>';
+            if (!hasFactories) bizList.innerHTML = '<li style="color:var(--text-dim);">У вас пока нет заводов. Откройте первый, инвестировав в производство.</li>';
         }
     },
 
-    // --- НОВАЯ ВКЛАДКА: B2B БИРЖА (Мульти-склад + Качество) ---
+    // --- НОВАЯ ВКЛАДКА: B2B БИРЖА С РАБОЧИМИ ФИЛЬТРАМИ ---
     updateMarketTab() {
         let marketContainer = document.getElementById('ui-market-businesses');
         if (!marketContainer || typeof MARKET === 'undefined') return;
 
-        // 1. Формируем список доступных складов игрока
         let cityOptions = '';
         if (STATE.company.warehouses) {
             Object.keys(CITIES).forEach(cId => {
@@ -1008,8 +1014,17 @@ const UI_DASHBOARD = {
             return;
         }
 
-        // 2. Блок выбора логистического маршрута
+        // Рендер кнопок фильтра
+        let filterHtml = `
+        <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+            <button onclick="UI_DASHBOARD.setMarketFilter('all')" style="background: ${this.marketFilter==='all' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='all' ? '#fff' : 'var(--text)'};">Все товары</button>
+            <button onclick="UI_DASHBOARD.setMarketFilter('raw')" style="background: ${this.marketFilter==='raw' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='raw' ? '#fff' : 'var(--text)'};">Только сырье</button>
+            <button onclick="UI_DASHBOARD.setMarketFilter('finished')" style="background: ${this.marketFilter==='finished' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='finished' ? '#fff' : 'var(--text)'};">Готовая продукция</button>
+            <button onclick="UI_DASHBOARD.setMarketFilter('equipment')" style="background: ${this.marketFilter==='equipment' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='equipment' ? '#fff' : 'var(--text)'};">Оборудование / ПК</button>
+        </div>`;
+
         let html = `
+        ${filterHtml}
         <div style="margin-bottom: 15px; padding: 15px; background: #e8f8f5; border: 1px solid #1abc9c; border-radius: 6px; display: flex; align-items: center;">
             <strong style="color: #16a085; margin-right: 15px;">📍 Склад назначения (доставка):</strong>
             <select id="market-target-city" style="padding: 6px 10px; font-size: 1em; border-radius: 4px; border: 1px solid #bdc3c7; cursor: pointer; flex-grow: 1; max-width: 400px;">
@@ -1028,23 +1043,28 @@ const UI_DASHBOARD = {
 
         Object.keys(RECIPES.RESOURCES).forEach(key => {
             let res = RECIPES.RESOURCES[key];
+            
+            // ЛОГИКА ФИЛЬТРАЦИИ
+            if (this.marketFilter === 'raw' && !res.isRaw) return;
+            if (this.marketFilter === 'finished' && (res.isRaw || res.isEquipment)) return;
+            if (this.marketFilter === 'equipment' && !res.isEquipment) return;
+
             let basePrice = MARKET.getCurrentPrice(key);
             let availQty = MARKET.getAvailablePool(key);
-            
-            // Заготовка: В будущем качество и бренд сырья на бирже могут зависеть от поставщиков
             let b2bQuality = 1.00;
             let b2bBrand = 0;
             
-            // Рендер товаров на складах для продажи
+            // Рендер товаров на НАШИХ складах для продажи
             Object.keys(STATE.company.warehouses).forEach(cId => {
                 let wh = STATE.company.warehouses[cId];
                 if (wh.inventory && wh.inventory[key] && wh.inventory[key].qty > 0) {
                     let inv = wh.inventory[key];
                     let finalPrice = basePrice * (inv.quality || 1.0);
+                    let cityName = typeof GEO !== 'undefined' ? GEO.getCity(cId).name : cId;
                     html += `
                     <tr style="background: #f4f6f7; border-bottom: 2px solid #bdc3c7;">
                         <td style="padding: 10px; border-left: 4px solid #2980b9;">
-                            <strong>${res.name}</strong><br><small style="color:#2980b9; font-weight: bold;">(Склад: ${CITIES[cId].name})</small>
+                            <strong>${res.name}</strong><br><small style="color:#2980b9; font-weight: bold;">(Ваш склад: ${cityName})</small>
                         </td>
                         <td><strong style="color: #2c3e50;">${inv.qty} шт.</strong></td>
                         <td><strong style="color:#8e44ad;">★ ${(inv.quality || 1.0).toFixed(2)}</strong></td>
@@ -1056,6 +1076,7 @@ const UI_DASHBOARD = {
                 }
             });
             
+            // Рендер товаров РЫНКА для покупки
             html += `
             <tr style="border-bottom: 1px solid #ecf0f1;">
                 <td style="padding: 10px;">
