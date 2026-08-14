@@ -588,7 +588,8 @@
             <div class="tab active" onclick="UI_DASHBOARD.switchTab(event, 'tab-dashboard')">📊 Компания</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-contracts')">📜 Тендеры</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-rnd')">🧪 R&D</div>
-            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-production')">🏭 Активы и Склад</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-warehouse')">📦 Склады</div> <!-- НОВАЯ ВКЛАДКА -->
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-production')">🏭 Производство</div> <!-- ПЕРЕИМЕНОВАНО -->
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-retail')">🏪 Розница</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-marketing')">📢 Маркетинг</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-market')">⚖️ Биржа</div>
@@ -708,15 +709,11 @@
             </div>
         </div>
 
-        <!-- ВКЛАДКА: ПРОИЗВОДСТВО И СКЛАД -->
-        <div id="tab-production" class="tab-content">
+        <!-- ВКЛАДКА: СКЛАДЫ (НОВАЯ) -->
+        <div id="tab-warehouse" class="tab-content">
             <div class="card">
-                <h3>Инвестиции в производство</h3>
-                <div id="ui-buy-businesses"></div>
-            </div>
-            <div class="card">
-                <h3>Управление складскими мощностями</h3>
-                <p><strong>Текущий уровень:</strong> <span id="ui-wh-lvl">1</span> | <strong>Админ. издержки:</strong> $<span id="ui-wh-rent" class="danger">50</span> / день</p>
+                <h3>Управление складскими мощностями (Логистические хабы)</h3>
+                <p><strong>Текущий уровень:</strong> <span id="ui-wh-lvl">...</span> | <strong>Админ. издержки:</strong> $<span id="ui-wh-rent" class="danger">...</span> / день</p>
 
                 <p style="margin: 0 0 10px 0;">Занято: <strong id="ui-wh-current">0</strong> м³ из <strong id="ui-wh-max">1000</strong> м³</p>
 
@@ -724,17 +721,12 @@
                     <div id="ui-wh-bar" style="width: 0%; background: var(--blue); height: 100%; border-radius: 3px; transition: width 0.3s;"></div>
                 </div>
 
-                <button id="ui-wh-upgrade-btn" onclick="WAREHOUSE.upgrade()" style="background: var(--orange);">Расширить склад</button>
-            </div>
-            <div class="card">
-                <h3>Мои активы (Работающие предприятия)</h3>
-                <ul id="ui-active-businesses" style="padding-left: 20px;">
-                    <li>Нет активных предприятий.</li>
-                </ul>
+                <button id="ui-wh-upgrade-btn" style="background: var(--orange);">Управление складами (Карта)</button>
             </div>
 
             <div class="card">
-                <h3>Складские запасы</h3>
+                <h3>Складские запасы (В наличии)</h3>
+                <p><small>Товары распределены по региональным складам. Отгрузка в другой город потребует оплаты транспортных расходов.</small></p>
                 <table>
                     <thead>
                         <tr>
@@ -747,6 +739,20 @@
                     </thead>
                     <tbody id="ui-warehouse-body"></tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА: ПРОИЗВОДСТВО -->
+        <div id="tab-production" class="tab-content">
+            <div class="card">
+                <h3>Инвестиции в производство</h3>
+                <div id="ui-buy-businesses"></div>
+            </div>
+            <div class="card">
+                <h3>Мои активы (Работающие предприятия)</h3>
+                <ul id="ui-active-businesses" style="padding-left: 0;">
+                    <li style="color:var(--text-dim);">Нет активных предприятий.</li>
+                </ul>
             </div>
         </div>
 
