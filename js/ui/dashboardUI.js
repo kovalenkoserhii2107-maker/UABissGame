@@ -1483,7 +1483,8 @@ const UI_DASHBOARD = {
         if (STATE.taxes) {
             let tb = STATE.taxes.taxableBase || 0;
             let dtr = STATE.taxes.daysToReport || 30;
-            let estimatedTax = tb > 0 ? tb * TAXES.RATES.corporate : 0;
+            let corpRate = (typeof GEO !== 'undefined' && GEO.COUNTRIES['ua']) ? GEO.COUNTRIES['ua'].taxes.corporate : 0.18;
+            let estimatedTax = tb > 0 ? tb * corpRate : 0;
             
             taxInfoHTML = `
                 <div style="background: #e8f8f5; border: 1px solid #1abc9c; padding: 15px; margin-bottom: 20px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
@@ -1686,49 +1687,6 @@ const UI_DASHBOARD = {
         amountInput.value = ''; 
     },
 
-    // Умный расчет максимально возможной закупки (кнопка MAX)
-    setMaxBuy(itemKey) {
-        let citySelect = document.getElementById('market-target-city');
-        if (!citySelect) return;
-        
-        let cityId = citySelect.value;
-        let price = MARKET.getCurrentPrice(itemKey);
-        let availMarket = MARKET.getAvailablePool(itemKey);
-        
-        // 1. Ограничение по деньгам
-        let maxByMoney = Math.floor(STATE.finances.balance / price);
-        
-        // 2. Ограничение по объему выбранного склада
-        let itemVol = RECIPES.RESOURCES[itemKey].volume || 1.0;
-        let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
-        let maxBySpace = Math.floor(freeSpace / itemVol);
-
-        // Итоговый максимум — это наименьшее из трех узких мест
-        let maxPossible = Math.min(availMarket, maxByMoney, maxBySpace);
-        if (maxPossible < 0) maxPossible = 0;
-
-        document.getElementById(`buy-qty-${itemKey}`).value = maxPossible;
-    },
-
-    // Обработка покупки с рынка
-    submitBuy(itemKey) {
-        let input = document.getElementById(`buy-qty-${itemKey}`);
-        let citySelect = document.getElementById('market-target-city');
-        
-        if (input && citySelect) {
-            let qty = parseInt(input.value);
-            let cityId = citySelect.value;
-            
-            if (isNaN(qty) || qty <= 0) {
-                NOTIFY.error('Ошибка', 'Введите корректное количество для покупки.');
-                return;
-            }
-            if (typeof MARKET !== 'undefined') {
-                MARKET.buy(itemKey, qty, cityId); // Теперь город передается на биржу!
-            }
-        }
-    },
-
     setFactoryWarehouses(uid) {
         let biz = STATE.company.businesses.find(b => b.uid === uid);
         if (biz) {
@@ -1769,40 +1727,9 @@ const UI_DASHBOARD = {
         }
     },
     
-    // Красивое окно выбора локации магазина
+    // Окно выбора города
     showLocationModal(bizType) {
-        // Удаляем старое окно, если оно зависло
-        let oldModal = document.getElementById('location-modal');
-        if (oldModal) oldModal.remove();
-
-        let modal = document.createElement('div');
-        modal.id = 'location-modal';
-        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(3px);';
-        
-        modal.innerHTML = `
-            <div style="background:#fff; padding:25px; border-radius:12px; width:450px; max-width:90%; box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: center;">
-                <h2 style="margin-top:0; color:#2c3e50; font-size: 1.5em;">Где открыть магазин?</h2>
-                <p style="color:#7f8c8d; margin-bottom: 25px;">От локации зависит ежедневный трафик покупателей и стоимость аренды помещения.</p>
-                
-                <button onclick="document.getElementById('location-modal').remove(); PRODUCTION.buyBusiness('${bizType}', 'center')" style="width:100%; text-align:left; padding:15px; margin-bottom:12px; background:#fdfefe; border:2px solid #e74c3c; border-radius:8px; cursor:pointer; transition: 0.2s;">
-                    <strong style="color:#c0392b; font-size:1.2em;">🏙️ Центр города</strong><br>
-                    <small style="color:#333; font-size: 0.9em;">Максимальный спрос | Аренда: х3.0</small>
-                </button>
-                
-                <button onclick="document.getElementById('location-modal').remove(); PRODUCTION.buyBusiness('${bizType}', 'residential')" style="width:100%; text-align:left; padding:15px; margin-bottom:12px; background:#fdfefe; border:2px solid #f39c12; border-radius:8px; cursor:pointer; transition: 0.2s;">
-                    <strong style="color:#d35400; font-size:1.2em;">🏘️ Спальный район</strong><br>
-                    <small style="color:#333; font-size: 0.9em;">Стабильный спрос | Аренда: х1.0</small>
-                </button>
-                
-                <button onclick="document.getElementById('location-modal').remove(); PRODUCTION.buyBusiness('${bizType}', 'suburb')" style="width:100%; text-align:left; padding:15px; margin-bottom:12px; background:#fdfefe; border:2px solid #27ae60; border-radius:8px; cursor:pointer; transition: 0.2s;">
-                    <strong style="color:#16a085; font-size:1.2em;">🌲 Пригород</strong><br>
-                    <small style="color:#333; font-size: 0.9em;">Низкий спрос | Аренда: х0.5</small>
-                </button>
-                
-                <button onclick="document.getElementById('location-modal').remove()" style="width:100%; padding:12px; margin-top:15px; background:#ecf0f1; border:none; border-radius:6px; color:#7f8c8d; font-weight: bold; cursor:pointer;">Отмена</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
+        this.showCityModal('business', bizType);
     },
 
     // --- 10. РОЗНИЦА ---

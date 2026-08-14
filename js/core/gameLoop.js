@@ -3,6 +3,8 @@ const GAME = {
     
     // Инициализация при старте игры
     init() {
+        if (typeof LEDGER !== 'undefined') LEDGER.init();
+        if (typeof WAREHOUSE !== 'undefined') WAREHOUSE.init();
         UI_DASHBOARD.update();
     },
 
@@ -20,24 +22,18 @@ const GAME = {
             LEDGER.record('exp_salary', dailySalaries);
         }
 
-        // 3. Списание аренды склада с записью в книгу
-        let dailyRent = WAREHOUSE.getDailyRent();
-        if (dailyRent > 0) {
-            STATE.finances.balance -= dailyRent;
-            LEDGER.record('exp_admin', dailyRent);
-        }
-
-        // 4. Отработка механик
+        // 3. Отработка механик
+        WAREHOUSE.processDaily(); // Склады (аренда всех хабов и автопополнение магазинов)
         HR.processDaily();
         CONTRACTS.processDaily();
         RND.processDaily();
         PRODUCTION.processProduction();
         MARKET.simulate();
-        LOGISTICS.processDaily(); // ЛОГИСТИКА
+        LOGISTICS.processDaily(); // Логистика
         RETAIL.processDaily();
         EVENTS.simulate();
         
-        // --- НОВОЕ: Списание налогов и формирование налоговой базы ---
+        // 4. Списание налогов и формирование налоговой базы
         if (typeof TAXES !== 'undefined') TAXES.processDaily();
         
         // 5. Закрытие бухгалтерского дня (Перенос данных)

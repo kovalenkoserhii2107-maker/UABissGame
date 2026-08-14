@@ -55,9 +55,7 @@ const RETAIL = {
         // Списание бюджета на рекламу и глобальный Бренд
         if (dailyMarketingCost > 0) {
             STATE.finances.balance -= dailyMarketingCost;
-            if (STATE.ledger && STATE.ledger.yesterday) {
-                STATE.ledger.yesterday.exp_marketing = (STATE.ledger.yesterday.exp_marketing || 0) + dailyMarketingCost;
-            }
+            if (typeof LEDGER !== 'undefined') LEDGER.record('exp_marketing', dailyMarketingCost);
         }
 
         // Динамика бренда (растет от PR, но органически забывается на 0.1% в день)
@@ -163,9 +161,9 @@ const RETAIL = {
                         };
                         
                         // Запись в глобальную бухгалтерию
-                        if (STATE.ledger && STATE.ledger.yesterday) {
-                            STATE.ledger.yesterday.rev_b2c = (STATE.ledger.yesterday.rev_b2c || 0) + revenue;
-                            STATE.ledger.yesterday.exp_materials = (STATE.ledger.yesterday.exp_materials || 0) + cogs;
+                        if (typeof LEDGER !== 'undefined') {
+                            LEDGER.record('rev_b2c', revenue);
+                            if (cogs > 0) LEDGER.record('exp_materials', cogs);
                         }
                     }
                 });

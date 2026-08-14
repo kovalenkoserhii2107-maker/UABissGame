@@ -19,12 +19,15 @@ const LOGISTICS = {
                     
                     let inv = targetWh.inventory[d.item];
                     let oldTotal = inv.qty * inv.avgCost;
+                    let oldTotalQ = inv.qty * (inv.quality || 1.0);
                     
                     // ВАЖНО: Добавляем транспортные расходы (d.logCost) в себестоимость товара!
                     let deliveryLogCost = d.logCost || 0;
+                    let delQuality = d.quality || 1.0;
                     
                     inv.qty += d.qty;
                     inv.avgCost = (oldTotal + d.cost + deliveryLogCost) / inv.qty;
+                    inv.quality = (oldTotalQ + (d.qty * delQuality)) / inv.qty;
                     
                     STATE.logistics.deliveries.splice(i, 1); 
                 }
@@ -39,10 +42,10 @@ const LOGISTICS = {
                 if (r.daysLeft <= 0) {
                     STATE.finances.balance += r.amount;
                     
-                    // Записываем в бухгалтерию P&L
-                    if (STATE.ledger && STATE.ledger.yesterday) {
-                        STATE.ledger.yesterday.rev_b2b = (STATE.ledger.yesterday.rev_b2b || 0) + r.amount;
-                        STATE.ledger.yesterday.exp_materials = (STATE.ledger.yesterday.exp_materials || 0) + r.cogs;
+                    // Записываем в бухгалтерию P&L через Ledger
+                    if (typeof LEDGER !== 'undefined') {
+                        LEDGER.record('rev_b2b', r.amount);
+                        if (r.cogs > 0) LEDGER.record('exp_materials', r.cogs);
                     }
                     STATE.logistics.receivables.splice(i, 1);
                 }

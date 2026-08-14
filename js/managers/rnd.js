@@ -45,17 +45,42 @@ const RND = {
         this.init();
         let maxSlots = this.getMaxStaff();
         let freeSlots = maxSlots - (STATE.rnd.facility.equipment.count || 0);
-        if (qty > freeSlots) { NOTIFY.error('Ошибка', 'Не хватает мест!'); return; }
+        if (qty > freeSlots) { NOTIFY.error('Ошибка', 'Не хватает мест в корпусе НИИ!'); return; }
 
-        let inv = STATE.company.inventory['smart_pc'];
-        if (!inv || inv.qty < qty) { NOTIFY.error('Ошибка', 'Нет ПК на складе.'); return; }
+        // Подсчет доступных ПК по всем складам
+        let totalPC = 0;
+        if (STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh && wh.inventory && wh.inventory['smart_pc']) {
+                    totalPC += wh.inventory['smart_pc'].qty || 0;
+                }
+            });
+        }
 
-        inv.qty -= qty;
-        if (inv.qty === 0) inv.avgCost = 0;
+        if (totalPC < qty) {
+            NOTIFY.error('Ошибка', `Недостаточно ПК на складах компании (Доступно: ${totalPC} шт., требуется: ${qty} шт.).`);
+            return;
+        }
 
-        let currentTotalHealth = STATE.rnd.facility.equipment.count * STATE.rnd.facility.equipment.condition;
+        // Последовательное списание со складов
+        let remainToDeduct = qty;
+        if (STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (remainToDeduct > 0 && wh && wh.inventory && wh.inventory['smart_pc'] && wh.inventory['smart_pc'].qty > 0) {
+                    let take = Math.min(remainToDeduct, wh.inventory['smart_pc'].qty);
+                    wh.inventory['smart_pc'].qty -= take;
+                    if (wh.inventory['smart_pc'].qty === 0) wh.inventory['smart_pc'].avgCost = 0;
+                    remainToDeduct -= take;
+                }
+            });
+        }
+
+        let currentTotalHealth = (STATE.rnd.facility.equipment.count || 0) * (STATE.rnd.facility.equipment.condition || 100);
         STATE.rnd.facility.equipment.count += qty;
         STATE.rnd.facility.equipment.condition = (currentTotalHealth + (qty * 100)) / STATE.rnd.facility.equipment.count;
+        NOTIFY.success('Успех', `Установлено ${qty} рабочих станций в лабораторию НИИ.`);
         if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
     },
 

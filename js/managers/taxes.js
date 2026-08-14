@@ -1,17 +1,22 @@
 // Модуль Налоговой системы и сборов (GEO Интеграция)
 const TAXES = {
+    get RATES() {
+        return typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].taxes : { payroll: 0.22, corporate: 0.18 };
+    },
+
     init() {
         if (!STATE.taxes) {
             STATE.taxes = { daysToReport: 30, taxableBase: 0, totalPaid: 0 };
         }
+        if (typeof LEDGER !== 'undefined') LEDGER.init();
     },
 
     processDaily() {
         this.init();
         // Берем налоги напрямую из макроэкономики страны
-        let rates = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].taxes : { payroll: 0.22, corporate: 0.18 };
+        let rates = this.RATES;
 
-        if (typeof STATE.ledger !== 'undefined' && STATE.ledger.today) {
+        if (STATE.ledger && STATE.ledger.today) {
             if (STATE.ledger.today.exp_taxes_payroll === undefined) STATE.ledger.today.exp_taxes_payroll = 0;
             if (STATE.ledger.today.exp_taxes_corp === undefined) STATE.ledger.today.exp_taxes_corp = 0;
         }
@@ -28,7 +33,7 @@ const TAXES = {
             let todayRev = (t.rev_b2b||0) + (t.rev_b2g||0) + (t.rev_other||0) + (t.fin_income||0) + (t.rev_b2c||0);
             let todayExp = (t.exp_materials||0) + (t.exp_salary||0) + (t.exp_admin||0) + 
                            (t.exp_hr||0) + (t.exp_fines||0) + (t.exp_repair||0) + 
-                           (t.exp_taxes_payroll||0) + (t.fin_expense||0) + (t.fin_fees||0) + (t.exp_logistics||0);
+                           (t.exp_taxes_payroll||0) + (t.exp_marketing||0) + (t.fin_expense||0) + (t.fin_fees||0) + (t.exp_logistics||0);
             
             STATE.taxes.taxableBase += (todayRev - todayExp);
         }

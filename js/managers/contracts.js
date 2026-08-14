@@ -59,12 +59,17 @@ const CONTRACTS = {
             }
             
             if (totalStock >= c.qty) {
-                // Списываем последовательно со складов разных городов
+                // Списываем последовательно со складов разных городов и считаем себестоимость
                 let remainToDeduct = c.qty;
+                let totalCogs = 0;
+
                 Object.keys(STATE.company.warehouses).forEach(cId => {
                     let wh = STATE.company.warehouses[cId];
                     if (remainToDeduct > 0 && wh.inventory && wh.inventory[c.item] && wh.inventory[c.item].qty > 0) {
                         let take = Math.min(remainToDeduct, wh.inventory[c.item].qty);
+                        let unitCost = wh.inventory[c.item].avgCost || 0;
+                        totalCogs += take * unitCost;
+
                         wh.inventory[c.item].qty -= take;
                         if (wh.inventory[c.item].qty === 0) wh.inventory[c.item].avgCost = 0;
                         remainToDeduct -= take;
@@ -72,14 +77,12 @@ const CONTRACTS = {
                 });
                 
                 STATE.finances.balance += c.totalReward;
-                if (typeof LEDGER !== 'undefined' && LEDGER.record) {
+                if (typeof LEDGER !== 'undefined') {
                     LEDGER.record('rev_b2g', c.totalReward);
-                } else if (STATE.ledger && STATE.ledger.yesterday) {
-                    STATE.ledger.yesterday.rev_b2g = (STATE.ledger.yesterday.rev_b2g || 0) + c.totalReward;
+                    if (totalCogs > 0) LEDGER.record('exp_materials', totalCogs);
                 }
                 
-                STATE.finances.creditScore += 15;
-                if (STATE.finances.creditScore > 1000) STATE.finances.creditScore = 1000;
+                STATE.finances.creditScore = Math.min(1000, (STATE.finances.creditScore || 300) + 15);
                 
                 STATE.contracts.active.splice(idx, 1);
                 UI_DASHBOARD.update();
@@ -97,9 +100,8 @@ const CONTRACTS = {
             c.deadline--;
             if (c.deadline <= 0) {
                 STATE.finances.balance -= c.penalty;
-                if (typeof LEDGER !== 'undefined' && LEDGER.record) LEDGER.record('exp_fines', c.penalty);
-                else if (STATE.ledger && STATE.ledger.yesterday) STATE.ledger.yesterday.exp_fines = (STATE.ledger.yesterday.exp_fines || 0) + c.penalty;
-                STATE.finances.creditScore -= 50; 
+                if (typeof LEDGER !== 'undefined') LEDGER.record('exp_fines', c.penalty);
+                STATE.finances.creditScore = Math.max(0, (STATE.finances.creditScore || 300) - 50); 
                 if (typeof NOTIFY !== 'undefined') NOTIFY.error('Срыв сроков поставки!', `Контракт провален. Штраф: $${formatMoney(c.penalty)}.`);
                 STATE.contracts.active.splice(i, 1);
             }

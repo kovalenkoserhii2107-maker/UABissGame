@@ -109,7 +109,7 @@ const WAREHOUSE = {
         
         if (totalRent > 0) {
             STATE.finances.balance -= totalRent;
-            if (STATE.ledger && STATE.ledger.yesterday) STATE.ledger.yesterday.exp_admin = (STATE.ledger.yesterday.exp_admin || 0) + totalRent;
+            if (typeof LEDGER !== 'undefined') LEDGER.record('exp_admin', totalRent);
         }
 
         STATE.company.businesses.forEach(biz => {

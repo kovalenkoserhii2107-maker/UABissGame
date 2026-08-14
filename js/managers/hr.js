@@ -136,22 +136,24 @@ const HR = {
 
     assignToBusiness(bizUid, grade) {
         this.init();
+        if (!this.GRADES[grade]) return;
+
         if (this.getUnassigned(grade) > 0) {
             let biz = STATE.company.businesses.find(b => b.uid === bizUid);
             if (biz) {
-                if (!biz.assigned) biz.assigned = { junior: 0, middle: 0, senior: 0 };
+                if (!biz.assigned) biz.assigned = {};
                 
                 let tpl = RECIPES.BUSINESSES[biz.type];
-                let level = biz.level || 1; // Учитываем уровень завода
+                let level = biz.level || 1; // Учитываем уровень объекта
                 let maxStaff = tpl.staffReq * level;
-                let assignedTotal = biz.assigned.junior + biz.assigned.middle + biz.assigned.senior;
+                let assignedTotal = Object.values(biz.assigned).reduce((a, b) => a + (Number(b) || 0), 0);
                 
-                // Проверка: есть ли физическое место на заводе
+                // Проверка: есть ли физическое место на объекте
                 if (assignedTotal < maxStaff) {
-                    biz.assigned[grade]++;
+                    biz.assigned[grade] = (biz.assigned[grade] || 0) + 1;
                     UI_DASHBOARD.update();
                 } else {
-                    NOTIFY.error('Ошибка', `На предприятии нет свободных мест! Максимум: ${maxStaff} чел. Расширьте производство.`);
+                    NOTIFY.error('Ошибка', `На предприятии нет свободных мест! Максимум: ${maxStaff} чел. Расширьте площадь.`);
                 }
             }
         } else {
@@ -161,7 +163,7 @@ const HR = {
 
     removeFromBusiness(bizUid, grade) {
         let biz = STATE.company.businesses.find(b => b.uid === bizUid);
-        if (biz && biz.assigned && biz.assigned[grade] > 0) {
+        if (biz && biz.assigned && (biz.assigned[grade] || 0) > 0) {
             biz.assigned[grade]--;
             UI_DASHBOARD.update();
         }
