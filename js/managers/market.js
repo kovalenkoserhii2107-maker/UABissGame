@@ -108,9 +108,11 @@ const MARKET = {
         }
     },
 
-    sell(itemKey, qty) {
-        let inv = STATE.company.inventory[itemKey];
+    sell(itemKey, qty, cityId = 'odesa') {
+        let wh = STATE.company.warehouses[cityId];
+        let inv = wh ? wh.inventory[itemKey] : null;
         qty = Math.floor(qty);
+        
         if (inv && Math.floor(inv.qty) >= qty) {
             let price = this.getCurrentPrice(itemKey) * (inv.quality || 1);
             let revenue = price * qty;
@@ -125,8 +127,10 @@ const MARKET = {
             if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
             STATE.logistics.receivables.push({ amount: revenue, cogs: cogs, source: 'B2B', daysLeft: 1 });
             
-            NOTIFY.success('Успех', `Отгружено. Выручка $${formatMoney(revenue)} поступит завтра.`);
+            NOTIFY.success('Успех', `Партия отгружена со склада ${CITIES[cityId].name}. Выручка $${formatMoney(revenue)} поступит завтра.`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
+        } else {
+             if (typeof NOTIFY !== 'undefined') NOTIFY.error('Ошибка', 'Недостаточно товара на складе для продажи.');
         }
     },
 
