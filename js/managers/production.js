@@ -1,4 +1,4 @@
-// Модуль управления производством
+// Модуль управления производством (Региональная экономика)
 const PRODUCTION = {
     init() {
         if (!STATE.company.businesses) STATE.company.businesses = [];
@@ -11,28 +11,26 @@ const PRODUCTION = {
                     quality: 1.0
                 };
             }
+            // Обратная совместимость для старых сохранений
+            if (!biz.city) biz.city = 'odesa'; 
         });
     },
 
-    buyBusiness(type, locationId = null) {
+    // Покупка бизнеса с привязкой к конкретному городу
+    buyBusiness(type, cityId = null) {
         let tpl = RECIPES.BUSINESSES[type];
         
-        // Если это магазин, а локация еще не выбрана - вызываем красивое окно с кнопками
-        if (tpl.isRetail && !locationId) {
+        // Если город не выбран — вызываем красивое окно с картой (из dashboardUI)
+        if (!cityId) {
             if (typeof UI_DASHBOARD !== 'undefined') {
-                UI_DASHBOARD.showLocationModal(type);
+                UI_DASHBOARD.showCityModal('business', type);
             }
             return;
         }
 
-        let locationName = '';
-        let costMult = 1.0;
-        
-        if (tpl.isRetail) {
-            if (locationId === 'center') { locationName = ' (Центр)'; costMult = 3.0; }
-            else if (locationId === 'suburb') { locationName = ' (Пригород)'; costMult = 0.5; }
-            else if (locationId === 'residential') { locationName = ' (Спальный)'; costMult = 1.0; }
-        }
+        // Берем мультипликаторы из гео-справочника
+        let city = GEO.getCity(cityId);
+        let costMult = city.rentMult;
         
         let cost = tpl.area * 50 * costMult; 
         
@@ -41,17 +39,7 @@ const PRODUCTION = {
             
             const UKR_NAMES = ['Мрія', 'Сокіл', 'Скіф', 'Булава', 'Грім', 'Січ', 'Воля'];
             const RETAIL_NAMES = ['Сільпо', 'АТБ', 'Аврора', 'Епіцентр', 'ФОРА', 'VARUS', 'КОСМО', 'Fozzy', 'EVA'];
-            const MARKETING_NAMES = [
-                'Banda Agency', 
-                'Fedoriv Group', 
-                'Gres Todorchuk', 
-                'Republik', 
-                'Katsman Communications', 
-                'IAMIDEA', 
-                'Sushka', 
-                'Postmen', 
-                'Arriba!'
-            ];
+            const MARKETING_NAMES = ['Banda Agency', 'Fedoriv Group', 'Gres Todorchuk', 'Republik', 'IAMIDEA', 'Postmen'];
             
             let randomName = '';
             if (tpl.isRetail) {
@@ -66,11 +54,11 @@ const PRODUCTION = {
             
             let customName = '';
             if (tpl.isRetail) {
-                customName = `Магазин "${randomName}"${locationName}`;
+                customName = `Магазин "${randomName}" (${city.name})`;
             } else if (tpl.isMarketing) {
-                customName = `Агентство "${randomName}"`;
+                customName = `Агентство "${randomName}" (${city.name})`;
             } else {
-                customName = `${tpl.name} "${randomName}-${countOfThisType}"`;
+                customName = `${tpl.name} "${randomName}-${countOfThisType}" (${city.name})`;
             }
             
             STATE.company.businesses.push({
@@ -78,13 +66,14 @@ const PRODUCTION = {
                 type: type, 
                 level: 1,
                 name: customName,
-                location: locationId, 
-                locMult: costMult,    
+                city: cityId,            // СОХРАНЯЕМ ИДЕНТИФИКАТОР ГОРОДА
+                locMult: costMult,       // СОХРАНЯЕМ СТОИМОСТЬ АРЕНДЫ ГОРОДА
                 assigned: { junior: 0, middle: 0, senior: 0 }, 
                 equipment: { count: 0, condition: 100, quality: 1.0 },
                 stats: { daily: 0, monthly: [], total: 0, lastOutput: 0 },
                 lastCogs: 0
             });
+            
             NOTIFY.success('Успех', `Вы открыли: ${customName}!`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {
@@ -96,12 +85,14 @@ const PRODUCTION = {
         let biz = STATE.company.businesses.find(b => b.uid === uid);
         if (biz) {
             let tpl = RECIPES.BUSINESSES[biz.type];
-            let cost = tpl.area * 50 * (biz.level || 1);
+            let city = GEO.getCity(biz.city || 'odesa');
+            // При расширении учитываем региональный коэффициент аренды земли
+            let cost = tpl.area * 50 * (biz.level || 1) * city.rentMult;
+            
             if (STATE.finances.balance >= cost) {
                 STATE.finances.balance -= cost;
                 biz.level = (biz.level || 1) + 1;
                 
-                // --- НОВОЕ: Правильные уведомления ---
                 let msg = "Завод расширен!";
                 if (tpl.isRetail) msg = "Площадь магазина успешно увеличена!";
                 else if (tpl.isMarketing) msg = "Офис маркетинга расширен!";
@@ -126,9 +117,16 @@ const PRODUCTION = {
 
         if (qty > freeSlots) { NOTIFY.error('Ошибка', 'Не хватает места в цеху!'); return; }
 
-        let inv = STATE.company.inventory[eqType];
-        if (!inv || inv.qty < qty) { NOTIFY.error('Ошибка', 'Нет оборудования на складе.'); return; }
+        let cityId = biz.city || 'odesa';
+        let localWh = STATE.company.warehouses[cityId];
+        
+        // Оборудование берется со склада того города, где стоит завод
+        if (!localWh || !localWh.inventory[eqType] || localWh.inventory[eqType].qty < qty) { 
+            NOTIFY.error('Ошибка', `Нет оборудования на складе города ${GEO.getCity(cityId).name}.`); 
+            return; 
+        }
 
+        let inv = localWh.inventory[eqType];
         if (!biz.equipment.quality) biz.equipment.quality = 1.0;
         let eqQuality = inv.quality || 1.0; 
         
@@ -193,33 +191,31 @@ const PRODUCTION = {
 
         sortedBusinesses.forEach(biz => {
             if (!biz.assigned) biz.assigned = { junior: 0, middle: 0, senior: 0 };
-            if (!biz.routing) biz.routing = {}; // Теперь здесь хранятся штуки, склад по умолчанию
+            if (!biz.routing) biz.routing = {}; 
 
             let tpl = RECIPES.BUSINESSES[biz.type];
             let level = biz.level || 1;
-            let locMult = biz.locMult || 1.0; // Вытаскиваем множитель аренды локации
+            let cityId = biz.city || 'odesa';
+            let cityData = GEO.getCity(cityId);
+            let locMult = cityData.rentMult; 
             
-            // Аренда списывается с учетом наценки локации
             let dailyAdminCost = tpl.area * 2 * level * locMult; 
             STATE.finances.balance -= dailyAdminCost; 
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_admin', dailyAdminCost);
 
-            // --- НОВОЕ: ЛОГИКА СКЛАДА ДЛЯ МАГАЗИНОВ И ОФИСОВ ---
+            // Обработка магазинов и офисов маркетинга (им не нужен производственный цикл)
             if (tpl.isRetail || tpl.isMarketing) {
                 if (!biz.localInventory) biz.localInventory = {};
                 
-                // Переносим товары из буфера поставок на локальный склад магазина
                 if (biz.dailyIncoming) {
                     Object.keys(biz.dailyIncoming).forEach(k => {
                         let inc = biz.dailyIncoming[k];
                         if (inc.qty > 0) {
-                            // Считаем текущий занятый объем склада магазина
                             let currentVol = 0;
                             Object.keys(biz.localInventory).forEach(ik => {
                                 currentVol += biz.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0);
                             });
                             
-                            // Вместимость: 2 м3 на каждый 1 кв.м площади с учетом локации
                             let maxVol = tpl.area * level * locMult * 2; 
                             let itemVol = RECIPES.RESOURCES[k].volume || 0.1;
                             
@@ -231,8 +227,10 @@ const PRODUCTION = {
                             
                             if (toStore > 0) addToInventory(biz.localInventory, k, toStore, toStore * inc.avgCost, inc.quality);
                             
-                            // Если склад магазина забит, излишки возвращаются на Глобальный склад
-                            if (toReject > 0) addToInventory(STATE.company.inventory, k, toReject, toReject * inc.avgCost, inc.quality);
+                            // Излишки возвращаются на склад того города, где находится магазин
+                            if (toReject > 0 && STATE.company.warehouses[cityId]) {
+                                addToInventory(STATE.company.warehouses[cityId].inventory, k, toReject, toReject * inc.avgCost, inc.quality);
+                            }
                         }
                     });
                     biz.dailyIncoming = {}; 
@@ -259,12 +257,13 @@ const PRODUCTION = {
             let possibleOutput = Math.floor(maxOutByEquip * uiEfficiency * conditionMult);
 
             let inputsKeys = Object.keys(tpl.inputs);
+            let localWh = STATE.company.warehouses[cityId];
 
             let flushLeftovers = () => {
-                if (biz.dailyIncoming) {
+                if (biz.dailyIncoming && localWh) {
                     Object.keys(biz.dailyIncoming).forEach(k => {
                         let inc = biz.dailyIncoming[k];
-                        if (inc.qty > 0) addToInventory(STATE.company.inventory, k, inc.qty, inc.qty * inc.avgCost, inc.quality);
+                        if (inc.qty > 0) addToInventory(localWh.inventory, k, inc.qty, inc.qty * inc.avgCost, inc.quality);
                     });
                     biz.dailyIncoming = {}; 
                 }
@@ -288,7 +287,7 @@ const PRODUCTION = {
             inputsKeys.forEach(k => {
                 let reqNum = tpl.inputs[k];
                 let incomingQty = (biz.dailyIncoming && biz.dailyIncoming[k]) ? biz.dailyIncoming[k].qty : 0;
-                let globalQty = STATE.company.inventory[k] ? STATE.company.inventory[k].qty : 0;
+                let globalQty = (localWh && localWh.inventory[k]) ? localWh.inventory[k].qty : 0;
                 let totalAvail = incomingQty + globalQty;
 
                 if (totalAvail < possibleOutput * reqNum) {
@@ -296,12 +295,14 @@ const PRODUCTION = {
                 }
             });
 
+            // Проверка вместимости локального склада для готовой продукции
             let outVol = RECIPES.RESOURCES[tpl.output].volume || 0;
             let inVol = 0;
             inputsKeys.forEach(k => inVol += (RECIPES.RESOURCES[k].volume || 0) * tpl.inputs[k]);
             let netVol = outVol - inVol;
-            if (netVol > 0 && typeof WAREHOUSE !== 'undefined') {
-                let freeSpace = WAREHOUSE.getMaxVolume() - WAREHOUSE.getCurrentVolume();
+            
+            if (netVol > 0 && typeof WAREHOUSE !== 'undefined' && localWh) {
+                let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
                 let maxBySpace = Math.floor(freeSpace / netVol);
                 if (maxBySpace < possibleOutput) possibleOutput = maxBySpace;
             }
@@ -312,7 +313,7 @@ const PRODUCTION = {
                 inputsKeys.forEach(k => {
                     let reqTotal = tpl.inputs[k] * actualOutput;
                     let incInv = (biz.dailyIncoming && biz.dailyIncoming[k]) ? biz.dailyIncoming[k] : { qty: 0, avgCost: 0, quality: 1.0 };
-                    let globalInv = STATE.company.inventory[k] || { qty: 0, avgCost: 0, quality: 1.0 };
+                    let globalInv = (localWh && localWh.inventory[k]) ? localWh.inventory[k] : { qty: 0, avgCost: 0, quality: 1.0 };
                     
                     let takeIncoming = Math.min(incInv.qty, reqTotal); 
                     let takeGlobal = reqTotal - takeIncoming;          
@@ -335,11 +336,12 @@ const PRODUCTION = {
                 let q_mat = totalInputsCount > 0 ? (sumMatQuality / totalInputsCount) : 1.0;
                 let q_out = (q_eq * 0.1) + (q_mat * 0.3) + (q_hr * 0.2) + (q_tech * 0.4);
 
-                let bizSalaryCost = (biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary);
+                let citySalaryMult = cityData.salaryMult || 1.0;
+                let bizSalaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary)) * citySalaryMult;
+                
                 let totalProductionCost = materialsCost + bizSalaryCost + dailyAdminCost; 
                 biz.lastCogs = totalProductionCost / actualOutput;
 
-                // --- 4. ОТГРУЗКА ГОТОВОЙ ПРОДУКЦИИ (В ШТУКАХ) ---
                 let remainingOutput = actualOutput;
                 let remainingCost = totalProductionCost;
 
@@ -347,7 +349,6 @@ const PRODUCTION = {
                     let targetQty = biz.routing[destId];
                     if (targetQty <= 0) return;
                     
-                    // Берем либо столько, сколько заказано, либо всё что осталось
                     let shareQty = Math.min(targetQty, remainingOutput); 
                     if (shareQty === 0) return;
                     
@@ -359,15 +360,14 @@ const PRODUCTION = {
                     if (destBiz) {
                         if (!destBiz.dailyIncoming) destBiz.dailyIncoming = {};
                         addToInventory(destBiz.dailyIncoming, tpl.output, shareQty, shareCost, q_out);
-                    } else {
-                        // Если цех-получатель удален - на склад
-                        addToInventory(STATE.company.inventory, tpl.output, shareQty, shareCost, q_out);
+                    } else if (localWh) {
+                        addToInventory(localWh.inventory, tpl.output, shareQty, shareCost, q_out);
                     }
                 });
 
-                // Все излишки (или если маршруты не заданы) автоматически летят на склад
-                if (remainingOutput > 0) {
-                    addToInventory(STATE.company.inventory, tpl.output, remainingOutput, Math.max(0, remainingCost), q_out);
+                // Все излишки летят на локальный склад города
+                if (remainingOutput > 0 && localWh) {
+                    addToInventory(localWh.inventory, tpl.output, remainingOutput, Math.max(0, remainingCost), q_out);
                 }
 
                 let wearRate = 1.5 * (actualOutput / maxOutByEquip);
