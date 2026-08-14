@@ -1333,7 +1333,7 @@ const UI_DASHBOARD = {
         let tRev = t.rev_b2b + t.rev_b2g + tRevB2C + tRevOther;
         
         let yOpex = y.exp_salary + y.exp_admin + y.exp_hr + yExpFines + yExpRepair + yTaxPayroll + yExpMarketing + yExpLogistics;
-        let tOpex = t.exp_salary + t.exp_admin + t.exp_hr + tExpFines + tExpRepair + tTaxPayroll + tExpMarketing;
+        let tOpex = t.exp_salary + t.exp_admin + t.exp_hr + tExpFines + tExpRepair + tTaxPayroll + tExpMarketingtExpLogistics;
         
         let yEbitda = yRev - y.exp_materials - yOpex;
         let tEbitda = tRev - t.exp_materials - tOpex;
