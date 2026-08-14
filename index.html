@@ -709,37 +709,16 @@
             </div>
         </div>
 
-        <!-- ВКЛАДКА: СКЛАДЫ (НОВАЯ) -->
+        <!-- ВКЛАДКА: СКЛАДЫ (ОБНОВЛЕННАЯ) -->
         <div id="tab-warehouse" class="tab-content">
-            <div class="card">
-                <h3>Управление складскими мощностями (Логистические хабы)</h3>
-                <p><strong>Текущий уровень:</strong> <span id="ui-wh-lvl">...</span> | <strong>Админ. издержки:</strong> $<span id="ui-wh-rent" class="danger">...</span> / день</p>
-
-                <p style="margin: 0 0 10px 0;">Занято: <strong id="ui-wh-current">0</strong> м³ из <strong id="ui-wh-max">1000</strong> м³</p>
-
-                <div style="width: 100%; background: var(--surface-3); height: 10px; margin-bottom: 15px; border-radius: 4px; border: 1px solid var(--border);">
-                    <div id="ui-wh-bar" style="width: 0%; background: var(--blue); height: 100%; border-radius: 3px; transition: width 0.3s;"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dcdde1;">
+                <div>
+                    <h2 style="margin: 0 0 5px 0; color: #2c3e50;">Логистические хабы</h2>
+                    <small style="color:var(--text-dim);">Управляйте складами, проверяйте запасы и отгружайте товары в магазины.</small>
                 </div>
-
-                <button id="ui-wh-upgrade-btn" style="background: var(--orange);">Управление складами (Карта)</button>
+                <button onclick="UI_DASHBOARD.showCityModal('warehouse')" style="background: var(--blue); font-weight: bold;">+ Построить новый склад</button>
             </div>
-
-            <div class="card">
-                <h3>Складские запасы (В наличии)</h3>
-                <p><small>Товары распределены по региональным складам. Отгрузка в другой город потребует оплаты транспортных расходов.</small></p>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Товарная позиция</th>
-                            <th>В наличии</th>
-                            <th>Качество</th>
-                            <th>Ср. Себестоимость</th>
-                            <th>Общая стоимость</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ui-warehouse-body"></tbody>
-                </table>
-            </div>
+            <ul id="ui-warehouse-list" style="padding-left: 0; margin-top: 10px; list-style-type: none;"></ul>
         </div>
 
         <!-- ВКЛАДКА: ПРОИЗВОДСТВО -->
