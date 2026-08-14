@@ -1168,19 +1168,6 @@ const UI_DASHBOARD = {
 
     // --- 9. ФИНАНСОВАЯ ОТЧЕТНОСТЬ (МСФО) ---
     updateFinanceTab() {
-        // 1.1. Инвентаризация (Глобальный склад + Полки магазинов)
-        let inventoryValue = 0;
-        if (STATE.company.warehouses) {
-            Object.keys(STATE.company.warehouses).forEach(cId => {
-                let wh = STATE.company.warehouses[cId];
-                if (wh.inventory) {
-                    Object.keys(wh.inventory).forEach(k => {
-                        inventoryValue += wh.inventory[k].qty * wh.inventory[k].avgCost;
-                    });
-                }
-            });
-        }
-        
         if (!document.getElementById('ui-balance-sheet') || typeof LEDGER === 'undefined') return;
         LEDGER.init();
         
@@ -1193,11 +1180,22 @@ const UI_DASHBOARD = {
             STATE.finances.deposits.forEach(d => { depositsValue += d.amount + d.accrued; });
         }
 
-        // 1.1. Инвентаризация (Глобальный склад + Полки магазинов)
+        // 1.1. Инвентаризация (Мульти-склады + Полки магазинов)
         let inventoryValue = 0;
-        Object.keys(STATE.company.inventory).forEach(k => {
-            inventoryValue += STATE.company.inventory[k].qty * STATE.company.inventory[k].avgCost;
-        });
+        
+        // Считаем товары на складах всех городов
+        if (STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.inventory) {
+                    Object.keys(wh.inventory).forEach(k => {
+                        inventoryValue += wh.inventory[k].qty * wh.inventory[k].avgCost;
+                    });
+                }
+            });
+        }
+        
+        // Считаем товары на полках магазинов
         STATE.company.businesses.forEach(b => {
             if (b.localInventory) {
                 Object.keys(b.localInventory).forEach(k => {
@@ -1241,11 +1239,16 @@ const UI_DASHBOARD = {
             }
         });
 
-        // 2.2. Склад
-        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouse) {
-            for (let i = 1; i < STATE.company.warehouse.level; i++) {
-                realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
-            }
+        // 2.2. Мульти-Склады
+        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.level > 0) {
+                    for (let i = 1; i < wh.level; i++) {
+                        realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
+                    }
+                }
+            });
         }
         
         // 2.3. НИИ
@@ -1254,7 +1257,7 @@ const UI_DASHBOARD = {
             for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
             
             if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
-                let pcPrice = RECIPES.RESOURCES['smart_pc'].basePrice || 800;
+                let pcPrice = RECIPES.RESOURCES['smart_pc'] ? RECIPES.RESOURCES['smart_pc'].basePrice : (RECIPES.RESOURCES['pc_workstation'] ? RECIPES.RESOURCES['pc_workstation'].basePrice : 800);
                 let rndCond = STATE.rnd.facility.equipment.condition || 0;
                 equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * (rndCond / 100);
             }
@@ -1310,7 +1313,7 @@ const UI_DASHBOARD = {
             </table>
         `;
 
-        // --- РАСЧЕТ И ОТРИСОВКА P&L (ниже идет ваш старый код без изменений) ---
+        // --- РАСЧЕТ И ОТРИСОВКА P&L ---
         let y = STATE.ledger.yesterday;
         let t = STATE.ledger.total;
         
@@ -1321,9 +1324,8 @@ const UI_DASHBOARD = {
         let yTaxPayroll = y.exp_taxes_payroll || 0; let tTaxPayroll = t.exp_taxes_payroll || 0;
         let yTaxCorp = y.exp_taxes_corp || 0; let tTaxCorp = t.exp_taxes_corp || 0;
         
-        // Выделение B2C и Маркетинга
         let yRevB2C = y.rev_b2c || 0; let tRevB2C = t.rev_b2c || 0;
-        let yRevOther = y.rev_other || 0; let tRevOther = t.rev_other || 0; // <--- Случайные события
+        let yRevOther = y.rev_other || 0; let tRevOther = t.rev_other || 0; 
         let yExpMarketing = y.exp_marketing || 0; let tExpMarketing = t.exp_marketing || 0;
         
         let yRev = y.rev_b2b + y.rev_b2g + yRevB2C + yRevOther;
