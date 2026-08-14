@@ -2120,7 +2120,7 @@ const UI_DASHBOARD = {
 
         let modal = document.createElement('div');
         modal.id = 'event-modal';
-        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(3px);';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(3px);';
         
         let logsHtml = '';
         if (!STATE.eventLog || STATE.eventLog.length === 0) {
@@ -2158,7 +2158,7 @@ const UI_DASHBOARD = {
 
         let modal = document.createElement('div');
         modal.id = 'city-modal';
-        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
         
         let title = actionType === 'warehouse' ? 'Где открываем или расширяем склад?' : 'Выберите город для инвестиций';
         if (bizType && typeof RECIPES !== 'undefined' && RECIPES.BUSINESSES[bizType]) {
