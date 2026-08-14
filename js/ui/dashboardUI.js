@@ -921,109 +921,130 @@ const UI_DASHBOARD = {
         }
     },
 
-    // --- 12. БИРЖА (B2B РЫНОК) С ФИЛЬТРАМИ ---
+// --- НОВАЯ ВКЛАДКА: B2B БИРЖА (Мульти-склад + Качество) ---
     updateMarketTab() {
-        let marketBody = document.getElementById('ui-market-businesses');
-        if (!marketBody) return;
-        
-        // ЗАЩИТА 1: Если переменные фильтров потерялись, создаем их на лету
-        if (!this.marketFilter) this.marketFilter = 'all';
-        if (!this.marketOptions) this.marketOptions = { hideEmpty: false, onlyMyStock: false };
-        if (this.isMarketOptOpen === undefined) this.isMarketOptOpen = false;
+        let marketContainer = document.getElementById('ui-market-businesses');
+        if (!marketContainer || typeof MARKET === 'undefined') return;
 
-        // ЗАЩИТА 2: Проверяем, существует ли список розничных товаров (от крашей recipes.js)
-        let retailAccepts = [];
-        if (RECIPES.BUSINESSES.retail_store && RECIPES.BUSINESSES.retail_store.accepts) {
-            retailAccepts = RECIPES.BUSINESSES.retail_store.accepts;
+        // 1. Формируем список доступных складов игрока
+        let cityOptions = '';
+        if (STATE.company.warehouses) {
+            Object.keys(CITIES).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh && wh.level > 0) {
+                    let maxVol = WAREHOUSE.getMaxVolume(cId);
+                    let curVol = WAREHOUSE.getCurrentVolume(cId);
+                    let freeSpace = Math.max(0, maxVol - curVol).toFixed(1);
+                    cityOptions += `<option value="${cId}">${CITIES[cId].name} (Свободно: ${freeSpace} м³)</option>`;
+                }
+            });
         }
 
-        // Генерация кнопок-фильтров
-        let filtersHtml = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap:wrap; gap:10px;">
-                <div style="display:flex; background:var(--surface-2); padding:4px; border-radius:8px; border:1px solid var(--border);">
-                    <button onclick="UI_DASHBOARD.setMarketFilter('all')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='all'?'var(--blue)':'transparent'}; color:${this.marketFilter==='all'?'white':'var(--text-dim)'}">Все</button>
-                    <button onclick="UI_DASHBOARD.setMarketFilter('raw')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='raw'?'var(--blue)':'transparent'}; color:${this.marketFilter==='raw'?'white':'var(--text-dim)'}">Сырьё</button>
-                    <button onclick="UI_DASHBOARD.setMarketFilter('components')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='components'?'var(--blue)':'transparent'}; color:${this.marketFilter==='components'?'white':'var(--text-dim)'}">Компоненты</button>
-                    <button onclick="UI_DASHBOARD.setMarketFilter('retail')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='retail'?'var(--blue)':'transparent'}; color:${this.marketFilter==='retail'?'white':'var(--text-dim)'}">Розничные</button>
-                    <button onclick="UI_DASHBOARD.setMarketFilter('equipment')" style="border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:500; background:${this.marketFilter==='equipment'?'var(--blue)':'transparent'}; color:${this.marketFilter==='equipment'?'white':'var(--text-dim)'}">Оборудование</button>
-                </div>
+        if (cityOptions === '') {
+            marketContainer.innerHTML = '<div style="padding: 20px; text-align:center; color:#7f8c8d;">У вас нет ни одного активного склада! Сначала постройте хаб.</div>';
+            return;
+        }
 
-                <div style="position:relative;">
-                    <button onclick="UI_DASHBOARD.toggleMarketOptMenu()" class="btn-secondary" style="padding:8px 15px; border-radius:6px;">⚙️ Фильтры</button>
-                    
-                    <div style="display:${this.isMarketOptOpen?'block':'none'}; position:absolute; top:40px; right:0; background:white; border:1px solid var(--border); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.1); padding:15px; min-width:250px; z-index:100;">
-                        <h4 style="margin:0 0 10px 0; color:var(--text);">Ручные параметры</h4>
-                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:10px; font-size:0.95em;">
-                            <input type="checkbox" ${this.marketOptions.hideEmpty ? 'checked' : ''} onchange="UI_DASHBOARD.toggleMarketOpt('hideEmpty')"> Скрыть товары без запасов на бирже
-                        </label>
-                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.95em;">
-                            <input type="checkbox" ${this.marketOptions.onlyMyStock ? 'checked' : ''} onchange="UI_DASHBOARD.toggleMarketOpt('onlyMyStock')"> Показывать только то, что есть на моем складе
-                        </label>
-                    </div>
-                </div>
-            </div>
+        // 2. Блок выбора логистического маршрута
+        let html = `
+        <div style="margin-bottom: 15px; padding: 15px; background: #e8f8f5; border: 1px solid #1abc9c; border-radius: 6px; display: flex; align-items: center;">
+            <strong style="color: #16a085; margin-right: 15px;">📍 Склад назначения (доставка):</strong>
+            <select id="market-target-city" style="padding: 6px 10px; font-size: 1em; border-radius: 4px; border: 1px solid #bdc3c7; cursor: pointer; flex-grow: 1; max-width: 400px;">
+                ${cityOptions}
+            </select>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.95em;">
+            <tr style="border-bottom: 2px solid #34495e; text-align: left;">
+                <th style="padding: 10px;">Сырье / Товар</th>
+                <th style="padding: 10px;">Резерв биржи</th>
+                <th style="padding: 10px;">Характеристики</th>
+                <th style="padding: 10px;">Цена (B2B)</th>
+                <th style="padding: 10px;">Ордер на закупку</th>
+            </tr>
         `;
-
-        let tableHeader = `
-        <table class="data-table" style="width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-            <tr style="background: var(--surface-2); text-align: left;">
-                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Товар</th>
-                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Остаток на Бирже</th>
-                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Мой склад</th>
-                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Опт. Цена</th>
-                <th style="padding: 12px; border-bottom: 2px solid var(--border);">Действия</th>
-            </tr>`;
-
-        let rowsHtml = '';
-        let itemsCount = 0;
 
         Object.keys(RECIPES.RESOURCES).forEach(key => {
             let res = RECIPES.RESOURCES[key];
-            let inv = STATE.company.inventory[key] || { qty: 0, avgCost: 0, quality: 1.0 };
+            let basePrice = MARKET.getCurrentPrice(key);
+            let availQty = MARKET.getAvailablePool(key);
             
-            // ЛОГИКА ФИЛЬТРАЦИИ ПО КАТЕГОРИЯМ
-            let isRaw = !!res.isRaw;
-            let isEq = !!res.isEquipment;
-            let isRet = retailAccepts.includes(key);
-            let isComp = !isRaw && !isEq && !isRet;
+            // Заготовка: В будущем качество и бренд сырья на бирже могут зависеть от поставщиков
+            let b2bQuality = 1.00;
+            let b2bBrand = 0;
 
-            let matchCategory = false;
-            if (this.marketFilter === 'all') matchCategory = true;
-            else if (this.marketFilter === 'raw' && isRaw) matchCategory = true;
-            else if (this.marketFilter === 'equipment' && isEq) matchCategory = true;
-            else if (this.marketFilter === 'retail' && isRet) matchCategory = true;
-            else if (this.marketFilter === 'components' && isComp) matchCategory = true;
-
-            if (!matchCategory) return; 
-
-            // ЛОГИКА РУЧНЫХ ФИЛЬТРОВ (Галочки)
-            let availablePool = typeof MARKET !== 'undefined' ? MARKET.getAvailablePool(key) : 0;
-            if (this.marketOptions.hideEmpty && availablePool <= 0) return;
-            if (this.marketOptions.onlyMyStock && inv.qty <= 0) return;
-
-            itemsCount++;
-            let basePrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(key) : res.basePrice;
-            
-            rowsHtml += `
-            <tr style="background: #fdfefe; border-bottom: 1px dashed var(--border);">
-                <td style="padding: 12px;"><strong>${res.name}</strong><br><small style="color:var(--text-dim);">${isRaw?'Сырьё':(isEq?'Оборудование':(isRet?'Ритейл':'Компонент'))}</small></td>
-                <td style="padding: 12px;"><strong style="color: ${availablePool > 0 ? 'var(--blue)' : 'var(--red)'};">${availablePool} шт.</strong></td>
-                <td style="padding: 12px;"><strong style="color: var(--green);">${inv.qty} шт.</strong><br><small style="color:var(--text-dim);">По $${formatMoney(inv.avgCost)}</small></td>
-                <td style="padding: 12px;"><strong>$${formatMoney(basePrice)}</strong></td>
-                <td style="padding: 12px; white-space: nowrap;">
-                    <div style="display:flex; gap:5px;">
-                        <input type="number" id="buy-qty-${key}" value="10" min="1" max="${availablePool}" style="width: 60px; padding: 4px; border:1px solid var(--border); border-radius:4px;">
-                        <button onclick="UI_DASHBOARD.submitBuy('${key}')" ${availablePool <= 0 ? 'disabled style="opacity:0.5;"' : 'style="background:var(--blue); padding: 5px 12px; color: white; border: none; border-radius:4px; cursor: pointer;"'}>Купить</button>
+            html += `
+            <tr style="border-bottom: 1px solid #ecf0f1;">
+                <td style="padding: 10px;">
+                    <strong style="color: #2c3e50; font-size: 1.1em;">${res.name}</strong><br>
+                    <small style="color:#7f8c8d;">Объем: ${res.volume || 1} м³/шт</small>
+                </td>
+                <td style="padding: 10px; color:#2980b9; font-weight:bold; font-size: 1.1em;">
+                    ${availQty} шт.
+                </td>
+                <td style="padding: 10px;">
+                    <span style="color:#8e44ad; font-weight:bold;">★ ${b2bQuality.toFixed(2)}</span><br>
+                    <small style="color:#e67e22;">Бренд: ${b2bBrand}</small>
+                </td>
+                <td style="padding: 10px; font-size: 1.2em; color: #27ae60;">
+                    <strong>$${formatMoney(basePrice)}</strong>
+                </td>
+                <td style="padding: 10px; min-width: 220px;">
+                    <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                        <input type="number" id="buy-qty-${key}" value="10" min="1" style="width: 80px; padding: 6px; border: 1px solid #bdc3c7; border-radius: 4px;">
+                        <button onclick="UI_DASHBOARD.submitBuy('${key}')" style="background:#3498db; color:white; border:none; padding: 6px 15px; border-radius: 4px; cursor:pointer; font-weight: bold;">Купить</button>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button onclick="document.getElementById('buy-qty-${key}').value = 10" style="font-size:0.8em; padding:3px 6px; background:#ecf0f1; border:1px solid #bdc3c7; border-radius:3px; cursor:pointer;">10</button>
+                        <button onclick="document.getElementById('buy-qty-${key}').value = 100" style="font-size:0.8em; padding:3px 6px; background:#ecf0f1; border:1px solid #bdc3c7; border-radius:3px; cursor:pointer;">100</button>
+                        <button onclick="document.getElementById('buy-qty-${key}').value = 1000" style="font-size:0.8em; padding:3px 6px; background:#ecf0f1; border:1px solid #bdc3c7; border-radius:3px; cursor:pointer;">1k</button>
+                        <button onclick="UI_DASHBOARD.setMaxBuy('${key}')" style="font-size:0.8em; padding:3px 8px; background:#f39c12; color:white; border:none; border-radius:3px; cursor:pointer; font-weight:bold;">MAX</button>
                     </div>
                 </td>
             </tr>`;
         });
 
-        if (itemsCount === 0) {
-            rowsHtml = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-dim);">По вашим фильтрам ничего не найдено.</td></tr>';
-        }
+        html += `</table>`;
+        marketContainer.innerHTML = html;
+    },
 
-        marketBody.innerHTML = filtersHtml + tableHeader + rowsHtml + '</table>';
+    // Умный расчет максимально возможной закупки
+    setMaxBuy(itemKey) {
+        let cityId = document.getElementById('market-target-city').value;
+        let price = MARKET.getCurrentPrice(itemKey);
+        let availMarket = MARKET.getAvailablePool(itemKey);
+        
+        // 1. Ограничение по деньгам
+        let maxByMoney = Math.floor(STATE.finances.balance / price);
+        
+        // 2. Ограничение по объему выбранного склада
+        let itemVol = RECIPES.RESOURCES[itemKey].volume || 1.0;
+        let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId);
+        let maxBySpace = Math.floor(freeSpace / itemVol);
+
+        // Итоговый максимум — это наименьшее из трех узких мест
+        let maxPossible = Math.min(availMarket, maxByMoney, maxBySpace);
+        if (maxPossible < 0) maxPossible = 0;
+
+        document.getElementById(`buy-qty-${itemKey}`).value = maxPossible;
+    },
+
+    // Отправка ордера на закупку с указанием города
+    submitBuy(itemKey) {
+        let input = document.getElementById(`buy-qty-${itemKey}`);
+        let citySelect = document.getElementById('market-target-city');
+        
+        if (input && citySelect) {
+            let qty = parseInt(input.value);
+            let cityId = citySelect.value;
+            
+            if (isNaN(qty) || qty <= 0) {
+                NOTIFY.error('Ошибка', 'Введите корректное количество для покупки.');
+                return;
+            }
+            if (typeof MARKET !== 'undefined') {
+                MARKET.buy(itemKey, qty, cityId);
+            }
+        }
     },
 
     // --- 8. БАНК И КРЕДИТЫ ---
