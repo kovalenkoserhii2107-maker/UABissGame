@@ -2194,30 +2194,30 @@ const UI_DASHBOARD = {
             } else {
                 actionCode = `document.getElementById('city-modal').remove(); PRODUCTION.buyBusiness('${bizType}', '${cId}');`;
                 citiesHtml += `
-                <div onclick="${actionCode}" style="background:#fdfefe; border:2px solid #bdc3c7; border-radius:8px; padding:15px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="flex:1;">
-                        <strong style="font-size:1.2em; color:#2c3e50;">${city.name}</strong><br>
+                <div onclick="${actionCode}" style="background:#fdfefe; border:1px solid #bdc3c7; border-radius:12px; padding:12px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div style="min-width:120px;">
+                        <strong style="font-size:1.1em; color:#2c3e50;">${city.name}</strong><br>
                         <small style="color:#7f8c8d;">Население: ${(city.population/1000000).toFixed(1)} млн</small>
                     </div>
-                    <div style="flex:1; text-align:center; font-size:0.85em;">
+                    <div style="font-size:0.82em; min-width:130px;">
                         <div style="color:${rentColor};">🏢 Аренда: <strong>x${city.rentMult}</strong></div>
                         <div style="color:${salaryColor};">💼 Зарплаты: <strong>x${city.salaryMult}</strong></div>
                     </div>
-                    <div style="flex:1; text-align:right;">
-                        <div style="color:${demandColor}; font-size:1.1em;">🛒 Спрос: <strong>x${city.demandMult}</strong></div>
+                    <div style="text-align:right; min-width:100px;">
+                        <div style="color:${demandColor}; font-size:1.05em;">🛒 Спрос: <strong>x${city.demandMult}</strong></div>
                     </div>
                 </div>`;
             }
         });
 
         modal.innerHTML = `
-            <div style="background:#fff; padding:25px; border-radius:12px; width:550px; max-width:95%; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-                <h2 style="margin-top:0; color:#2c3e50; font-size: 1.5em; border-bottom:2px solid #ecf0f1; padding-bottom:10px;">🗺️ ${title}</h2>
-                <p style="color:#7f8c8d; margin-bottom: 20px; font-size:0.9em;">Выберите локацию. От города зависят постоянные расходы и объем рынка сбыта.</p>
-                <div style="max-height: 50vh; overflow-y: auto; padding-right: 5px;">
+            <div style="background:#fff; padding:20px 16px; border-radius:16px; width:550px; max-width:94%; box-shadow: 0 20px 50px rgba(0,0,0,0.25); max-height:85vh; display:flex; flex-direction:column;">
+                <h2 style="margin-top:0; color:#2c3e50; font-size: 1.3em; border-bottom:2px solid #ecf0f1; padding-bottom:10px;">🗺️ ${title}</h2>
+                <p style="color:#7f8c8d; margin-bottom: 12px; font-size:0.85em;">Выберите локацию. От города зависят расходы и спрос.</p>
+                <div style="overflow-y: auto; flex: 1; padding-right: 4px;">
                     ${citiesHtml}
                 </div>
-                <button onclick="document.getElementById('city-modal').remove()" style="width:100%; padding:12px; margin-top:15px; background:#ecf0f1; border:none; border-radius:6px; color:#7f8c8d; font-weight: bold; cursor:pointer;">Отмена</button>
+                <button onclick="document.getElementById('city-modal').remove()" style="width:100%; padding:12px; margin-top:12px; background:#ecf0f1; border:none; border-radius:10px; color:#7f8c8d; font-weight: bold; cursor:pointer; min-height:44px;">Отмена</button>
             </div>
         `;
         document.body.appendChild(modal);
