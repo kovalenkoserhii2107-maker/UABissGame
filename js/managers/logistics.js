@@ -10,7 +10,6 @@ const LOGISTICS = {
                 d.daysLeft--;
                 
                 if (d.daysLeft <= 0) {
-                    // Ищем склад назначения (если город удалили из игры, везем в Одессу)
                     let targetWh = STATE.company.warehouses[d.targetCity];
                     if (!targetWh) targetWh = STATE.company.warehouses['odesa']; 
 
@@ -21,8 +20,11 @@ const LOGISTICS = {
                     let inv = targetWh.inventory[d.item];
                     let oldTotal = inv.qty * inv.avgCost;
                     
+                    // ВАЖНО: Добавляем транспортные расходы (d.logCost) в себестоимость товара!
+                    let deliveryLogCost = d.logCost || 0;
+                    
                     inv.qty += d.qty;
-                    inv.avgCost = (oldTotal + d.cost) / inv.qty;
+                    inv.avgCost = (oldTotal + d.cost + deliveryLogCost) / inv.qty;
                     
                     STATE.logistics.deliveries.splice(i, 1); 
                 }
