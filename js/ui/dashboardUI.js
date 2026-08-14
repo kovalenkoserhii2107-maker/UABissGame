@@ -686,6 +686,7 @@ const UI_DASHBOARD = {
         let totalRent = 0;
         let activeWhs = [];
 
+        // Собираем данные только по тем городам, где уровень склада > 0
         Object.keys(STATE.company.warehouses).forEach(cId => {
             let wh = STATE.company.warehouses[cId];
             if (wh.level > 0) {
@@ -698,9 +699,15 @@ const UI_DASHBOARD = {
         });
 
         if (document.getElementById('ui-wh-lvl')) {
-            // Показываем все активные склады или заглушку
-            document.getElementById('ui-wh-lvl').innerText = activeWhs.length > 0 ? activeWhs.join(' | ') : 'Нет построенных складов';
-            if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = formatMoney(totalRent);
+            // Если складов нет, выводим красное предупреждение
+            if (activeWhs.length === 0) {
+                document.getElementById('ui-wh-lvl').innerHTML = '<span style="color:#e74c3c; font-weight:bold;">Нет построенных складов</span>';
+                if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = '0';
+            } else {
+                document.getElementById('ui-wh-lvl').innerHTML = activeWhs.join(' | ');
+                if(document.getElementById('ui-wh-rent')) document.getElementById('ui-wh-rent').innerText = formatMoney(totalRent);
+            }
+            
             if(document.getElementById('ui-wh-current')) document.getElementById('ui-wh-current').innerText = totalCurVol.toFixed(1);
             if(document.getElementById('ui-wh-max')) document.getElementById('ui-wh-max').innerText = totalMaxVol;
             
@@ -714,7 +721,7 @@ const UI_DASHBOARD = {
             let btn = document.getElementById('ui-wh-upgrade-btn');
             if (btn) {
                 btn.style.display = 'inline-block';
-                // Кнопка теперь динамическая и вызывает Модальное Окно
+                // Кнопка меняет текст и вызывает модальное окно выбора города
                 btn.innerText = activeWhs.length === 0 ? 'Открыть первый складской хаб' : 'Управление складами (Карта)';
                 btn.onclick = () => UI_DASHBOARD.showCityModal('warehouse');
             }
