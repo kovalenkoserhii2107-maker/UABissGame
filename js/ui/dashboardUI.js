@@ -1783,72 +1783,16 @@ const UI_DASHBOARD = {
         
         let breakdownDiv = document.getElementById('ui-hr-breakdown');
         if (breakdownDiv) {
-            let html = '<strong>В штате числятся:</strong> ';
             let parts = [];
             Object.keys(HR.GRADES).forEach(grade => {
                 let total = STATE.hr && STATE.hr.staff ? (STATE.hr.staff[grade] || 0) : 0;
-                if (total > 0) parts.push(`<strong>${HR.GRADES[grade].name.split(' ')[0]}:</strong> ${total} чел.`);
+                if (total > 0) parts.push(`<span style="background:var(--blue-dim); color:var(--blue); padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:600;">${HR.GRADES[grade].name.split(' ')[0]}: ${total}</span>`);
             });
             
             let trainingCount = STATE.hr.trainingQueue.length;
-            if (trainingCount > 0) parts.push(`<strong>На учебе:</strong> ${trainingCount} чел.`);
+            if (trainingCount > 0) parts.push(`<span style="background:var(--orange-dim); color:var(--orange); padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:600;">На учебе: ${trainingCount}</span>`);
             
-            breakdownDiv.innerHTML = parts.join(' | ');
-        }
-        
-        let poolDiv = document.getElementById('ui-hr-pool');
-        if (poolDiv) {
-            poolDiv.innerHTML = '';
-            Object.keys(HR.GRADES).forEach(grade => {
-                let unassigned = HR.getUnassigned(grade);
-                let gTpl = HR.GRADES[grade];
-                
-                let trainBtn = '';
-                if (gTpl.canTrainTo && unassigned > 0) {
-                    let nextTpl = HR.GRADES[gTpl.canTrainTo];
-                    trainBtn = `<button onclick="HR.startTraining('${grade}')" style="background:#2980b9; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; margin-right:5px;">Начать обучение до ${nextTpl.name.split(' ')[0]} ($${gTpl.trainingCost} / ${gTpl.trainingDays} дн.)</button>`;
-                }
-                
-                let fireBtn = '';
-                if (unassigned > 0) {
-                    fireBtn = `<button onclick="HR.fire('${grade}')" style="background:#c0392b; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer;">Уволить</button>`;
-                }
-                
-                poolDiv.innerHTML += `
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ecf0f1; padding:8px 0;">
-                    <div>
-                        <strong>${gTpl.name}</strong> <span style="color:#7f8c8d;">(Свободно: ${unassigned})</span>
-                    </div>
-                    <div>
-                        ${trainBtn}
-                        ${fireBtn}
-                    </div>
-                </div>`;
-            });
-        }
-    },
-
-    // --- 7. HR И КАДРЫ ---
-    updateHRTab() {
-        if (typeof HR === 'undefined' || !document.getElementById('ui-staff-total')) return;
-        HR.init();
-        
-        document.getElementById('ui-staff-total').innerText = HR.getTotalStaff();
-        if(document.getElementById('ui-staff-salary')) document.getElementById('ui-staff-salary').innerText = formatMoney(HR.getDailySalaryFund());
-        
-        let breakdownDiv = document.getElementById('ui-hr-breakdown');
-        if (breakdownDiv) {
-            let html = '<strong>В штате числятся:</strong> ';
-            let parts = [];
-            Object.keys(HR.GRADES).forEach(grade => {
-                let total = STATE.hr && STATE.hr.staff ? (STATE.hr.staff[grade] || 0) : 0;
-                if (total > 0) parts.push(`<strong>${HR.GRADES[grade].name.split(' ')[0]}:</strong> ${total} чел.`);
-            });
-            
-            let trainingCount = STATE.hr.trainingQueue.length;
-            if (trainingCount > 0) parts.push(`<strong>На учебе:</strong> ${trainingCount} чел.`);
-            
-            breakdownDiv.innerHTML = html + (parts.length > 0 ? parts.join(' | ') : '<small style="color:#7f8c8d;">Нет сотрудников</small>');
+            breakdownDiv.innerHTML = parts.length > 0 ? parts.join('') : '<span style="color:var(--text-faint); font-size:0.9rem;">Штат пуст</span>';
         }
 
         let hireFactory = document.getElementById('ui-hire-factory');
@@ -1859,12 +1803,20 @@ const UI_DASHBOARD = {
             
             Object.keys(HR.GRADES).forEach(grade => {
                 let info = HR.GRADES[grade];
-                let btnHtml = `<button onclick="HR.hire('${grade}')" style="width: 100%; margin-bottom: 8px; padding: 10px; background: ${info.role === 'rnd' ? '#1abc9c' : '#2ecc71'}; text-align: left; display: flex; justify-content: space-between; border-radius: 4px;">
-                    <span><strong>Найм: ${info.name.split(' ')[0]}</strong> ($${formatMoney(info.hireCost)})</span>
-                    <span style="opacity: 0.9;">ЗП: $${formatMoney(info.salary)}/дн</span>
-                </button>`;
+                let isFactory = info.role === 'factory';
                 
-                if (info.role === 'factory') hireFactory.innerHTML += btnHtml;
+                let btnHtml = `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); box-shadow:var(--shadow-card);">
+                    <div>
+                        <div style="font-weight:600; color:var(--text);">${info.name.split(' ')[0]}</div>
+                        <div style="font-size:0.8rem; color:var(--text-dim);">ЗП: $${formatMoney(info.salary)}/дн</div>
+                    </div>
+                    <button onclick="HR.hire('${grade}')" style="background:${isFactory ? 'var(--blue)' : '#1abc9c'}; color:white; border:none; padding:8px 16px; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; font-size:0.85rem; transition:transform 0.1s;">
+                        Найм ($${formatMoney(info.hireCost)})
+                    </button>
+                </div>`;
+                
+                if (isFactory) hireFactory.innerHTML += btnHtml;
                 else hireRnd.innerHTML += btnHtml;
             });
         }
@@ -1872,21 +1824,30 @@ const UI_DASHBOARD = {
         let trainingDiv = document.getElementById('ui-hr-training-list');
         if (trainingDiv) {
             if (STATE.hr.trainingQueue.length === 0) {
-                trainingDiv.innerHTML = '<small style="color:#7f8c8d;">В данный момент никто не проходит обучение.</small>';
+                trainingDiv.innerHTML = '<span style="color:var(--text-dim); font-size:0.9rem;">В данный момент никто не проходит обучение.</span>';
             } else {
-                let tHtml = '<ul style="padding-left: 20px;">';
+                let tHtml = '<div style="display:flex; flex-direction:column; gap:10px;">';
                 STATE.hr.trainingQueue.forEach(t => {
                     let nextName = HR.GRADES[t.toGrade].name.split(' ')[0];
-                    tHtml += `<li style="margin-bottom: 5px;">Повышение до <strong>${nextName}</strong>. Осталось учиться: <strong class="danger">${t.daysLeft} дн.</strong> <small style="color:#7f8c8d;">(Сотрудник получает ЗП $${t.salary}/дн)</small></li>`;
+                    tHtml += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+                        <div>
+                            <span style="font-weight:600; color:var(--text);">Повышение квалификации ➔ ${nextName}</span>
+                            <div style="font-size:0.8rem; color:var(--text-dim);">Сотрудник получает стипендию $${t.salary}/дн</div>
+                        </div>
+                        <div style="background:var(--orange-dim); color:var(--orange); font-weight:bold; padding:6px 12px; border-radius:8px; font-size:0.9rem;">
+                            Осталось ${t.daysLeft} дн.
+                        </div>
+                    </div>`;
                 });
-                tHtml += '</ul>';
+                tHtml += '</div>';
                 trainingDiv.innerHTML = tHtml;
             }
         }
 
         let reserveContainer = document.getElementById('ui-hr-reserve-table');
         if (reserveContainer) {
-            let html = `<table style="width: 100%; border-collapse: collapse;">`;
+            let html = `<div style="display:flex; flex-direction:column; gap:10px;">`;
             Object.keys(HR.GRADES).forEach(grade => {
                 let free = HR.getUnassigned(grade);
                 let info = HR.GRADES[grade];
@@ -1897,15 +1858,22 @@ const UI_DASHBOARD = {
                 
                 let trainBtn = '';
                 if (trainCost) {
-                    trainBtn = `<button onclick="HR.train('${grade}')" ${free===0?'disabled style="opacity:0.5;"':'style="background:#3498db;"'}>Начать обучение до ${nextGradeName} ($${trainCost} / ${trainDays} дн.)</button>`;
+                    trainBtn = `<button onclick="HR.train('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--blue); color:white; border:none; padding:6px 12px; border-radius:6px; font-size:0.85rem; font-weight:600; cursor:pointer;">Обучить до ${nextGradeName} ($${trainCost})</button>`;
                 }
 
-                html += `<tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 10px 0;"><strong>${info.name}</strong> <span style="color:#7f8c8d;">(Свободно: ${free})</span></td>
-                    <td style="text-align: right;">${trainBtn} <button onclick="HR.fire('${grade}')" ${free===0?'disabled style="opacity:0.5;"':'style="background:#e74c3c;"'}>Уволить</button></td>
-                </tr>`;
+                html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                    <div>
+                        <strong style="color:var(--text);">${info.name}</strong> 
+                        <span style="color:var(--text-dim); margin-left:8px;">(Доступно: ${free})</span>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        ${trainBtn} 
+                        <button onclick="HR.fire('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--red-dim); color:var(--red); border:none; padding:6px 12px; border-radius:6px; font-size:0.85rem; font-weight:600; cursor:pointer;">Уволить</button>
+                    </div>
+                </div>`;
             });
-            html += `</table>`;
+            html += `</div>`;
             reserveContainer.innerHTML = html;
         }
     },
