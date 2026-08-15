@@ -1534,7 +1534,7 @@ const UI_DASHBOARD = {
                                 Поставка: <span style="color:var(--blue);">${offer.qty} шт.</span> ${name}
                             </div>
                             <div style="display:flex; gap:10px; font-size:0.85rem;">
-                                <span style="background:rgba(255,149,0,0.1); color:var(--orange); padding:4px 8px; border-radius:6px; font-weight:600;">Качество: ${stars} (${offer.quality.toFixed(1)})</span>
+                                <span style="background:rgba(255,149,0,0.1); color:var(--orange); padding:4px 8px; border-radius:6px; font-weight:600;">Качество: ${stars} (${Number(offer.quality).toFixed(1)})</span>
                                 <span style="background:rgba(0,122,255,0.1); color:var(--blue); padding:4px 8px; border-radius:6px; font-weight:600;">Бренд: +${offer.brandPower}</span>
                                 <span style="background:rgba(255,59,48,0.1); color:var(--red); padding:4px 8px; border-radius:6px; font-weight:600;">Истекает: через ${daysLeft} дн.</span>
                             </div>

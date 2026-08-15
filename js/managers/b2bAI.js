@@ -138,7 +138,7 @@ const B2B_AI = {
                 qty: qty,
                 price: price,
                 totalPrice: qty * price,
-                quality: (1.0 + Math.random() * 4.0).toFixed(1),
+                quality: parseFloat((1.0 + Math.random() * 4.0).toFixed(1)),
                 brandName: corp.name,
                 brandPower: corp.brandMod,
                 accepted: false,
