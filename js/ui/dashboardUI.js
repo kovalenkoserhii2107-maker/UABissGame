@@ -959,235 +959,446 @@ const UI_DASHBOARD = {
     },
 
     // --- 6. ПРОИЗВОДСТВО ---
+    // Словарь иконок для производств
+    _bizIcons: {
+        bakery_fab: '🥖', canned_food_fab: '🥫', clothes_fab: '👗',
+        chem_fab: '🧴', furniture_fab: '🪑', optics_fab: '🔭',
+        fab_3d: '🖨️', microchips: '💾', servo_fab: '⚙️',
+        battery_fab: '🔋', camera_fab: '📷', drop_fab: '🪂',
+        software_co: '💻', ai_lab: '🤖', pc_fab: '🖥️',
+        radio_fab: '📡', drones: '🚁', drones_ai_fab: '🛡️',
+        retail_eq_fab: '🏪', server_fab: '🗄️', marketing_agency: '📢',
+    },
+
+    // Тематические цвета по категориям
+    _bizColors: {
+        bakery_fab: '#e67e22', canned_food_fab: '#e74c3c', clothes_fab: '#e91e63',
+        chem_fab: '#9c27b0', furniture_fab: '#795548', optics_fab: '#2196f3',
+        fab_3d: '#00bcd4', microchips: '#3f51b5', servo_fab: '#607d8b',
+        battery_fab: '#ff9800', camera_fab: '#4caf50', drop_fab: '#009688',
+        software_co: '#673ab7', ai_lab: '#f44336', pc_fab: '#2196f3',
+        radio_fab: '#00838f', drones: '#1565c0', drones_ai_fab: '#b71c1c',
+        retail_eq_fab: '#388e3c', server_fab: '#455a64',
+    },
+
+    toggleBuyPanel() {
+        let panel = document.getElementById('ui-buy-panel');
+        if (!panel) return;
+        let isHidden = panel.style.display === 'none';
+        panel.style.display = isHidden ? 'block' : 'none';
+        let btn = document.getElementById('btn-toggle-buy');
+        if (btn) btn.textContent = isHidden ? '✕ Закрыть каталог' : '+ Построить предприятие';
+    },
+
     updateProductionTab() {
-        let bizList = document.getElementById('ui-active-businesses');
-        if (bizList) {
-            bizList.innerHTML = '';
-            
-            let hasFactories = false;
-            STATE.company.businesses.forEach(biz => {
-                let tpl = RECIPES.BUSINESSES[biz.type];
-                
-                // ИГНОРИРУЕМ МАГАЗИНЫ И ОФИСЫ
-                if (tpl.isRetail || tpl.isMarketing) return; 
-                hasFactories = true;
-
-                if (!biz.assigned) biz.assigned = { junior: 0, middle: 0, senior: 0 };
-                if (!biz.stats) biz.stats = { daily: 0, monthly: [], total: 0, lastOutput: 0 };
-                
-                let level = biz.level || 1;
-                let eqCount = biz.equipment.count || 0;
-                let maxSlots = level * (tpl.slotsPerLevel || 10);
-                let cond = biz.equipment.condition !== undefined ? biz.equipment.condition : 100;
-                let condColor = cond >= 70 ? '#27ae60' : (cond >= 30 ? '#f39c12' : '#c0392b');
-
-                let maxStaff = tpl.staffReq * level;
-                let maxOutByEquip = eqCount * (tpl.outputPerMachine || 10);
-                let assignedTotal = biz.assigned.junior + biz.assigned.middle + biz.assigned.senior;
-                let isFull = assignedTotal >= maxStaff;
-                
-                let prodPower = (biz.assigned.junior * HR.GRADES.junior.prodMult) + (biz.assigned.middle * HR.GRADES.middle.prodMult) + (biz.assigned.senior * HR.GRADES.senior.prodMult);
-                let uiEfficiency = maxStaff > 0 ? (prodPower / maxStaff) : 1;
-                if (assignedTotal === 0) uiEfficiency = 0;
-
-                let conditionMult = cond < 70 ? Math.max(0.0, cond/70) : 1.0;
-                let effPercent = (uiEfficiency * conditionMult * 100).toFixed(0);
-                let statusColor = (uiEfficiency * conditionMult) >= 1 ? 'color: #8e44ad; font-weight: bold;' : ((uiEfficiency * conditionMult) > 0 ? 'color: #27ae60;' : 'color: #c0392b;');
-                
-                let cityId = biz.city || 'odesa';
-                let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { name: cityId, rentMult: 1.0, salaryMult: 1.0 };
-                
-                let salaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary)) * cityData.salaryMult;
-                let adminCost = tpl.area * 2 * level * cityData.rentMult; 
-                let upgradeCost = tpl.area * 50 * level * cityData.rentMult;
-
-                let localWh = STATE.company.warehouses[cityId];
-                if (localWh && !localWh.inventory) localWh.inventory = {};
-                let localInv = localWh ? localWh.inventory : {};
-
-                let outRes = RECIPES.RESOURCES[tpl.output] || { name: 'Услуги' };
-                let outInvData = localInv[tpl.output] || { qty: 0, quality: 1.0 };
-                let outInv = outInvData.qty;
-                
-                let capacityOutput = Math.floor(maxOutByEquip * uiEfficiency * conditionMult);
-                
-                let eqQuality = biz.equipment.quality || 1.0;
-                let q_tech = (STATE.rnd && STATE.rnd.techLevels && STATE.rnd.techLevels[biz.type]) ? STATE.rnd.techLevels[biz.type] : 1.0;
-                let q_hr = 1.0;
-                if (assignedTotal > 0) q_hr = ((biz.assigned.junior * 1.0) + (biz.assigned.middle * 1.2) + (biz.assigned.senior * 1.5)) / assignedTotal;
-
-                let whOptions = '';
-                Object.keys(STATE.company.warehouses).forEach(cId => {
-                    if (STATE.company.warehouses[cId].level > 0) {
-                        let cName = typeof GEO !== 'undefined' ? GEO.getCity(cId).name : cId;
-                        whOptions += `<option value="${cId}">${cName}</option>`;
-                    }
-                });
-
-                let sourceWh = biz.sourceWh || cityId;
-                let targetWh = biz.targetWh || cityId;
-         
-                let inputsHtml = '';
-                let sumMatQuality = 0;
-                let totalInputsCount = 0;
-                let inputsKeys = Object.keys(tpl.inputs);
-                
-                if (inputsKeys.length === 0) {
-                    inputsHtml = '<span style="color:#7f8c8d;">Не требует сырья</span>';
-                } else {
-                    let inArr = [];
-                    inputsKeys.forEach(k => {
-                        let reqNum = tpl.inputs[k];
-                        let inName = RECIPES.RESOURCES[k].name;
-                        
-                        let invMat = localInv[k];
-                        let inQty = invMat ? invMat.qty : 0;
-                        let matQ = (invMat && invMat.qty > 0) ? (invMat.quality || 1.0) : 1.0;
-                        
-                        sumMatQuality += (matQ * reqNum);
-                        totalInputsCount += reqNum;
-                        
-                        let totalReqPerDay = reqNum * capacityOutput;
-                        let color = inQty < totalReqPerDay ? 'color: #e74c3c; font-weight:bold;' : 'color: #27ae60;';
-                        inArr.push(`&bull; ${inName}: <span style="${color}">${inQty} шт.</span> (Расход: ${totalReqPerDay}/дн)`);
-                    });
-                    inputsHtml = inArr.join('<br>');
-                }
-                
-                let q_mat = totalInputsCount > 0 ? (sumMatQuality / totalInputsCount) : 1.0;
-                let expectedQuality = (eqQuality * 0.1) + (q_mat * 0.3) + (q_hr * 0.2) + (q_tech * 0.4);
-
-                let freeJun = typeof HR !== 'undefined' ? HR.getUnassigned('junior') : 0;
-                let freeMid = typeof HR !== 'undefined' ? HR.getUnassigned('middle') : 0;
-                let freeSen = typeof HR !== 'undefined' ? HR.getUnassigned('senior') : 0;
-
-                if (!biz.routing) biz.routing = {};
-                let viableRoutes = [];
-                
-                STATE.company.businesses.forEach(other => {
-                    if (other.uid === biz.uid) return;
-                    let otherTpl = RECIPES.BUSINESSES[other.type];
-                    
-                    if (otherTpl.inputs && otherTpl.inputs[tpl.output] !== undefined) {
-                        viableRoutes.push({ id: other.uid, name: `🏭 ${other.name || otherTpl.name}` });
-                    }
-                    else if (otherTpl.isRetail && otherTpl.accepts && otherTpl.accepts.includes(tpl.output)) {
-                        viableRoutes.push({ id: other.uid, name: `🏪 ${other.name}` });
-                    }
-                });
-
-                let logisticsSelectorsHtml = `
-                <div style="background: #fdfefe; padding: 12px; border: 1px solid #bdc3c7; border-radius: 4px; margin-top: 12px; font-size: 0.9em;">
-                    <strong style="color:#2c3e50;">ЛОГИСТИКА И СНАБЖЕНИЕ:</strong><br>
-                    <div style="display:flex; justify-content:space-between; margin-top:8px; align-items:center;">
-                        <span>Брать сырьё со склада:</span>
-                        <select id="source-wh-${biz.uid}" onchange="UI_DASHBOARD.setFactoryWarehouses(${biz.uid})" style="padding:4px; border-radius:3px; border: 1px solid #ccc; width: 140px;">
-                            ${whOptions.replace(`value="${sourceWh}"`, `value="${sourceWh}" selected`)}
-                        </select>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-top:8px; align-items:center;">
-                        <span>Отгружать готовую продукцию на:</span>
-                        <select id="target-wh-${biz.uid}" onchange="UI_DASHBOARD.setFactoryWarehouses(${biz.uid})" style="padding:4px; border-radius:3px; border: 1px solid #ccc; width: 140px;">
-                            ${whOptions.replace(`value="${targetWh}"`, `value="${targetWh}" selected`)}
-                        </select>
-                    </div>
-                    <div style="color:#c0392b; margin-top:8px; font-size:0.85em; font-style:italic;">* Доставка из других городов платная (за м³ и км пробега).</div>
-                </div>`;
-                
-                // ВОССТАНОВЛЕНА ПЕРЕМЕННАЯ routingHtml
-                let routingHtml = `<div style="background: #fff3cd; padding: 10px; border-radius: 4px; border: 1px solid #f1c40f; margin-top: 10px;">
-                    <strong style="font-size: 0.9em; color: #b9770e;">АВТО-ПОСТАВКИ (ШТУК В ДЕНЬ):</strong><br>`;
-
-                if (viableRoutes.length === 0) {
-                    routingHtml += `<div style="font-size:0.85em; color:#7f8c8d;">Нет потребителей. 100% уходит на выбранный склад.</div>`;
-                } else {
-                    viableRoutes.forEach(route => {
-                        let val = biz.routing[route.id] || 0;
-                        routingHtml += `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; font-size:0.85em;">
-                            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%;">${route.name}</span>
-                            <span style="white-space: nowrap;"><input type="number" id="route-${biz.uid}-${route.id}" value="${val}" min="0" style="width:65px; padding:2px; text-align:right;"> шт.</span>
-                        </div>`;
-                    });
-                }
-                let destsStr = viableRoutes.map(r => r.id).join(',');
-                if (viableRoutes.length > 0) {
-                    routingHtml += `<button onclick="UI_DASHBOARD.saveRoutes(${biz.uid}, '${destsStr}')" style="margin-top:8px; background:#d4ac0d; padding:4px 10px; font-size:0.85em; width:100%; color:#fff; border:none; cursor:pointer;">Сохранить квоты отгрузки</button>`;
-                }
-                routingHtml += `</div>`;
-
-                let displayName = biz.name || tpl.name;
-
-                bizList.innerHTML += `
-                <li style="margin-bottom: 20px; background: #fff; padding: 15px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
-                        <strong style="font-size: 1.1em; color: #2c3e50;">${displayName} <span style="color:#3498db; font-size: 0.9em; font-weight: normal;">(Ур. ${level} | Технология v${q_tech.toFixed(2)})</span></strong>
-                        <span style="${statusColor}">[КПД: ${effPercent}%]</span>
-                    </div>
-                    
-                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 250px;">
-                            <p style="margin: 0 0 5px 0;"><strong>📦 Выпуск:</strong> ${outRes.name} <span style="color:#2980b9; margin-left:10px;">(Склад ${cityData.name}: <strong>${outInv} шт.</strong>)</span></p>
-                            <p style="margin: 0 0 5px 0;"><small>План (Мощность) на сегодня: <strong style="color:#27ae60; font-size: 1.2em;">${capacityOutput} шт.</strong> / Лимит станков: ${maxOutByEquip}</small></p>
-                            <p style="margin: 0 0 10px 0;"><small>✨ Ожидаемое качество: <strong style="color:#8e44ad; font-size: 1.1em;">★ ${expectedQuality.toFixed(2)}</strong></small></p>
-                            
-                            <div style="background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.85em; border: 1px dashed #ccc;">
-                                <strong style="color:#7f8c8d;">ПОТРЕБНОСТЬ В СЫРЬЕ (Склад ${cityData.name}):</strong><br>
-                                ${inputsHtml}
-                            </div>
-                            ${logisticsSelectorsHtml}
-                            ${routingHtml}
-                            <div style="background: #fdfefe; padding: 10px; border: 1px dashed #bdc3c7; border-radius: 4px; margin-top: 10px; font-size: 0.9em;">
-                                <strong style="color:#2c3e50;">ОБОРУДОВАНИЕ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
-                                Слотов: <strong>${eqCount} / ${maxSlots}</strong> | Состояние: <strong style="color:${condColor}">${cond.toFixed(1)}%</strong>
-                                <div style="margin-top: 8px; display: flex; gap: 5px;">
-                                    <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:50px; padding:3px;">
-                                    <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#2980b9; flex-grow: 1; border: none; color: white; cursor: pointer;">Установить</button>
-                                    <button onclick="PRODUCTION.repairEquipment(${biz.uid})" style="background:#8e44ad; padding: 4px 12px; border: none; color: white; cursor: pointer;">ТО</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="flex: 1; min-width: 250px;">
-                            <p style="margin: 0 0 5px 0;"><small>💰 ФОТ: <strong>$${formatMoney(salaryCost)}</strong>/дн | 🏢 Админ: <strong>$${formatMoney(adminCost)}</strong>/дн</small></p>
-                            <p style="margin: 0 0 10px 0;"><small>🏭 Текущая Себестоимость: <strong>$${formatMoney(biz.lastCogs)}</strong>/шт</small></p>
-                            
-                            <div style="background: #ecf0f1; padding: 10px; border-radius: 4px;">
-                                <strong style="font-size: 0.85em; color: #7f8c8d;">СМЕНА (${assignedTotal} / ${maxStaff} мест):</strong><br>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.9em;">
-                                    <span>Jun <small style="color:#7f8c8d;">(Резерв: ${freeJun})</small></span>
-                                    <div>
-                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'junior')" ${biz.assigned.junior===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#e74c3c; border:none; color:white; cursor:pointer;">-</button> 
-                                        <strong style="display:inline-block; width:20px; text-align:center;">${biz.assigned.junior}</strong> 
-                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'junior')" ${isFull||freeJun===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#2ecc71; border:none; color:white; cursor:pointer;">+</button>
-                                    </div>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.9em;">
-                                    <span>Mid <small style="color:#7f8c8d;">(Резерв: ${freeMid})</small></span>
-                                    <div>
-                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'middle')" ${biz.assigned.middle===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#e74c3c; border:none; color:white; cursor:pointer;">-</button> 
-                                        <strong style="display:inline-block; width:20px; text-align:center;">${biz.assigned.middle}</strong> 
-                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'middle')" ${isFull||freeMid===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#2ecc71; border:none; color:white; cursor:pointer;">+</button>
-                                    </div>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.9em;">
-                                    <span>Sen <small style="color:#7f8c8d;">(Резерв: ${freeSen})</small></span>
-                                    <div>
-                                        <button onclick="HR.removeFromBusiness(${biz.uid}, 'senior')" ${biz.assigned.senior===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#e74c3c; border:none; color:white; cursor:pointer;">-</button> 
-                                        <strong style="display:inline-block; width:20px; text-align:center;">${biz.assigned.senior}</strong> 
-                                        <button onclick="HR.assignToBusiness(${biz.uid}, 'senior')" ${isFull||freeSen===0?'disabled style="opacity:0.5;"':''} style="padding: 2px 8px; background:#2ecc71; border:none; color:white; cursor:pointer;">+</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="margin-top: 15px; text-align: right; border-top: 1px solid #eee; padding-top: 10px;">
-                        <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; font-size: 0.85em; padding: 6px 12px; border-radius: 4px;">Расширить завод ($${formatMoney(upgradeCost)})</button>
-                    </div>
-                </li>`;
+        // ─── ДАШБОРД ──────────────────────────────────────────────────
+        let prodDash = document.getElementById('ui-prod-dashboard');
+        if (prodDash) {
+            let factories = STATE.company.businesses.filter(b => {
+                let t = RECIPES.BUSINESSES[b.type];
+                return t && !t.isRetail && !t.isMarketing;
             });
-            if (!hasFactories) bizList.innerHTML = '<li style="color:var(--text-dim);">У вас пока нет заводов. Откройте первый, инвестировав в производство.</li>';
+            let totalStaff = 0, totalEq = 0, totalOutput = 0, totalCost = 0;
+            factories.forEach(b => {
+                let t = RECIPES.BUSINESSES[b.type];
+                let assigned = (b.assigned.junior||0)+(b.assigned.middle||0)+(b.assigned.senior||0);
+                totalStaff += assigned;
+                totalEq += (b.equipment.count||0);
+                let lvl = b.level||1;
+                let maxOut = (b.equipment.count||0) * (t.outputPerMachine||10);
+                totalOutput += maxOut;
+                totalCost += (t.area*2*lvl) + assigned*200;
+            });
+            let dashMetrics = [
+                { icon:'🏭', label:'Заводов',    value: factories.length,           color:'var(--blue)' },
+                { icon:'👥', label:'Рабочих',    value: totalStaff,                 color:'var(--text)' },
+                { icon:'⚙️', label:'Станков',    value: totalEq,                    color:'var(--green)' },
+                { icon:'📦', label:'Мощность/дн', value: totalOutput + ' шт',       color:'#8e44ad' },
+                { icon:'💸', label:'Затраты/дн', value: '$'+formatMoney(totalCost), color:'var(--red)' },
+            ];
+            prodDash.innerHTML = dashMetrics.map(m => `
+                <div style="background:var(--surface); padding:14px 16px; border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow-card);">
+                    <div style="font-size:1.4rem; margin-bottom:4px;">${m.icon}</div>
+                    <div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700;">${m.label}</div>
+                    <div style="font-size:1.15rem; font-weight:800; color:${m.color}; margin-top:2px;">${m.value}</div>
+                </div>`).join('');
+        }
+
+        // ─── КАТАЛОГ ПОКУПКИ ───────────────────────────────────────────
+        let buyContainer = document.getElementById('ui-buy-businesses');
+        if (buyContainer) {
+            buyContainer.innerHTML = '';
+            const TIERS = {
+                food: { label: '🥗 Пищевая промышленность', color: '#e67e22', keys: ['bakery_fab','canned_food_fab'] },
+                light: { label: '👕 Лёгкая промышленность', color: '#e91e63', keys: ['clothes_fab','chem_fab','furniture_fab'] },
+                optics: { label: '🔬 Точная механика', color: '#2196f3', keys: ['fab_3d','optics_fab','camera_fab','drop_fab'] },
+                electronics: { label: '💡 Электроника и IT', color: '#3f51b5', keys: ['microchips','pc_fab','software_co','ai_lab'] },
+                defense: { label: '🛡️ Оборонная промышленность', color: '#b71c1c', keys: ['servo_fab','battery_fab','radio_fab','drones','drones_ai_fab'] },
+                equip: { label: '🏗️ Производство оборудования', color: '#607d8b', keys: ['retail_eq_fab','server_fab'] },
+            };
+
+            let html = '';
+            Object.values(TIERS).forEach(tier => {
+                let tierCards = '';
+                tier.keys.forEach(key => {
+                    let tpl = RECIPES.BUSINESSES[key];
+                    if (!tpl) return;
+                    let isUnlocked = (tpl.researchCost === 0) || (STATE.rnd && STATE.rnd.unlocked && STATE.rnd.unlocked.includes(key));
+                    let icon = this._bizIcons[key] || '🏭';
+                    let color = this._bizColors[key] || 'var(--blue)';
+                    let cost = tpl.area * 50;
+                    let inputsStr = Object.entries(tpl.inputs||{}).map(([k,v]) => {
+                        let r = RECIPES.RESOURCES[k];
+                        return `${r ? r.name : k} ×${v}`;
+                    }).join(', ') || 'Без сырья';
+                    let outRes = RECIPES.RESOURCES[tpl.output];
+
+                    if (!isUnlocked) {
+                        tierCards += `
+                        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px; opacity:0.6; position:relative; overflow:hidden;">
+                            <div style="position:absolute; top:8px; right:8px; background:rgba(142,68,173,0.15); color:#8e44ad; font-size:0.65rem; font-weight:700; padding:2px 7px; border-radius:6px; text-transform:uppercase;">🔒 Заблокировано</div>
+                            <div style="font-size:2rem; margin-bottom:8px; filter:grayscale(80%);">${icon}</div>
+                            <div style="font-weight:700; color:var(--text-dim); font-size:0.9rem; margin-bottom:4px;">${tpl.name}</div>
+                            <div style="font-size:0.72rem; color:var(--text-faint);">Требует исследования (${tpl.researchCost} RP)</div>
+                        </div>`;
+                        return;
+                    }
+
+                    tierCards += `
+                    <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-card); transition:transform 0.15s,box-shadow 0.15s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+                        <div style="background:${color}18; border-bottom:2px solid ${color}40; padding:14px 16px; display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:1.8rem;">${icon}</span>
+                            <div>
+                                <div style="font-weight:700; font-size:0.88rem; color:var(--text);">${tpl.name}</div>
+                                <div style="font-size:0.7rem; color:${color}; font-weight:600;">→ ${outRes ? outRes.name : tpl.output}</div>
+                            </div>
+                        </div>
+                        <div style="padding:12px 16px;">
+                            <div style="font-size:0.72rem; color:var(--text-dim); margin-bottom:6px;">📦 Сырьё: <span style="color:var(--text);">${inputsStr}</span></div>
+                            <div style="font-size:0.72rem; color:var(--text-dim); margin-bottom:10px;">⚙️ ${tpl.outputPerMachine} шт/станок · 👥 ${tpl.staffReq} чел./уровень</div>
+                            <div style="font-size:1rem; font-weight:800; color:${color}; margin-bottom:10px;">$${formatMoney(cost)}</div>
+                            <button onclick="PRODUCTION.buyBusiness('${key}')" style="width:100%; background:${color}; color:white; border:none; padding:9px; border-radius:8px; cursor:pointer; font-weight:700; font-size:0.85rem; transition:opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                                🏗️ Построить
+                            </button>
+                        </div>
+                    </div>`;
+                });
+
+                if (tierCards) {
+                    html += `<div style="grid-column:1/-1; display:flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:4px; padding-bottom:8px; border-bottom:1px solid var(--border);">
+                        <span style="font-size:1rem;">${tier.label.split(' ')[0]}</span>
+                        <span style="font-weight:700; color:${tier.color}; font-size:0.9rem;">${tier.label.slice(3)}</span>
+                    </div>${tierCards}`;
+                }
+            });
+            buyContainer.innerHTML = html || '<div style="color:var(--text-dim)">Нет доступных предприятий.</div>';
+        }
+
+        // ─── АКТИВНЫЕ ПРЕДПРИЯТИЯ ──────────────────────────────────────
+        let bizList = document.getElementById('ui-active-businesses');
+        if (!bizList) return;
+        bizList.innerHTML = '';
+
+        let hasFactories = false;
+        STATE.company.businesses.forEach(biz => {
+            let tpl = RECIPES.BUSINESSES[biz.type];
+            if (!tpl || tpl.isRetail || tpl.isMarketing) return;
+            hasFactories = true;
+
+            if (!biz.assigned) biz.assigned = { junior: 0, middle: 0, senior: 0 };
+            if (!biz.stats) biz.stats = { daily: 0, monthly: [], total: 0, lastOutput: 0 };
+
+            let level = biz.level || 1;
+            let eqCount = biz.equipment.count || 0;
+            let maxSlots = level * (tpl.slotsPerLevel || 10);
+            let cond = biz.equipment.condition !== undefined ? biz.equipment.condition : 100;
+            let maxStaff = tpl.staffReq * level;
+            let maxOutByEquip = eqCount * (tpl.outputPerMachine || 10);
+            let assignedTotal = (biz.assigned.junior||0) + (biz.assigned.middle||0) + (biz.assigned.senior||0);
+            let isFull = assignedTotal >= maxStaff;
+
+            let prodPower = ((biz.assigned.junior||0) * HR.GRADES.junior.prodMult) + ((biz.assigned.middle||0) * HR.GRADES.middle.prodMult) + ((biz.assigned.senior||0) * HR.GRADES.senior.prodMult);
+            let uiEfficiency = maxStaff > 0 ? (prodPower / maxStaff) : 0;
+            if (assignedTotal === 0) uiEfficiency = 0;
+
+            let condMult = cond < 70 ? Math.max(0, cond/70) : 1.0;
+            let effPercent = Math.round(uiEfficiency * condMult * 100);
+            let effColor = effPercent >= 80 ? 'var(--green)' : (effPercent >= 40 ? 'var(--orange)' : 'var(--red)');
+            let condColor = cond >= 70 ? 'var(--green)' : (cond >= 30 ? 'var(--orange)' : 'var(--red)');
+
+            let cityId = biz.city || 'odesa';
+            let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { name: 'Одесса', rentMult: 1.0, salaryMult: 1.0 };
+
+            let salaryCost = (((biz.assigned.junior||0) * HR.GRADES.junior.salary) + ((biz.assigned.middle||0) * HR.GRADES.middle.salary) + ((biz.assigned.senior||0) * HR.GRADES.senior.salary)) * cityData.salaryMult;
+            let adminCost = tpl.area * 2 * level * cityData.rentMult;
+            let upgradeCost = tpl.area * 50 * level * cityData.rentMult;
+
+            let localWh = STATE.company.warehouses[cityId];
+            if (localWh && !localWh.inventory) localWh.inventory = {};
+            let localInv = localWh ? localWh.inventory : {};
+
+            let outRes = RECIPES.RESOURCES[tpl.output] || { name: 'Продукция' };
+            let outInvData = localInv[tpl.output] || { qty: 0 };
+            let outInv = outInvData.qty;
+
+            let capacityOutput = Math.floor(maxOutByEquip * uiEfficiency * condMult);
+
+            let q_tech = (STATE.rnd && STATE.rnd.techLevels && STATE.rnd.techLevels[biz.type]) ? STATE.rnd.techLevels[biz.type] : 1.0;
+            let q_hr = 1.0;
+            if (assignedTotal > 0) q_hr = (((biz.assigned.junior||0)*1.0) + ((biz.assigned.middle||0)*1.2) + ((biz.assigned.senior||0)*1.5)) / assignedTotal;
+
+            let sumMatQ = 0, totalMatCount = 0;
+            let inputsKeys = Object.keys(tpl.inputs || {});
+            let inputsHtml = '';
+            if (inputsKeys.length === 0) {
+                inputsHtml = '<span style="color:var(--text-dim); font-size:0.82rem;">Не требует сырья</span>';
+            } else {
+                inputsKeys.forEach(k => {
+                    let reqNum = tpl.inputs[k];
+                    let inName = RECIPES.RESOURCES[k] ? RECIPES.RESOURCES[k].name : k;
+                    let invMat = localInv[k];
+                    let inQty = invMat ? invMat.qty : 0;
+                    let matQ = (invMat && invMat.qty > 0) ? (invMat.quality || 1.0) : 1.0;
+                    sumMatQ += matQ * reqNum;
+                    totalMatCount += reqNum;
+                    let totalReqPerDay = reqNum * capacityOutput;
+                    let hasEnough = inQty >= totalReqPerDay;
+                    inputsHtml += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:var(--surface); border-radius:6px; border:1px solid var(--border); margin-bottom:4px;">
+                        <span style="font-size:0.8rem; color:var(--text);">${inName}</span>
+                        <div style="text-align:right;">
+                            <span style="font-weight:700; font-size:0.82rem; color:${hasEnough ? 'var(--green)' : 'var(--red)'};">${inQty} шт</span>
+                            <span style="font-size:0.72rem; color:var(--text-dim); margin-left:4px;">(−${totalReqPerDay}/дн)</span>
+                        </div>
+                    </div>`;
+                });
+            }
+
+            let q_mat = totalMatCount > 0 ? (sumMatQ / totalMatCount) : 1.0;
+            let expectedQuality = ((biz.equipment.quality || 1.0) * 0.1 + q_mat * 0.3 + q_hr * 0.2 + q_tech * 0.4).toFixed(2);
+
+            let freeJun = typeof HR !== 'undefined' ? HR.getUnassigned('junior') : 0;
+            let freeMid = typeof HR !== 'undefined' ? HR.getUnassigned('middle') : 0;
+            let freeSen = typeof HR !== 'undefined' ? HR.getUnassigned('senior') : 0;
+
+            // Склады для логистики
+            let whOptions = '';
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                if (STATE.company.warehouses[cId].level > 0) {
+                    let cName = typeof GEO !== 'undefined' ? GEO.getCity(cId).name : cId;
+                    whOptions += `<option value="${cId}">${cName}</option>`;
+                }
+            });
+            let sourceWh = biz.sourceWh || cityId;
+            let targetWh = biz.targetWh || cityId;
+
+            // Авто-маршруты
+            let viableRoutes = [];
+            STATE.company.businesses.forEach(other => {
+                if (other.uid === biz.uid) return;
+                let ot = RECIPES.BUSINESSES[other.type];
+                if (ot.inputs && ot.inputs[tpl.output] !== undefined) {
+                    viableRoutes.push({ id: other.uid, name: `🏭 ${other.name || ot.name}` });
+                } else if (ot.isRetail && ot.accepts && ot.accepts.includes(tpl.output)) {
+                    viableRoutes.push({ id: other.uid, name: `🏪 ${other.name}` });
+                }
+            });
+            if (!biz.routing) biz.routing = {};
+            let routingHtml = '';
+            if (viableRoutes.length > 0) {
+                routingHtml = viableRoutes.map(r => {
+                    let val = biz.routing[r.id] || 0;
+                    return `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:0.8rem; color:var(--text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.name}</span>
+                        <div style="display:flex; align-items:center; gap:4px; margin-left:8px;">
+                            <input type="number" id="route-${biz.uid}-${r.id}" value="${val}" min="0" style="width:56px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:0.8rem; text-align:right;">
+                            <span style="font-size:0.75rem; color:var(--text-dim);">шт</span>
+                        </div>
+                    </div>`;
+                }).join('');
+                let destsStr = viableRoutes.map(r => r.id).join(',');
+                routingHtml += `<button onclick="UI_DASHBOARD.saveRoutes(${biz.uid},'${destsStr}')" style="width:100%; background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:7px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.8rem; margin-top:4px;">💾 Сохранить маршруты</button>`;
+            }
+
+            let eqPct = maxSlots > 0 ? Math.round((eqCount/maxSlots)*100) : 0;
+            let staffPct = maxStaff > 0 ? Math.round((assignedTotal/maxStaff)*100) : 0;
+            let freeSlots = maxSlots - eqCount;
+            let bizIcon = this._bizIcons[biz.type] || '🏭';
+            let bizColor = this._bizColors[biz.type] || 'var(--blue)';
+
+            bizList.innerHTML += `
+            <div style="background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow-card); overflow:hidden; margin-bottom:20px;">
+
+                <!-- ЗАГОЛОВОК -->
+                <div style="background:linear-gradient(135deg,${bizColor}18,${bizColor}06); border-bottom:2px solid ${bizColor}40; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div style="font-size:2.2rem;">${bizIcon}</div>
+                        <div>
+                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">${biz.name || tpl.name}</div>
+                            <div style="font-size:0.78rem; color:var(--text-dim);">
+                                Ур.${level} • 📍 ${cityData.name} • 🔬 Тех. v${q_tech.toFixed(2)} • 💸 $${formatMoney(adminCost+salaryCost)}/дн
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <div style="background:${effColor}; color:white; padding:6px 14px; border-radius:8px; font-weight:800; font-size:0.95rem;">КПД ${effPercent}%</div>
+                        <div style="background:rgba(142,68,173,0.1); color:#8e44ad; padding:6px 12px; border-radius:8px; font-weight:700; font-size:0.88rem;">★ ${expectedQuality}</div>
+                        <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:7px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem;">⬆️ $${formatMoney(upgradeCost)}</button>
+                    </div>
+                </div>
+
+                <!-- ТЕЛО: 3 колонки -->
+                <div style="padding:18px 20px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px;">
+
+                    <!-- КОЛОНКА 1: Производство и сырьё -->
+                    <div style="display:flex; flex-direction:column; gap:14px;">
+                        <div style="background:var(--surface-2); border-radius:10px; padding:14px; border:1px solid var(--border);">
+                            <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:10px;">📦 Производство</div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem;">
+                                <span style="color:var(--text-dim);">Продукт</span>
+                                <span style="font-weight:700; color:${bizColor};">${outRes.name}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.85rem;">
+                                <span style="color:var(--text-dim);">Мощность</span>
+                                <span style="font-weight:700; color:var(--green);">${capacityOutput} шт/дн</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:0.85rem;">
+                                <span style="color:var(--text-dim);">На складе</span>
+                                <span style="font-weight:700;">${outInv} шт</span>
+                            </div>
+                            <div style="height:1px; background:var(--border); margin-bottom:10px;"></div>
+                            <div style="font-size:0.68rem; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:8px;">🧪 Сырьё на складе (${cityData.name})</div>
+                            ${inputsHtml || '<span style="color:var(--text-dim); font-size:0.82rem;">Не требует сырья</span>'}
+                        </div>
+
+                        <!-- Логистика -->
+                        <div style="background:var(--surface-2); border-radius:10px; padding:14px; border:1px solid var(--border);">
+                            <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:10px;">🚛 Логистика</div>
+                            <div style="font-size:0.78rem; color:var(--text-dim); margin-bottom:6px;">Брать сырьё:</div>
+                            <select id="source-wh-${biz.uid}" onchange="UI_DASHBOARD.setFactoryWarehouses(${biz.uid})" style="width:100%; padding:7px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:0.82rem; margin-bottom:8px;">
+                                ${whOptions.replace(`value="${sourceWh}"`, `value="${sourceWh}" selected`)}
+                            </select>
+                            <div style="font-size:0.78rem; color:var(--text-dim); margin-bottom:6px;">Отгружать на:</div>
+                            <select id="target-wh-${biz.uid}" onchange="UI_DASHBOARD.setFactoryWarehouses(${biz.uid})" style="width:100%; padding:7px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:0.82rem;">
+                                ${whOptions.replace(`value="${targetWh}"`, `value="${targetWh}" selected`)}
+                            </select>
+                            <div style="font-size:0.72rem; color:var(--text-faint); margin-top:6px;">* Межгородские поставки платные</div>
+                        </div>
+                    </div>
+
+                    <!-- КОЛОНКА 2: Персонал -->
+                    <div style="display:flex; flex-direction:column; gap:14px;">
+                        <div style="background:var(--surface-2); border-radius:10px; padding:14px; border:1px solid var(--border);">
+                            <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:10px;">👥 Смена (${assignedTotal}/${maxStaff})</div>
+                            <div style="background:var(--surface); border-radius:6px; height:6px; overflow:hidden; margin-bottom:12px;">
+                                <div style="height:100%; width:${staffPct}%; background:${bizColor}; border-radius:6px; transition:width 0.4s;"></div>
+                            </div>
+                            ${[
+                                {key:'junior',  label:'🔧 Junior', free: freeJun, color:'rgba(52,152,219,0.1)', textColor:'var(--blue)'},
+                                {key:'middle',  label:'⚙️ Middle', free: freeMid, color:'rgba(39,174,96,0.1)', textColor:'var(--green)'},
+                                {key:'senior',  label:'🔬 Senior', free: freeSen, color:'rgba(142,68,173,0.1)', textColor:'#8e44ad'},
+                            ].map(g => `
+                            <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div>
+                                        <div style="font-weight:600; font-size:0.85rem; color:var(--text);">${g.label}</div>
+                                        <div style="font-size:0.72rem; color:var(--text-dim);">Резерв: ${g.free}</div>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <button onclick="HR.removeFromBusiness(${biz.uid},'${g.key}')" ${biz.assigned[g.key]===0?'disabled':''} style="background:var(--red-dim); color:var(--red); border:none; width:28px; height:28px; border-radius:6px; font-size:1rem; cursor:pointer; ${biz.assigned[g.key]===0?'opacity:0.4;cursor:not-allowed;':''}">−</button>
+                                        <span style="font-weight:700; min-width:18px; text-align:center;">${biz.assigned[g.key]||0}</span>
+                                        <button onclick="HR.assignToBusiness(${biz.uid},'${g.key}')" ${(isFull||g.free===0)?'disabled':''} style="background:${g.color}; color:${g.textColor}; border:none; width:28px; height:28px; border-radius:6px; font-size:1rem; cursor:pointer; ${(isFull||g.free===0)?'opacity:0.4;cursor:not-allowed;':''}">+</button>
+                                    </div>
+                                </div>
+                            </div>`).join('')}
+                            <div style="margin-top:6px; background:var(--surface-2); border-radius:8px; padding:8px 10px; font-size:0.78rem; display:flex; justify-content:space-between;">
+                                <span style="color:var(--text-dim);">💰 ФОТ</span>
+                                <span style="font-weight:700; color:var(--red);">$${formatMoney(salaryCost)}/дн</span>
+                            </div>
+                        </div>
+
+                        <!-- Авто-маршруты -->
+                        ${viableRoutes.length > 0 ? `
+                        <div style="background:rgba(243,156,18,0.06); border-radius:10px; padding:14px; border:1px solid rgba(243,156,18,0.2);">
+                            <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--orange); font-weight:700; margin-bottom:10px;">📬 Авто-поставки (шт/день)</div>
+                            ${routingHtml}
+                        </div>` : ''}
+                    </div>
+
+                    <!-- КОЛОНКА 3: Оборудование и КПД -->
+                    <div style="display:flex; flex-direction:column; gap:14px;">
+
+                        <!-- Оборудование -->
+                        <div style="background:var(--surface-2); border-radius:10px; padding:14px; border:1px solid var(--border);">
+                            <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:10px;">⚙️ Оборудование</div>
+                            <div style="display:flex; justify-content:space-between; font-size:0.82rem; margin-bottom:4px;">
+                                <span style="color:var(--text-dim);">Установлено</span>
+                                <span style="font-weight:700;">${eqCount} / ${maxSlots}</span>
+                            </div>
+                            <div style="background:var(--surface); border-radius:6px; height:6px; overflow:hidden; margin-bottom:4px;">
+                                <div style="height:100%; width:${eqPct}%; background:var(--blue); border-radius:6px; transition:width 0.4s;"></div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-size:0.82rem; margin-bottom:10px;">
+                                <span style="color:var(--text-dim);">Состояние</span>
+                                <span style="font-weight:700; color:${condColor};">${cond.toFixed(0)}%</span>
+                            </div>
+                            <div style="background:var(--surface); border-radius:6px; height:4px; overflow:hidden; margin-bottom:12px;">
+                                <div style="height:100%; width:${Math.max(0,Math.min(100,cond))}%; background:${condColor}; border-radius:6px;"></div>
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${Math.max(1,freeSlots)}" style="width:55px; padding:7px 6px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); text-align:center; font-weight:600; font-size:0.85rem;">
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="flex:1; background:rgba(52,152,219,0.1); color:var(--blue); border:1px solid rgba(52,152,219,0.3); padding:7px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.8rem;">⬇️ Установить</button>
+                                <button onclick="PRODUCTION.repairEquipment(${biz.uid})" style="background:rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:7px 10px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.8rem;">🔧 ТО</button>
+                            </div>
+                        </div>
+
+                        <!-- Общая эффективность -->
+                        <div style="background:${effColor}18; border-radius:10px; padding:16px; border:1px solid ${effColor}30;">
+                            <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:${effColor}; font-weight:700; margin-bottom:12px;">📊 Эффективность</div>
+                            <div style="text-align:center;">
+                                <div style="font-size:2.8rem; font-weight:900; color:${effColor}; line-height:1;">${effPercent}%</div>
+                                <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">${effPercent >= 80 ? '🔥 Завод работает на максимуме!' : effPercent >= 40 ? '⚙️ Есть потенциал роста' : assignedTotal === 0 ? '😴 Назначьте рабочих' : '⚠️ Требует внимания'}</div>
+                            </div>
+                            <div style="margin-top:14px; display:flex; flex-direction:column; gap:6px; font-size:0.78rem;">
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span style="color:var(--text-dim);">Кач. оборуд.</span><span style="font-weight:700;">${(biz.equipment.quality||1.0).toFixed(2)}</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span style="color:var(--text-dim);">Кач. персонала</span><span style="font-weight:700;">${q_hr.toFixed(2)}</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span style="color:var(--text-dim);">Технология</span><span style="font-weight:700; color:#8e44ad;">v${q_tech.toFixed(2)}</span>
+                                </div>
+                                <div style="height:1px; background:var(--border);"></div>
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span style="color:var(--text-dim);">Кач. продукта ★</span><span style="font-weight:800; color:#8e44ad;">${expectedQuality}</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span style="color:var(--text-dim);">Себестоимость</span><span style="font-weight:700; color:var(--red);">$${formatMoney(biz.lastCogs)}/шт</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>`;
+        });
+
+        if (!hasFactories) {
+            bizList.innerHTML = `
+            <div style="text-align:center; padding:60px 20px;">
+                <div style="font-size:4rem; margin-bottom:16px;">🏗️</div>
+                <h3 style="color:var(--text); margin:0 0 8px 0;">Нет активных предприятий</h3>
+                <p style="color:var(--text-dim); margin:0 0 24px 0; max-width:400px; margin-left:auto; margin-right:auto;">
+                    Постройте первый завод, чтобы начать производство. Нажмите кнопку «+ Построить предприятие» выше.
+                </p>
+                <button onclick="UI_DASHBOARD.toggleBuyPanel()" style="background:linear-gradient(135deg,#3498db,#2980b9); color:white; border:none; padding:14px 32px; border-radius:var(--radius); cursor:pointer; font-weight:700; font-size:1rem; box-shadow:0 4px 15px rgba(52,152,219,0.4);">
+                    🏗️ Открыть каталог предприятий
+                </button>
+            </div>`;
         }
     },
+
 
     // --- БИРЖА С РАБОЧИМИ ФИЛЬТРАМИ И АКТИВНЫМИ ОРДЕРАМИ ---
     updateB2BTab() {

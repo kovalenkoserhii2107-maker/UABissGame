@@ -886,16 +886,31 @@
 
         <!-- ВКЛАДКА: ПРОИЗВОДСТВО -->
         <div id="tab-production" class="tab-content">
-            <div class="card">
-                <h3>Инвестиции в производство</h3>
-                <div id="ui-buy-businesses"></div>
+            <!-- ШАПКА -->
+            <div style="background: linear-gradient(135deg, rgba(52,152,219,0.12), rgba(39,174,96,0.08)); border: 1px solid rgba(52,152,219,0.2); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                <div>
+                    <h2 style="margin: 0 0 4px 0; background: linear-gradient(135deg, #3498db, #27ae60); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🏭 Производственный Комплекс</h2>
+                    <p style="margin: 0; color: var(--text-dim); font-size: 0.9rem;">Постройте заводы, назначьте персонал и управляйте цепочками поставок.</p>
+                </div>
+                <button onclick="UI_DASHBOARD.toggleBuyPanel()" id="btn-toggle-buy" style="background: linear-gradient(135deg,#3498db,#2980b9); color:white; border:none; padding:11px 22px; border-radius:var(--radius-sm); cursor:pointer; font-weight:700; font-size:0.9rem; box-shadow: 0 4px 14px rgba(52,152,219,0.4);">
+                    + Построить предприятие
+                </button>
             </div>
-            <div class="card">
-                <h3>Мои активы (Работающие предприятия)</h3>
-                <ul id="ui-active-businesses" style="padding-left: 0;">
-                    <li style="color:var(--text-dim);">Нет активных предприятий.</li>
-                </ul>
+
+            <!-- ДАШБОРД ПРОИЗВОДСТВА -->
+            <div id="ui-prod-dashboard" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 12px; margin-bottom: 20px;"></div>
+
+            <!-- КАТАЛОГ ПОКУПКИ (скрыт по умолчанию) -->
+            <div id="ui-buy-panel" style="display:none; background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); overflow:hidden; margin-bottom:20px; box-shadow:var(--shadow-card);">
+                <div style="background:linear-gradient(135deg,rgba(52,152,219,0.1),rgba(39,174,96,0.05)); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; color:var(--text);">🏗️ Каталог предприятий</h3>
+                    <button onclick="UI_DASHBOARD.toggleBuyPanel()" style="background:var(--surface-2); color:var(--text-dim); border:1px solid var(--border); padding:6px 14px; border-radius:8px; cursor:pointer;">✕ Закрыть</button>
+                </div>
+                <div id="ui-buy-businesses" style="padding:20px; display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px;"></div>
             </div>
+
+            <!-- АКТИВНЫЕ ПРЕДПРИЯТИЯ -->
+            <div id="ui-active-businesses"></div>
         </div>
 
         <!-- ВКЛАДКА: РИТЕЙЛ -->
