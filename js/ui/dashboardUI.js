@@ -1890,6 +1890,1554 @@ const UI_DASHBOARD = {
     updateBankTab() {
         if (typeof FINANCE === 'undefined') return;
         
+        this.initCharts();
+        let totalDebt = STATE.finances.loans ? STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0) : 0;
+        let availableLimit = FINANCE.getAvailableLimit() - totalDebt;
+
+        if (typeof Chart !== 'undefined' && document.getElementById('chart-bank-credit')) {
+            let ctx = document.getElementById('chart-bank-credit').getContext('2d');
+            if (!this.charts.bankCredit) {
+                this.charts.bankCredit = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Использовано (Долг)', 'Свободно'],
+                        datasets: [{
+                            data: [totalDebt, Math.max(0, availableLimit)],
+                            backgroundColor: ['#ff3b30', '#34c759'],
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '75%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) { return '
+        if (document.getElementById('ui-credit-limit')) document.getElementById('ui-credit-limit').innerText = formatMoney(FINANCE.getAvailableLimit());
+        
+        let loansList = document.getElementById('ui-active-loans');
+        if (loansList) {
+            let totalDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
+            if(document.getElementById('ui-debt')) document.getElementById('ui-debt').innerText = formatMoney(totalDebt);
+            
+            loansList.innerHTML = '';
+            if (STATE.finances.loans.length === 0) {
+                loansList.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Нет активных кредитов</div>';
+            } else {
+                STATE.finances.loans.forEach(l => {
+                    let currentDailyInterest = (l.remainingPrincipal * l.rate) / 365;
+                    let currentDailyPayment = l.dailyPrincipal + currentDailyInterest;
+                    
+                    loansList.innerHTML += `
+                    <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">Заём $${formatMoney(l.amount)}</div>
+                            <div style="background:var(--orange-dim); color:var(--orange); padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Осталось: ${l.remainingDays} дн.</div>
+                        </div>
+                        
+                        <div style="display:flex; gap:16px; margin-bottom:12px;">
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Остаток Долга</div>
+                                <div style="color:var(--red); font-weight:700; font-size:1rem;">$${formatMoney(l.remainingPrincipal)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Ставка</div>
+                                <div style="color:var(--text); font-weight:700; font-size:1rem;">${(l.rate*100).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Платёж/день</div>
+                                <div style="color:var(--text); font-weight:700; font-size:1rem;">$${formatMoney(currentDailyPayment)}</div>
+                            </div>
+                        </div>
+
+                        <!-- Прогресс бар -->
+                        <div style="height:6px; background:rgba(0,0,0,0.05); border-radius:3px; margin-bottom:16px; overflow:hidden;">
+                            <div style="height:100%; background:var(--orange); width:${Math.max(0, 100 - (l.remainingPrincipal / l.amount) * 100)}%;"></div>
+                        </div>
+
+                        <button onclick="FINANCE.payOffLoan(${l.id})" style="width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); font-size:0.85rem; padding:8px; border-radius:8px; font-weight:600; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='var(--surface)'">Досрочно погасить ($${formatMoney(l.remainingPrincipal + currentDailyInterest)})</button>
+                    </div>`;
+                });
+            }
+        }
+
+        let depList = document.getElementById('ui-active-deposits');
+        if (depList) {
+            if (!STATE.finances.deposits) STATE.finances.deposits = [];
+            
+            let totalDeposits = STATE.finances.deposits.reduce((sum, d) => sum + d.amount, 0);
+            if (document.getElementById('ui-total-deposits')) document.getElementById('ui-total-deposits').innerText = formatMoney(totalDeposits);
+
+            depList.innerHTML = '';
+            if (STATE.finances.deposits.length === 0) {
+                depList.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Нет открытых вкладов</div>';
+            } else {
+                STATE.finances.deposits.forEach(d => {
+                    let payoutText = d.payoutType === 'daily' ? 'Ежедневно' : 'В конце';
+                    let accText = d.payoutType === 'daily' ? 'выплачивается' : `$${formatMoney(d.accrued)}`;
+                    let progress = Math.min(100, (1 - (d.daysLeft / d.term)) * 100);
+                    
+                    depList.innerHTML += `
+                    <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">Вклад $${formatMoney(d.amount)}</div>
+                            <div style="background:var(--blue-dim); color:var(--blue); padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Осталось: ${d.daysLeft} дн.</div>
+                        </div>
+                        
+                        <div style="display:flex; gap:16px; margin-bottom:12px;">
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Накоплено</div>
+                                <div style="color:var(--green); font-weight:700; font-size:1rem;">${accText}</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Ставка</div>
+                                <div style="color:var(--text); font-weight:700; font-size:1rem;">${(d.rate*100).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Тип выплаты</div>
+                                <div style="color:var(--text); font-weight:700; font-size:0.85rem;">${payoutText}</div>
+                            </div>
+                        </div>
+
+                        <!-- Прогресс бар -->
+                        <div style="height:6px; background:rgba(0,0,0,0.05); border-radius:3px; overflow:hidden;">
+                            <div style="height:100%; background:var(--blue); width:${progress}%;"></div>
+                        </div>
+                    </div>`;
+                });
+            }
+        }
+    },
+
+    switchFinanceTab(tabId) {
+        STATE.financeTab = tabId;
+        this.updateFinanceTab();
+    },
+
+    // --- 9. ФИНАНСОВАЯ ОТЧЕТНОСТЬ (МСФО / IFRS / GAAP) ---
+    updateFinanceTab() {
+        let container = document.getElementById('ui-finance-dashboard');
+        if (!container || typeof LEDGER === 'undefined') return;
+        LEDGER.init();
+        
+        if (!STATE.financeTab) STATE.financeTab = 'all';
+
+        // 1. Расчет активов (Balance Sheet - Assets)
+        let cash = Math.max(0, STATE.finances.balance);
+        let depositsValue = 0;
+        if (STATE.finances.deposits) {
+            STATE.finances.deposits.forEach(d => { depositsValue += d.amount + (d.accrued || 0); });
+        }
+
+        let inventoryValue = 0;
+        if (STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.inventory) {
+                    Object.keys(wh.inventory).forEach(k => {
+                        inventoryValue += wh.inventory[k].qty * wh.inventory[k].avgCost;
+                    });
+                }
+            });
+        }
+        STATE.company.businesses.forEach(b => {
+            if (b.localInventory) {
+                Object.keys(b.localInventory).forEach(k => {
+                    inventoryValue += b.localInventory[k].qty * b.localInventory[k].avgCost;
+                });
+            }
+        });
+
+        let logisticsValue = 0;
+        let receivablesValue = 0;
+        if (STATE.logistics) {
+            if (STATE.logistics.deliveries) {
+                STATE.logistics.deliveries.forEach(d => { logisticsValue += d.cost; });
+            }
+            if (STATE.logistics.receivables) {
+                STATE.logistics.receivables.forEach(r => { receivablesValue += r.amount; });
+            }
+        }
+
+        let currentAssets = cash + inventoryValue + depositsValue + logisticsValue + receivablesValue;
+
+        let realEstateValue = 0;
+        let equipmentValue = 0;
+
+        STATE.company.businesses.forEach(b => {
+            let tpl = RECIPES.BUSINESSES[b.type];
+            let locMult = b.locMult || 1.0;
+            let baseCost = tpl.area * 50 * locMult;
+            realEstateValue += baseCost;
+            for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult);
+
+            if (b.equipment && b.equipment.count > 0) {
+                let eqPrice = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 500;
+                let cond = b.equipment.condition || 0;
+                equipmentValue += (b.equipment.count * eqPrice) * (cond / 100);
+            }
+        });
+
+        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.level > 0) {
+                    for (let i = 1; i < wh.level; i++) {
+                        realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
+                    }
+                }
+            });
+        }
+
+        let rndIpValue = 0;
+        if (STATE.rnd && STATE.rnd.facility) {
+            let rndLvl = STATE.rnd.facility.level || 0;
+            for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
+            if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
+                let pcPrice = RECIPES.RESOURCES['smart_pc'] ? RECIPES.RESOURCES['smart_pc'].basePrice : 800;
+                let rndCond = STATE.rnd.facility.equipment.condition || 0;
+                equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * (rndCond / 100);
+            }
+            if (STATE.rnd.unlockedTechs) {
+                rndIpValue += STATE.rnd.unlockedTechs.length * 5000;
+            }
+        }
+
+        let nonCurrentAssets = realEstateValue + equipmentValue + rndIpValue;
+        let totalAssets = currentAssets + nonCurrentAssets;
+
+        // Пассивы и Капитал
+        let totalLiabilities = 0;
+        if (STATE.finances.loans) {
+            STATE.finances.loans.forEach(l => { totalLiabilities += l.remainingPrincipal; });
+        }
+        if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
+
+        let startCapital = STATE.finances.startCapital || 25000;
+        let retainedEarnings = totalAssets - totalLiabilities - startCapital;
+        let totalEquity = startCapital + retainedEarnings;
+
+        // 2. Расчет P&L (Yesterday & Total)
+        let y = STATE.ledger.yesterday || {};
+        let t = STATE.ledger.total || {};
+
+        let yRevB2C = y.rev_b2c || 0; let tRevB2C = t.rev_b2c || 0;
+        let yRevB2B = y.rev_b2b || 0; let tRevB2B = t.rev_b2b || 0;
+        let yRevB2G = y.rev_b2g || 0; let tRevB2G = t.rev_b2g || 0;
+        let yRevOther = y.rev_other || 0; let tRevOther = t.rev_other || 0;
+
+        let yRev = yRevB2B + yRevB2G + yRevB2C + yRevOther;
+        let tRev = tRevB2B + tRevB2G + tRevB2C + tRevOther;
+
+        let yCogs = y.exp_materials || 0;
+        let tCogs = t.exp_materials || 0;
+
+        let yGross = yRev - yCogs;
+        let tGross = tRev - tCogs;
+
+        let yTaxPayroll = y.exp_taxes_payroll || 0; let tTaxPayroll = t.exp_taxes_payroll || 0;
+        let yTaxCorp = y.exp_taxes_corp || 0; let tTaxCorp = t.exp_taxes_corp || 0;
+        let yExpMarketing = y.exp_marketing || 0; let tExpMarketing = t.exp_marketing || 0;
+        let yExpLogistics = y.exp_logistics || 0; let tExpLogistics = t.exp_logistics || 0;
+        let yExpRepair = y.exp_repair || 0; let tExpRepair = t.exp_repair || 0;
+        let yExpFines = y.exp_fines || 0; let tExpFines = t.exp_fines || 0;
+
+        let yOpex = (y.exp_salary || 0) + (y.exp_admin || 0) + (y.exp_hr || 0) + yTaxPayroll + yExpMarketing + yExpLogistics + yExpRepair + yExpFines;
+        let tOpex = (t.exp_salary || 0) + (t.exp_admin || 0) + (t.exp_hr || 0) + tTaxPayroll + tExpMarketing + tExpLogistics + tExpRepair + tExpFines;
+
+        let yEbitda = yGross - yOpex;
+        let tEbitda = tGross - tOpex;
+
+        let yDepr = Math.round(yExpRepair * 0.5);
+        let tDepr = Math.round(tExpRepair * 0.5);
+
+        let yEbit = yEbitda - yDepr;
+        let tEbit = tEbitda - tDepr;
+
+        let yFin = (y.fin_income || 0) - (y.fin_expense || 0) - (y.fin_fees || 0);
+        let tFin = (t.fin_income || 0) - (t.fin_expense || 0) - (t.fin_fees || 0);
+
+        let yEbt = yEbit + yFin;
+        let tEbt = tEbit + tFin;
+
+        let yNet = yEbt - yTaxCorp;
+        let tNet = tEbt - tTaxCorp;
+
+        // 3. Финансовые показатели
+        let netMargin = tRev > 0 ? ((tNet / tRev) * 100).toFixed(1) : '0.0';
+        let grossMargin = tRev > 0 ? ((tGross / tRev) * 100).toFixed(1) : '0.0';
+        let ebitdaMargin = tRev > 0 ? ((tEbitda / tRev) * 100).toFixed(1) : '0.0';
+        let roe = totalEquity > 0 ? ((tNet / totalEquity) * 100).toFixed(1) : '0.0';
+        let roa = totalAssets > 0 ? ((tNet / totalAssets) * 100).toFixed(1) : '0.0';
+
+        let currentLiabDiv = totalLiabilities > 0 ? totalLiabilities : 1;
+        let currentRatio = (currentAssets / currentLiabDiv).toFixed(2);
+        let debtEquityRatio = totalEquity > 0 ? (totalLiabilities / totalEquity).toFixed(2) : '0.00';
+
+        // 4. Налоговый календарь
+        let taxInfoHTML = '';
+        if (STATE.taxes) {
+            let tb = STATE.taxes.taxableBase || 0;
+            let dtr = STATE.taxes.daysToReport || 30;
+            let corpRate = (typeof GEO !== 'undefined' && GEO.COUNTRIES['ua']) ? GEO.COUNTRIES['ua'].taxes.corporate : 0.18;
+            let estimatedTax = tb > 0 ? tb * corpRate : 0;
+            
+            taxInfoHTML = `
+                <div style="background: rgba(0,122,255,0.05); border: 1px solid rgba(0,122,255,0.15); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <div style="color: var(--blue, #007AFF); font-weight: bold; font-size: 0.95em;">🏛 Налоговый календарь (Отчетный период ДФС)</div>
+                        <small style="color: var(--text-dim, #86868B);">Дней до подачи декларации: <strong>${dtr} дн.</strong> | Налоговая база прибыли: <strong style="color:${tb >= 0 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'};">$${formatMoney(tb)}</strong></small>
+                    </div>
+                    <div style="text-align: right; background: var(--surface, #fff); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border, #dcdde1);">
+                        <small style="color: var(--text-dim, #86868B); display: block;">Резерв налога на прибыль (18%):</small>
+                        <strong style="font-size: 1.15em; color: var(--red, #FF3B30); font-family: var(--font-mono);">$${formatMoney(estimatedTax)}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
+        // РАСЧЕТ CASH FLOW (Движение Денежных Средств)
+        let cfo = yRev - yCogs - yOpex - yTaxCorp; // Поток от операционной деятельности
+        let cfi = -(yExpRepair + (y.exp_materials || 0) * 0.1); // Поток от инвестиций
+        let cff = yFin; // Поток от фин. операций
+        let netCashFlow = cfo + cfi + cff;
+
+        // Навигация под-вкладок отчетности
+        let tabPnlActive = (STATE.financeTab === 'all' || STATE.financeTab === 'pnl') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
+        let tabBalActive = (STATE.financeTab === 'all' || STATE.financeTab === 'balance') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
+        let tabCfActive = (STATE.financeTab === 'all' || STATE.financeTab === 'cashflow') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
+        let tabRatActive = (STATE.financeTab === 'all' || STATE.financeTab === 'ratios') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
+
+        container.innerHTML = `
+            <!-- ВЕРХНЯЯ KPI ПАНЕЛЬ ФИНАНСОВОГО ЗДОРОВЬЯ -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--green, #34C759);">
+                    <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Чистая прибыль (Кумулятивно)</small>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: ${tNet >= 0 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(tNet)}</div>
+                    <small style="color: var(--text-dim);">Рентабельность (ROS): <strong style="color:var(--text);">${netMargin}%</strong></small>
+                </div>
+
+                <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--blue, #007AFF);">
+                    <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">EBITDA (Операционная прибыль)</small>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: ${tEbitda >= 0 ? 'var(--blue, #007AFF)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(tEbitda)}</div>
+                    <small style="color: var(--text-dim);">EBITDA Margin: <strong style="color:var(--text);">${ebitdaMargin}%</strong></small>
+                </div>
+
+                <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--orange, #FF9500);">
+                    <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Ликвидность (Current Ratio)</small>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: ${currentRatio >= 1.2 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">${currentRatio}x</div>
+                    <small style="color: var(--text-dim);">Норма: ≥ 1.50 (Покрытие долга)</small>
+                </div>
+
+                <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid #8e44ad;">
+                    <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Капитализация (Net Worth)</small>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: var(--text); margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(totalEquity)}</div>
+                    <small style="color: var(--text-dim);">ROE: <strong style="color:var(--text);">${roe}%</strong> | ROA: <strong style="color:var(--text);">${roa}%</strong></small>
+                </div>
+            </div>
+
+            ${taxInfoHTML}
+
+            <!-- ПЕРЕКЛЮЧАТЕЛЬ ОТЧЕТОВ -->
+            <div style="display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap;">
+                <button onclick="UI_DASHBOARD.switchFinanceTab('all')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'all' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">📋 Все отчеты (Сводный вид)</button>
+                <button onclick="UI_DASHBOARD.switchFinanceTab('pnl')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'pnl' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">📊 Прибыли и Убытки (P&L)</button>
+                <button onclick="UI_DASHBOARD.switchFinanceTab('balance')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'balance' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">⚖️ Баланс (Balance Sheet)</button>
+                <button onclick="UI_DASHBOARD.switchFinanceTab('cashflow')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'cashflow' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">🌊 Движение средств (Cash Flow)</button>
+                <button onclick="UI_DASHBOARD.switchFinanceTab('ratios')" style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85em; font-weight: bold; cursor: pointer; ${STATE.financeTab === 'ratios' ? 'background: var(--blue); color:#fff;' : 'background:var(--surface); color:var(--text);'}">📈 Финансовые коэффициенты</button>
+            </div>
+
+            <!-- ГРИД ОСНОВНЫХ ОТЧЕТОВ -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px;">
+
+                <!-- 1. ОТЧЕТ О ПРИБЫЛЯХ И УБЫТКАХ (P&L) -->
+                ${(STATE.financeTab === 'all' || STATE.financeTab === 'pnl') ? `
+                <div class="card" style="padding: 20px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">📊 Отчет о прибылях и убытках (P&L)</h3>
+                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 1) • Метод начисления</small>
+                        </div>
+                    </div>
+                    
+                    <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
+                        <tr style="border-bottom: 1px solid var(--border); color: var(--text-dim); text-align: right;">
+                            <th style="text-align:left; padding: 6px 0;">Статья отчета</th>
+                            <th style="padding: 6px;">Вчера</th>
+                            <th style="padding: 6px;">Всего</th>
+                        </tr>
+                        
+                        <tr style="font-weight:bold; background: var(--surface-2);"><td style="text-align:left; padding:6px 4px;">1. ВЫРУЧКА (REVENUE)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRev)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRev)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2C Розничные продажи</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(yRevB2C)}</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(tRevB2C)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2B Оптовая биржа</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRevB2B)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRevB2B)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2G Госзакупки и Тендеры</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yRevB2G)}</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(tRevB2G)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Прочие доходы (Гранты)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRevOther)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRevOther)}</td></tr>
+                        
+                        <tr style="border-top:1px dashed var(--border);"><td style="text-align:left; padding:4px 0; color:var(--red); font-weight:600;">2. Себестоимость продаж (COGS)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yCogs)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tCogs)}</td></tr>
+                        
+                        <tr style="font-weight:bold; background: rgba(52,199,89,0.06); border-top:1px solid var(--border);"><td style="text-align:left; padding:6px 4px; color:var(--green);">ВАЛОВАЯ ПРИБЫЛЬ (GROSS PROFIT)</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yGross)}</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(tGross)}</td></tr>
+                        
+                        <tr style="font-weight:bold; background: var(--surface-2); border-top:1px solid var(--border);"><td style="text-align:left; padding:6px 4px;">3. ОПЕРАЦИОННЫЕ РАСХОДЫ (OPEX)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yOpex)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tOpex)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Фонд оплаты труда (ЗП)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(y.exp_salary || 0)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(t.exp_salary || 0)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Социальный взнос ЕСВ (22%)</td><td style="text-align:right; color:var(--orange); font-family:var(--font-mono);">$${formatMoney(yTaxPayroll)}</td><td style="text-align:right; color:var(--orange); font-family:var(--font-mono);">$${formatMoney(tTaxPayroll)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Аренда недвижимости</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(y.exp_admin || 0)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(t.exp_admin || 0)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Межгородская логистика</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpLogistics)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpLogistics)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Маркетинг и бренд</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpMarketing)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpMarketing)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- ТО и ремонт оборудования</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpRepair)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpRepair)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Штрафы и непредвиденные</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpFines)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpFines)}</td></tr>
+                        
+                        <tr style="font-weight:bold; border-top:1px solid var(--border); background: var(--surface-3);"><td style="text-align:left; padding:6px 4px;">4. EBITDA</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbitda>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbitda)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbitda>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbitda)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Амортизация станков (D&A)</td><td style="text-align:right; font-family:var(--font-mono);">-$${formatMoney(yDepr)}</td><td style="text-align:right; font-family:var(--font-mono);">-$${formatMoney(tDepr)}</td></tr>
+                        
+                        <tr style="font-weight:bold;"><td style="text-align:left; padding:4px 0;">5. ОПЕРАЦИОННАЯ ПРИБЫЛЬ (EBIT)</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbit>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbit)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbit>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbit)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">+/- Финансовые доходы/расходы</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yFin)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tFin)}</td></tr>
+                        
+                        <tr style="font-weight:bold; border-top:1px solid var(--border);"><td style="text-align:left; padding:4px 0;">6. ПРИБЫЛЬ ДО НАЛОГОВ (EBT)</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbt>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbt)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbt>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbt)}</td></tr>
+                        <tr><td style="text-align:left; padding-left:12px; color:var(--red);">- Налог на прибыль (18%)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yTaxCorp)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tTaxCorp)}</td></tr>
+                        
+                        <tr style="font-weight:bold; font-size:1.05rem; background: rgba(0,122,255,0.08); border-top: 2px solid var(--blue);"><td style="text-align:left; padding:8px 4px; color:var(--blue);">7. ЧИСТАЯ ПРИБЫЛЬ (NET INCOME)</td><td style="text-align:right; font-family:var(--font-mono); color:${yNet>=0?'var(--green)':'var(--red)'};">$${formatMoney(yNet)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tNet>=0?'var(--green)':'var(--red)'};">$${formatMoney(tNet)}</td></tr>
+                    </table>
+                </div>
+                ` : ''}
+
+                <!-- 2. БАЛАНСОВЫЙ ОТЧЕТ (BALANCE SHEET) -->
+                ${(STATE.financeTab === 'all' || STATE.financeTab === 'balance') ? `
+                <div class="card" style="padding: 20px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">⚖️ Отчет о финансовом положении (Баланс)</h3>
+                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 1) • Активы = Пассивы + Капитал</small>
+                        </div>
+                    </div>
+                    
+                    <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
+                        <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">I. ОБОРОТНЫЕ АКТИВЫ (CURRENT ASSETS)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Денежные средства на расчетном счете:</td><td style="text-align:right; font-family:var(--font-mono); font-weight:600;">$${formatMoney(cash)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Запасы сырья и товаров (Склады и Магазины):</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(inventoryValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Товары в пути (Оплаченная логистика):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(logisticsValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Дебиторская задолженность (Выручка в пути):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(receivablesValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Банковские депозиты (Краткосрочные):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(depositsValue)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Оборотные активы:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(currentAssets)}</td></tr>
+                        
+                        <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">II. ВНЕОБОРОТНЫЕ АКТИВЫ (NON-CURRENT ASSETS)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Основные средства: Недвижимость (Цеха, Магазины, Склады):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(realEstateValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Машины и оборудование (Остаточная стоимость):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(equipmentValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Нематериальные активы (Патенты и R&D разработки):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(rndIpValue)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Внеоборотные активы:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(nonCurrentAssets)}</td></tr>
+                        
+                        <tr style="font-weight:bold; font-size:1.02rem; background: rgba(52,199,89,0.08); border-top:2px solid var(--green);"><td style="padding:6px 0; color:var(--green);">ИТОГО АКТИВОВ:</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(totalAssets)}</td></tr>
+                        
+                        <tr><td colspan="2" style="padding:6px 0;">&nbsp;</td></tr>
+                        
+                        <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--red);">III. ОБЯЗАТЕЛЬСТВА (LIABILITIES)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Краткосрочные кредиты и займы банка:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">$${formatMoney(totalLiabilities)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Обязательства:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">$${formatMoney(totalLiabilities)}</td></tr>
+                        
+                        <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">IV. СОБСТВЕННЫЙ КАПИТАЛ (EQUITY)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Уставный капитал:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(startCapital)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Нераспределенная прибыль (Retained Earnings):</td><td style="text-align:right; font-family:var(--font-mono); color:${retainedEarnings>=0?'var(--green)':'var(--red)'};">$${formatMoney(retainedEarnings)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Капитал:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(totalEquity)}</td></tr>
+                        
+                        <tr style="font-weight:bold; font-size:1.02rem; background: rgba(0,122,255,0.08); border-top:2px solid var(--blue);"><td style="padding:6px 0; color:var(--blue);">ИТОГО ПАССИВОВ И КАПИТАЛА:</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(totalLiabilities + totalEquity)}</td></tr>
+                    </table>
+                </div>
+                ` : ''}
+
+                <!-- 3. ДВИЖЕНИЕ ДЕНЕЖНЫХ СРЕДСТВ (CASH FLOW) -->
+                ${(STATE.financeTab === 'all' || STATE.financeTab === 'cashflow') ? `
+                <div class="card" style="padding: 20px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">🌊 Отчет о движении денежных средств (Cash Flow)</h3>
+                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 7) • Прямой метод</small>
+                        </div>
+                    </div>
+                    
+                    <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
+                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">1. ОПЕРАЦИОННЫЙ ПОТОК (CFO)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">+ Поступления от продаж (B2C, B2B, B2G):</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yRev)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Оплата сырья и поставщиков:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yCogs)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Выплата заработной платы и налогов на ФОТ:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney((y.exp_salary || 0) + yTaxPayroll)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Оплата аренды, логистики и маркетинга:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney((y.exp_admin || 0) + yExpLogistics + yExpMarketing)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый операционный поток (CFO):</td><td style="text-align:right; font-family:var(--font-mono); color:${cfo>=0?'var(--green)':'var(--red)'};">$${formatMoney(cfo)}</td></tr>
+                        
+                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">2. ИНВЕСТИЦИОННЫЙ ПОТОК (CFI)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Приобретение оборудования и ремонт станков:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yExpRepair)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый инвестиционный поток (CFI):</td><td style="text-align:right; font-family:var(--font-mono); color:${cfi>=0?'var(--green)':'var(--red)'};">$${formatMoney(cfi)}</td></tr>
+                        
+                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">3. ФИНАНСОВЫЙ ПОТОК (CFF)</th></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">+/- Проценты и операции по вкладам/кредитам:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(cff)}</td></tr>
+                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый финансовый поток (CFF):</td><td style="text-align:right; font-family:var(--font-mono); color:${cff>=0?'var(--green)':'var(--red)'};">$${formatMoney(cff)}</td></tr>
+                        
+                        <tr style="font-weight:bold; font-size:1.02rem; background: rgba(0,122,255,0.08); border-top:2px solid var(--blue);"><td style="padding:6px 0; color:var(--blue);">ЧИСТОЕ ИЗМЕНЕНИЕ ДЕНЕГ (NET CASH FLOW):</td><td style="text-align:right; color:${netCashFlow>=0?'var(--green)':'var(--red)'}; font-family:var(--font-mono);">$${formatMoney(netCashFlow)}</td></tr>
+                    </table>
+                </div>
+                ` : ''}
+
+                <!-- 4. ФИНАНСОВЫЕ КОЭФФИЦИЕНТЫ И РЕНТАБЕЛЬНОСТЬ -->
+                ${(STATE.financeTab === 'all' || STATE.financeTab === 'ratios') ? `
+                <div class="card" style="padding: 20px; margin-bottom: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">📈 Финансовый анализ и Коэффициенты</h3>
+                            <small style="color: var(--text-dim);">Международные бенчмарки корпоративной устойчивости</small>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Рентабельность продаж (ROS)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--blue); font-family: var(--font-mono);">${netMargin}%</div>
+                            <small style="color: var(--text-dim);">Чистая прибыль / Выручка</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Валовая маржинальность (Gross Margin)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--green); font-family: var(--font-mono);">${grossMargin}%</div>
+                            <small style="color: var(--text-dim);">Валовая прибыль / Выручка</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Рентабельность капитала (ROE)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: #8e44ad; font-family: var(--font-mono);">${roe}%</div>
+                            <small style="color: var(--text-dim);">Прибыль / Собственный капитал</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Рентабельность активов (ROA)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--orange); font-family: var(--font-mono);">${roa}%</div>
+                            <small style="color: var(--text-dim);">Прибыль / Все активы</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Коэффициент автономии (Debt/Equity)</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--text); font-family: var(--font-mono);">${debtEquityRatio}x</div>
+                            <small style="color: var(--text-dim);">Обязательства / Капитал (Норма: <1.0)</small>
+                        </div>
+
+                        <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
+                            <small style="color: var(--text-dim);">Коэффициент ликвидности</small>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: ${currentRatio>=1.2?'var(--green)':'var(--red)'}; font-family: var(--font-mono);">${currentRatio}x</div>
+                            <small style="color: var(--text-dim);">Оборотные активы / Обязательства</small>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+
+            </div>
+        `;
+    },
+
+    // --- 7. HR И КАДРЫ ---
+    updateHRTab() {
+        if (typeof HR === 'undefined' || !document.getElementById('ui-staff-total')) return;
+        HR.init();
+        
+        document.getElementById('ui-staff-total').innerText = HR.getTotalStaff();
+        if(document.getElementById('ui-staff-salary')) document.getElementById('ui-staff-salary').innerText = formatMoney(HR.getDailySalaryFund());
+        
+        let breakdownDiv = document.getElementById('ui-hr-breakdown');
+        if (breakdownDiv) {
+            let parts = [];
+            Object.keys(HR.GRADES).forEach(grade => {
+                let total = STATE.hr && STATE.hr.staff ? (STATE.hr.staff[grade] || 0) : 0;
+                if (total > 0) parts.push(`<span style="background:var(--blue-dim); color:var(--blue); padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:600;">${HR.GRADES[grade].name.split(' ')[0]}: ${total}</span>`);
+            });
+            
+            let trainingCount = STATE.hr.trainingQueue.length;
+            if (trainingCount > 0) parts.push(`<span style="background:var(--orange-dim); color:var(--orange); padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:600;">На учебе: ${trainingCount}</span>`);
+            
+            breakdownDiv.innerHTML = parts.length > 0 ? parts.join('') : '<span style="color:var(--text-faint); font-size:0.9rem;">Штат пуст</span>';
+        }
+
+        let hireFactory = document.getElementById('ui-hire-factory');
+        let hireRnd = document.getElementById('ui-hire-rnd');
+        if (hireFactory && hireRnd) {
+            hireFactory.innerHTML = '';
+            hireRnd.innerHTML = '';
+            
+            Object.keys(HR.GRADES).forEach(grade => {
+                let info = HR.GRADES[grade];
+                let isFactory = info.role === 'factory';
+                
+                let btnHtml = `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); box-shadow:var(--shadow-card);">
+                    <div>
+                        <div style="font-weight:600; color:var(--text);">${info.name.split(' ')[0]}</div>
+                        <div style="font-size:0.8rem; color:var(--text-dim);">ЗП: $${formatMoney(info.salary)}/дн</div>
+                    </div>
+                    <button onclick="HR.hire('${grade}')" style="background:${isFactory ? 'var(--blue)' : '#1abc9c'}; color:white; border:none; padding:8px 16px; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; font-size:0.85rem; transition:transform 0.1s;">
+                        Найм ($${formatMoney(info.hireCost)})
+                    </button>
+                </div>`;
+                
+                if (isFactory) hireFactory.innerHTML += btnHtml;
+                else hireRnd.innerHTML += btnHtml;
+            });
+        }
+        
+        let trainingDiv = document.getElementById('ui-hr-training-list');
+        if (trainingDiv) {
+            if (STATE.hr.trainingQueue.length === 0) {
+                trainingDiv.innerHTML = '<span style="color:var(--text-dim); font-size:0.9rem;">В данный момент никто не проходит обучение.</span>';
+            } else {
+                let tHtml = '<div style="display:flex; flex-direction:column; gap:10px;">';
+                STATE.hr.trainingQueue.forEach(t => {
+                    let nextName = HR.GRADES[t.toGrade].name.split(' ')[0];
+                    tHtml += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+                        <div>
+                            <span style="font-weight:600; color:var(--text);">Повышение квалификации ➔ ${nextName}</span>
+                            <div style="font-size:0.8rem; color:var(--text-dim);">Сотрудник получает стипендию $${t.salary}/дн</div>
+                        </div>
+                        <div style="background:var(--orange-dim); color:var(--orange); font-weight:bold; padding:6px 12px; border-radius:8px; font-size:0.9rem;">
+                            Осталось ${t.daysLeft} дн.
+                        </div>
+                    </div>`;
+                });
+                tHtml += '</div>';
+                trainingDiv.innerHTML = tHtml;
+            }
+        }
+
+        let reserveContainer = document.getElementById('ui-hr-reserve-table');
+        if (reserveContainer) {
+            let html = `<div style="display:flex; flex-direction:column; gap:10px;">`;
+            Object.keys(HR.GRADES).forEach(grade => {
+                let free = HR.getUnassigned(grade);
+                let info = HR.GRADES[grade];
+                
+                let trainCost = grade === 'junior' ? 250 : (grade === 'middle' ? 800 : (grade === 'scientist' ? 1500 : null));
+                let trainDays = grade === 'junior' ? 3 : (grade === 'middle' ? 7 : (grade === 'scientist' ? 10 : null));
+                let nextGradeName = grade === 'junior' ? 'Middle' : (grade === 'middle' ? 'Senior' : (grade === 'scientist' ? 'Ст. Научного' : ''));
+                
+                let trainBtn = '';
+                if (trainCost) {
+                    trainBtn = `<button onclick="HR.train('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--blue); color:white; border:none; padding:6px 12px; border-radius:6px; font-size:0.85rem; font-weight:600; cursor:pointer;">Обучить до ${nextGradeName} ($${trainCost})</button>`;
+                }
+
+                html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm);">
+                    <div>
+                        <strong style="color:var(--text);">${info.name}</strong> 
+                        <span style="color:var(--text-dim); margin-left:8px;">(Доступно: ${free})</span>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        ${trainBtn} 
+                        <button onclick="HR.fire('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--red-dim); color:var(--red); border:none; padding:6px 12px; border-radius:6px; font-size:0.85rem; font-weight:600; cursor:pointer;">Уволить</button>
+                    </div>
+                </div>`;
+            });
+            html += `</div>`;
+            reserveContainer.innerHTML = html;
+        }
+    },
+    
+    // --- СЛУЖЕБНЫЕ МЕТОДЫ ОШИБОК И ФОРМ ---
+    clearError() {
+        let errDiv = document.getElementById('debug-error');
+        if (errDiv) errDiv.style.display = 'none';
+    },
+
+    showError(err) {
+        let errDiv = document.getElementById('debug-error');
+        if (!errDiv) {
+            errDiv = document.createElement('div');
+            errDiv.id = 'debug-error';
+            errDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; background:#c0392b; color:white; padding:20px; z-index:9999; box-shadow: 0 5px 15px rgba(0,0,0,0.5);';
+            document.body.prepend(errDiv);
+        }
+        errDiv.innerHTML = `
+            <h3 style="margin-top:0;">⚠️ КРИТИЧЕСКАЯ ОШИБКА ИНТЕРФЕЙСА</h3>
+            <p><strong>Суть ошибки:</strong> ${err.message}</p>
+            <button onclick="document.getElementById('debug-error').style.display='none'" style="background:#333; padding: 5px 10px; color: white;">Закрыть это окно</button>
+        `;
+        console.error(err);
+    },
+
+    switchTab(event, tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+        let targetEl = document.getElementById(tabId);
+        if (targetEl) targetEl.classList.add('active');
+        if (event && event.currentTarget) event.currentTarget.classList.add('active');
+        if (tabId === 'tab-wiki' && typeof WIKI !== 'undefined') WIKI.render();
+        if (tabId === 'tab-finance') this.updateFinanceTab();
+        if (tabId === 'tab-b2b') this.updateB2BTab();
+    },
+
+    submitLoan() {
+        let amountInput = document.getElementById('input-loan-amount');
+        let termInput = document.getElementById('select-loan-term');
+        let amount = parseFloat(amountInput.value);
+        let term = parseInt(termInput.value);
+        if (isNaN(amount) || amount <= 0) {
+            NOTIFY.error('Ошибка', 'Пожалуйста, введите корректную сумму кредита.');
+            return;
+        }
+        FINANCE.takeLoan(amount, term);
+        amountInput.value = ''; 
+    },
+
+    submitDeposit() {
+        let amountInput = document.getElementById('input-dep-amount');
+        let termInput = document.getElementById('select-dep-term');
+        let typeInput = document.getElementById('select-dep-type');
+        let amount = parseFloat(amountInput.value);
+        let term = parseInt(termInput.value);
+        let payoutType = typeInput.value;
+        if (isNaN(amount) || amount <= 0) {
+            NOTIFY.error('Ошибка', 'Пожалуйста, введите корректную сумму депозита.');
+            return;
+        }
+        FINANCE.openDeposit(amount, term, payoutType);
+        amountInput.value = ''; 
+    },
+
+    setFactoryWarehouses(uid) {
+        let biz = STATE.company.businesses.find(b => b.uid === uid);
+        if (biz) {
+            let sWh = document.getElementById(`source-wh-${uid}`);
+            let tWh = document.getElementById(`target-wh-${uid}`);
+            if (sWh) biz.sourceWh = sWh.value;
+            if (tWh) biz.targetWh = tWh.value;
+            this.update();
+        }
+    },
+    
+    // Сохранение процентов логистики
+    saveRoutes(bizUid, destsStr) {
+        let dests = destsStr ? destsStr.split(',') : [];
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (!biz) return;
+        
+        let newRoutes = {};
+        dests.forEach(d => {
+            let val = parseInt(document.getElementById(`route-${bizUid}-${d}`).value) || 0;
+            if (val > 0) newRoutes[d] = val; // Сохраняем абсолютные значения в штуках
+        });
+        
+        biz.routing = newRoutes;
+        NOTIFY.success('Успех', 'Квоты отгрузки (в шт.) успешно обновлены!');
+        this.update();
+    },
+
+    // Сохранение цели рекламной кампании (Бренд, Магазин или Товар)
+    setMarketingTarget(bizUid) {
+        let select = document.getElementById(`marketing-target-${bizUid}`);
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (biz && select) {
+            let parts = select.value.split('_'); // 'brand_global', 'store_12345', 'product_drones'
+            biz.targetType = parts[0];
+            biz.targetId = parts.slice(1).join('_');
+            this.update();
+        }
+    },
+    
+    // Окно выбора города
+    showLocationModal(bizType) {
+        this.showCityModal('business', bizType);
+    },
+
+    // --- 10. РОЗНИЦА ---
+    updateRetailTab() {
+        let retailBody = document.getElementById('ui-retail-businesses');
+        if (!retailBody) return;
+        
+        if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
+        
+        let hasRetail = false;
+        let activeStoresHtml = '';
+
+        STATE.company.businesses.forEach(biz => {
+            let tpl = RECIPES.BUSINESSES[biz.type];
+            if (!tpl.isRetail) return;
+            hasRetail = true;
+            
+            let level = biz.level || 1;
+            let locMult = biz.locMult || 1.0;
+            let adminCost = tpl.area * 2 * level * locMult;
+            
+            if (!biz.assigned) biz.assigned = {};
+            if (biz.assigned.salesman === undefined) biz.assigned.salesman = 0;
+            if (biz.assigned.store_manager === undefined) biz.assigned.store_manager = 0;
+            
+            let freeSales = typeof HR !== 'undefined' ? HR.getUnassigned('salesman') : 0;
+            let freeMgr = typeof HR !== 'undefined' ? HR.getUnassigned('store_manager') : 0;
+            let assignedTotal = biz.assigned.salesman + biz.assigned.store_manager;
+            let maxStaff = tpl.staffReq * level;
+
+            let maxVol = tpl.area * level * locMult * 2;
+            let currentVol = 0;
+            let invHtml = '';
+            
+            let totalSold = 0;
+            let totalRev = 0;
+
+            if (biz.localInventory) {
+                Object.keys(biz.localInventory).forEach(k => {
+                    let inv = biz.localInventory[k];
+                    if (inv.qty > 0) {
+                        let rTpl = RECIPES.RESOURCES[k];
+                        currentVol += inv.qty * (rTpl.volume || 0);
+                        let b2bPrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(k) : 0;
+                        if (!biz.prices) biz.prices = {};
+                        let retailPrice = biz.prices[k] || (b2bPrice * 2.5);
+                        let margin = b2bPrice > 0 ? (retailPrice / b2bPrice) : 1;
+                        let marginColor = margin >= 4 ? 'var(--red)' : (margin >= 2.5 ? 'var(--orange)' : 'var(--green)');
+                        let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
+                        let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
+
+                        totalSold += soldYesterday;
+                        totalRev += revYesterday;
+
+                        let icon = this._resIcons && this._resIcons[k] ? this._resIcons[k] : '📦';
+
+                        invHtml += `
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 5px rgba(0,0,0,0.02);">
+                            <div style="display:flex; align-items:center; gap:12px; width: 35%;">
+                                <div style="font-size:2rem;">${icon}</div>
+                                <div>
+                                    <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${rTpl.name}</div>
+                                    <div style="font-size:0.75rem; color:var(--blue); font-weight:700;">Сток: ${inv.qty} шт</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">★ ${(inv.quality||1.0).toFixed(2)} • Опт: $${formatMoney(b2bPrice)}</div>
+                                </div>
+                            </div>
+                            
+                            <div style="width: 35%; display:flex; flex-direction:column; gap:4px;">
+                                <div style="font-size:0.75rem; color:var(--text-dim);">Цена на полке (x${margin.toFixed(1)})</div>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span style="color:var(--text); font-weight:700;">$</span>
+                                    <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:70px; padding:6px; border:1px solid var(--border); border-radius:6px; font-weight:700; font-size:0.9rem; background:var(--surface-2); color:var(--text);">
+                                    <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:var(--blue); color:white; border:none; padding:6px 10px; font-size:0.8rem; border-radius:6px; cursor:pointer; font-weight:700;">OK</button>
+                                </div>
+                            </div>
+                            
+                            <div style="width: 30%; text-align:right;">
+                                <div style="font-size:0.75rem; color:var(--text-dim);">Продано вчера</div>
+                                <div style="font-weight:800; color:var(--green); font-size:1.1rem;">${soldYesterday} шт</div>
+                                <div style="font-size:0.8rem; color:var(--text); font-weight:700;">+$${formatMoney(revYesterday)}</div>
+                            </div>
+                        </div>`;
+                    }
+                });
+            }
+            if (invHtml === '') invHtml = '<div style="text-align:center; padding:20px; color:var(--text-dim); background:var(--surface-2); border-radius:8px; border:1px dashed var(--border);">Товара на полках нет</div>';
+            
+            let volPercent = Math.min(100, (currentVol/maxVol)*100).toFixed(1);
+            let eqCount = biz.equipment.count || 0;
+            let maxSlots = level * (tpl.slotsPerLevel || 5);
+            let eqName = RECIPES.RESOURCES[tpl.equipmentType].name;
+
+            // Рендер диаграммы занятости склада
+            let chartBg = volPercent > 90 ? 'var(--red)' : (volPercent > 70 ? 'var(--orange)' : 'var(--green)');
+
+            activeStoresHtml += `
+            <div style="background:var(--surface); padding:0; border:1px solid var(--border); border-radius:16px; margin-bottom:24px; box-shadow:var(--shadow-card); overflow:hidden;">
+                <!-- ШАПКА МАГАЗИНА -->
+                <div style="background:linear-gradient(135deg, rgba(46,204,113,0.1), rgba(39,174,96,0.05)); padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div style="font-size:2rem; background:white; width:48px; height:48px; display:flex; align-items:center; justify-content:center; border-radius:12px; box-shadow:0 2px 6px rgba(0,0,0,0.1);">🏪</div>
+                        <div>
+                            <h3 style="margin:0; font-size:1.4rem; color:var(--text);">${biz.name}</h3>
+                            <div style="font-size:0.85rem; color:var(--green); font-weight:700;">Уровень ${level} • Аренда $${formatMoney(adminCost)}/дн</div>
+                        </div>
+                    </div>
+                    <div style="text-align:right; background:white; padding:10px 16px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); border:1px solid var(--border);">
+                        <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:800; letter-spacing:0.5px;">ВЫРУЧКА ЗА ВЧЕРА</div>
+                        <div style="font-size:1.4rem; font-weight:800; color:var(--green);">+$${formatMoney(totalRev)} <span style="font-size:0.9rem; color:var(--text-dim); font-weight:400;">(${totalSold} шт)</span></div>
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-wrap:wrap; gap:0;">
+                    <!-- КОЛОНКА 1: ПОЛКИ И ЗАПАСЫ -->
+                    <div style="flex:1.5; min-width:350px; padding:24px; border-right:1px solid var(--border);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <h4 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">📦 Заполнение склада</h4>
+                            <span style="font-weight:700; color:${chartBg};">${volPercent}%</span>
+                        </div>
+                        <div style="height:8px; background:var(--surface-3); border-radius:4px; margin-bottom:8px; overflow:hidden;">
+                            <div style="height:100%; width:${volPercent}%; background:${chartBg}; transition:0.3s;"></div>
+                        </div>
+                        <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:16px;">
+                            Занято ${currentVol.toFixed(1)} м³ из ${maxVol.toFixed(1)} м³. Доставляйте товары с производственных складов.
+                        </div>
+                        
+                        <div style="max-height: 400px; overflow-y: auto; padding-right:8px;">
+                            ${invHtml}
+                        </div>
+                    </div>
+
+                    <!-- КОЛОНКА 2: МЕБЕЛЬ И ПЕРСОНАЛ -->
+                    <div style="flex:1; min-width:300px; padding:24px; background:var(--surface-2);">
+                        <h4 style="margin:0 0 16px 0; font-size:1.1rem;">Оборудование & Персонал</h4>
+                        
+                        <!-- Мебель -->
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px;">
+                            <div style="font-size:0.85rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; margin-bottom:8px;">Торговое оборудование</div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <div><strong style="color:var(--text);">${eqName}</strong></div>
+                                <div style="font-weight:700; color:var(--blue);">${eqCount} / ${maxSlots}</div>
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:8px; border:1px solid var(--border); border-radius:8px; font-weight:700; text-align:center;">
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="flex:1; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:8px; font-weight:700; cursor:pointer;">Докупить</button>
+                            </div>
+                        </div>
+
+                        <!-- Персонал -->
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                <div style="font-size:0.85rem; color:var(--text-dim); font-weight:700; text-transform:uppercase;">Персонал</div>
+                                <div style="font-weight:700; color:var(--text);">${assignedTotal} / ${maxStaff}</div>
+                            </div>
+
+                            <!-- Директор -->
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed var(--border);">
+                                <div>
+                                    <div style="font-weight:700; font-size:0.95rem;">Директор</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeMgr}</span></div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button> 
+                                    <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${biz.assigned.store_manager}</span> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr === 0 ? 'disabled' : ''} class="btn-hr-plus">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Продавец -->
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-weight:700; font-size:0.95rem;">Продавцы</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeSales}</span></div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button> 
+                                    <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${biz.assigned.salesman}</span> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales === 0 ? 'disabled' : ''} class="btn-hr-plus">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="width:100%; margin-top:16px; padding:12px; background:var(--orange); color:white; border:none; border-radius:10px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 10px rgba(243,156,18,0.3);">🚀 Расширить магазин ($${formatMoney(tpl.area * 50 * level)})</button>
+                    </div>
+                </div>
+            </div>`;
+        });
+        
+        let headerHtml = `
+        <div style="background: linear-gradient(135deg, rgba(46,204,113,0.1), rgba(39,174,96,0.05)); border: 1px solid rgba(46,204,113,0.2); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 24px;">
+            <h2 style="margin: 0 0 6px 0; color: var(--green);">🏪 Управление Розницей</h2>
+            <p style="margin: 0; color: var(--text-dim); font-size: 0.95rem;">Ваши действующие магазины. Устанавливайте цены, контролируйте полки и получайте выручку.</p>
+        </div>
+        `;
+
+        if (!hasRetail) {
+            activeStoresHtml = '<div style="text-align:center; padding: 60px 20px; color:var(--text-dim); font-size:1.2rem; background:var(--surface); border-radius:16px; border:1px dashed var(--border); margin-bottom:24px;">У вас пока нет розничных магазинов. Откройте свой первый бизнес!</div>';
+        }
+
+        let newShopHtml = `
+        <div style="background:var(--surface); border-radius:16px; border:1px solid var(--border); padding:30px; text-align:center; box-shadow:var(--shadow-card);">
+            <div style="font-size:3rem; margin-bottom:12px;">🛒</div>
+            <h3 style="margin:0 0 8px 0; font-size:1.5rem; color:var(--text);">Открыть новую точку</h3>
+            <p style="color:var(--text-dim); max-width:400px; margin:0 auto 20px auto;">Расширяйте свою империю! Постройте новый фирменный магазин, чтобы продавать больше продукции B2C.</p>
+            <button onclick="PRODUCTION.buyBusiness('retail_store')" style="background:linear-gradient(135deg, #2ecc71, #27ae60); color:white; font-size:1.1rem; font-weight:800; padding:14px 32px; border:none; border-radius:12px; cursor:pointer; box-shadow:0 6px 20px rgba(46,204,113,0.4); transition:0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">+ Построить Фирменный Магазин</button>
+        </div>`;
+
+        retailBody.innerHTML = headerHtml + activeStoresHtml + newShopHtml;
+        
+        // Добавим стили для кнопок HR если их нет
+        if (!document.getElementById('retail-hr-styles')) {
+            let style = document.createElement('style');
+            style.id = 'retail-hr-styles';
+            style.innerHTML = `
+                .btn-hr-minus { width:32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--red-dim); color:var(--red); border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer; }
+                .btn-hr-minus:disabled { opacity:0.5; cursor:not-allowed; }
+                .btn-hr-plus { width:32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--green-dim); color:var(--green); border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer; }
+                .btn-hr-plus:disabled { opacity:0.5; cursor:not-allowed; }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+,
+
+    // --- 11. НОВАЯ ВКЛАДКА: МАРКЕТИНГ ---
+    updateMarketingTab() {
+        let marketingBody = document.getElementById('ui-marketing-businesses');
+        if (!marketingBody) return;
+
+        if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
+        let currentBrand = STATE.retail.brand || 10;
+
+        // ─── ДАШБОРД ЭФФЕКТИВНОСТИ ─────────────────────────────────
+        let mktDash = document.getElementById('ui-mkt-dashboard');
+        if (mktDash) {
+            let agencies = STATE.company.businesses.filter(b => RECIPES.BUSINESSES[b.type] && RECIPES.BUSINESSES[b.type].isMarketing);
+            let totalStaff = 0, totalEq = 0, totalBudget = 0;
+            let campaignLabels = { 0:'Органика', 1:'Контекст', 2:'Блогеры', 3:'ТВ' };
+            let campaignCosts  = { 0:0, 1:100, 2:500, 3:2000 };
+            let campaignEffect = { 0:1.0, 1:1.5, 2:2.5, 3:5.0 };
+            let maxEffect = 1.0;
+            agencies.forEach(biz => {
+                let tpl = RECIPES.BUSINESSES[biz.type];
+                totalStaff += (biz.assigned.marketer || 0) + (biz.assigned.pr_manager || 0);
+                totalEq += biz.equipment.count || 0;
+                totalBudget += campaignCosts[biz.campaign || 0];
+                maxEffect = Math.max(maxEffect, campaignEffect[biz.campaign || 0]);
+            });
+            
+            // Индекс маркетинговой силы: бренд * количество агентств * кампания
+            let mktIndex = (currentBrand * agencies.length * maxEffect).toFixed(0);
+            let brandColor = currentBrand >= 50 ? 'var(--green)' : (currentBrand >= 20 ? 'var(--orange)' : '#8e44ad');
+            
+            let dashMetrics = [
+                { label: 'Сила Бренда', value: currentBrand.toFixed(1) + '%', icon: '🌟', color: brandColor, desc: 'Узнаваемость' },
+                { label: 'Агентств', value: agencies.length, icon: '🏢', color: 'var(--blue)', desc: 'Офисов маркетинга' },
+                { label: 'Команда', value: totalStaff, icon: '👥', color: 'var(--text)', desc: 'Маркетологов/PR' },
+                { label: 'Рекл. бюджет', value: '$' + formatMoney(totalBudget) + '/дн', icon: '💸', color: 'var(--red)', desc: 'В день' },
+                { label: 'Макс. эффект', value: 'x' + maxEffect.toFixed(1), icon: '⚡', color: '#e67e22', desc: 'Усилитель кампании' },
+                { label: 'Маркетинг-индекс', value: mktIndex, icon: '📈', color: '#8e44ad', desc: 'Общий показатель' },
+            ];
+            
+            mktDash.innerHTML = dashMetrics.map(m => `
+                <div style="background:var(--surface); padding:16px; border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow-card);">
+                    <div style="font-size:1.6rem; margin-bottom:6px;">${m.icon}</div>
+                    <div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700;">${m.label}</div>
+                    <div style="font-size:1.25rem; font-weight:800; color:${m.color}; margin-top:2px;">${m.value}</div>
+                    <div style="font-size:0.72rem; color:var(--text-faint); margin-top:2px;">${m.desc}</div>
+                </div>`).join('');
+        }
+
+        // ─── КАРТОЧКИ АГЕНТСТВ ─────────────────────────────────────
+        marketingBody.innerHTML = '';
+        let hasMarketing = false;
+
+        const CAMPAIGNS = [
+            { id: 0, name: 'Органический рост',   icon: '🌱', cost:    0, effect: 1.0, color: 'var(--green)',  desc: 'Без затрат. Естественный прирост бренда.' },
+            { id: 1, name: 'Контекстная реклама',  icon: '🖥️', cost:  100, effect: 1.5, color: 'var(--blue)',   desc: '$100/дн. Целевые объявления. Эффект ×1.5' },
+            { id: 2, name: 'Блогеры и СМИ',        icon: '🎥', cost:  500, effect: 2.5, color: 'var(--orange)', desc: '$500/дн. Охват аудитории. Эффект ×2.5' },
+            { id: 3, name: 'Национальное ТВ',      icon: '📺', cost: 2000, effect: 5.0, color: 'var(--red)',    desc: '$2 000/дн. Максимальный охват. Эффект ×5.0' },
+        ];
+
+        STATE.company.businesses.forEach(biz => {
+            let tpl = RECIPES.BUSINESSES[biz.type];
+            if (!tpl || !tpl.isMarketing) return;
+            hasMarketing = true;
+
+            let level = biz.level || 1;
+            let adminCost = tpl.area * 2 * level;
+
+            if (!biz.assigned) biz.assigned = {};
+            if (biz.assigned.marketer === undefined) biz.assigned.marketer = 0;
+            if (biz.assigned.pr_manager === undefined) biz.assigned.pr_manager = 0;
+
+            let freeMarketer = typeof HR !== 'undefined' ? HR.getUnassigned('marketer') : 0;
+            let freePR = typeof HR !== 'undefined' ? HR.getUnassigned('pr_manager') : 0;
+            let assignedTotal = biz.assigned.marketer + biz.assigned.pr_manager;
+            let maxStaff = tpl.staffReq * level;
+            let isFull = assignedTotal >= maxStaff;
+
+            let eqCount = biz.equipment.count || 0;
+            let maxSlots = level * (tpl.slotsPerLevel || 5);
+            let freeSlots = maxSlots - eqCount;
+            let staffPct = maxStaff > 0 ? Math.round((assignedTotal / maxStaff) * 100) : 0;
+            let eqPct = maxSlots > 0 ? Math.round((eqCount / maxSlots) * 100) : 0;
+
+            let currentCampaign = biz.campaign || 0;
+            let targetType = biz.targetType || 'brand';
+            let targetId = biz.targetId || '';
+
+            // Эффективность агентства: сколько ПК и персонал задействованы
+            let efficiency = Math.min(assignedTotal, eqCount, maxStaff, maxSlots);
+            let effMax = Math.min(maxStaff, maxSlots);
+            let effPct = effMax > 0 ? Math.round((efficiency / effMax) * 100) : 0;
+            let effColor = effPct >= 75 ? 'var(--green)' : (effPct >= 40 ? 'var(--orange)' : 'var(--red)');
+
+            // Таргет опции
+            let targetOptions = `<option value="brand_global" ${targetType==='brand' ? 'selected' : ''}>🌍 Глобальный бренд компании</option>`;
+            targetOptions += `<optgroup label="🏪 Продвижение магазина">`;
+            STATE.company.businesses.forEach(store => {
+                if (RECIPES.BUSINESSES[store.type].isRetail) {
+                    let sel = (targetType === 'store' && targetId == store.uid) ? 'selected' : '';
+                    targetOptions += `<option value="store_${store.uid}" ${sel}>📍 ${store.name}</option>`;
+                }
+            });
+            targetOptions += `</optgroup>`;
+            targetOptions += `<optgroup label="📦 Продвижение товара">`;
+            Object.keys(RECIPES.RESOURCES).forEach(k => {
+                let res = RECIPES.RESOURCES[k];
+                if (!res.isRaw && !res.isEquipment) {
+                    let sel = (targetType === 'product' && targetId === k) ? 'selected' : '';
+                    targetOptions += `<option value="product_${k}" ${sel}>🛍️ ${res.name}</option>`;
+                }
+            });
+            targetOptions += `</optgroup>`;
+
+            // Рендер кнопок кампаний
+            let campaignButtons = CAMPAIGNS.map(c => {
+                let isActive = currentCampaign === c.id;
+                return `
+                <div onclick="UI_DASHBOARD.setCampaignById(${biz.uid}, ${c.id})" 
+                     title="${c.desc}"
+                     style="cursor:pointer; border:2px solid ${isActive ? c.color : 'var(--border)'}; background:${isActive ? 'rgba(0,0,0,0.04)' : 'var(--surface-2)'}; border-radius:10px; padding:10px 12px; text-align:center; transition:all 0.15s; ${isActive ? 'box-shadow: 0 0 0 3px ' + c.color.replace(')', ',0.2)').replace('var(--','rgba(') + ';' : ''}">
+                    <div style="font-size:1.5rem; margin-bottom:4px;">${c.icon}</div>
+                    <div style="font-size:0.75rem; font-weight:700; color:${isActive ? c.color : 'var(--text-dim)'};">${c.name}</div>
+                    <div style="font-size:0.7rem; color:var(--text-faint); margin-top:2px;">${c.cost > 0 ? '$' + c.cost + '/дн' : 'Бесплатно'}</div>
+                    ${isActive ? `<div style="margin-top:4px; background:${c.color}; color:white; border-radius:4px; font-size:0.65rem; font-weight:700; padding:2px 6px;">АКТИВНА</div>` : ''}
+                </div>`;
+            }).join('');
+
+            marketingBody.innerHTML += `
+            <div style="background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow-card); overflow:hidden; margin-bottom:20px;">
+
+                <!-- ЗАГОЛОВОК КАРТОЧКИ -->
+                <div style="background:linear-gradient(135deg,rgba(142,68,173,0.1),rgba(231,76,60,0.05)); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div style="font-size:2rem;">📢</div>
+                        <div>
+                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">${biz.name}</div>
+                            <div style="font-size:0.8rem; color:var(--text-dim);">Уровень ${level} • Аренда <strong style="color:var(--red);">$${formatMoney(adminCost)}</strong>/дн</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <div style="background:${effColor}; color:white; padding:6px 14px; border-radius:8px; font-weight:700; font-size:0.9rem;">
+                            КПД: ${effPct}%
+                        </div>
+                        <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem;">
+                            ⬆️ Расширить ($${formatMoney(tpl.area * 50 * level)})
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ОСНОВНОЕ ТЕЛО -->
+                <div style="padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
+                    <!-- ЛЕВАЯ: Кампании + Таргет -->
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+
+                        <!-- Выбор кампании -->
+                        <div>
+                            <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:10px;">🎯 Рекламная кампания</div>
+                            <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px;">
+                                ${campaignButtons}
+                            </div>
+                        </div>
+
+                        <!-- Таргет -->
+                        <div>
+                            <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:8px;">📍 Цель продвижения</div>
+                            <select id="marketing-target-${biz.uid}" onchange="UI_DASHBOARD.setMarketingTarget(${biz.uid})" 
+                                    style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); cursor:pointer; font-size:0.9rem;">
+                                ${targetOptions}
+                            </select>
+                        </div>
+
+                        <!-- Оборудование -->
+                        <div style="background:var(--surface-2); padding:14px; border-radius:10px; border:1px solid var(--border);">
+                            <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:10px;">💻 Оборудование (Смарт-ПК)</div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.88rem;">
+                                <span style="color:var(--text-dim);">Установлено</span>
+                                <span style="font-weight:700; color:var(--text);">${eqCount} / ${maxSlots}</span>
+                            </div>
+                            <div style="background:var(--surface); border-radius:6px; height:6px; overflow:hidden; margin-bottom:10px;">
+                                <div style="height:100%; width:${eqPct}%; background:linear-gradient(90deg,#8e44ad,#e74c3c); border-radius:6px; transition:width 0.4s;"></div>
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${Math.max(1,freeSlots)}" 
+                                       style="width:60px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); text-align:center; font-weight:600;">
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" 
+                                        style="flex:1; background:rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:8px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem;">
+                                    ⬇️ Купить ПК
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- ПРАВАЯ: Персонал + Эффективность -->
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+
+                        <!-- Прогресс эффективности -->
+                        <div style="background:var(--surface-2); padding:16px; border-radius:10px; border:1px solid var(--border);">
+                            <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:12px;">📊 Эффективность агентства</div>
+                            <div style="display:flex; justify-content:space-between; font-size:0.82rem; margin-bottom:4px;">
+                                <span style="color:var(--text-dim);">Персонал</span><span style="font-weight:700;">${assignedTotal} / ${maxStaff}</span>
+                            </div>
+                            <div style="background:var(--surface); border-radius:6px; height:6px; margin-bottom:10px; overflow:hidden;">
+                                <div style="height:100%; width:${staffPct}%; background:var(--blue); border-radius:6px; transition:width 0.4s;"></div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-size:0.82rem; margin-bottom:4px;">
+                                <span style="color:var(--text-dim);">Оборудование</span><span style="font-weight:700;">${eqCount} / ${maxSlots}</span>
+                            </div>
+                            <div style="background:var(--surface); border-radius:6px; height:6px; margin-bottom:12px; overflow:hidden;">
+                                <div style="height:100%; width:${eqPct}%; background:#8e44ad; border-radius:6px; transition:width 0.4s;"></div>
+                            </div>
+                            <div style="background:${effColor}; color:white; border-radius:8px; padding:10px; text-align:center;">
+                                <div style="font-size:1.6rem; font-weight:800;">${effPct}%</div>
+                                <div style="font-size:0.75rem; opacity:0.9;">${effPct >= 75 ? '🔥 Отличная работа!' : effPct >= 40 ? '⚙️ Есть потенциал' : '⚠️ Требует внимания'}</div>
+                            </div>
+                            ${assignedTotal > eqCount ? `<div style="margin-top:10px; background:rgba(230,126,34,0.1); color:var(--orange); border:1px solid rgba(230,126,34,0.3); border-radius:8px; padding:8px; font-size:0.8rem; font-weight:600;">⚠️ Сотрудников больше, чем ПК! Часть команды простаивает.</div>` : ''}
+                        </div>
+
+                        <!-- Управление кадрами -->
+                        <div style="background:var(--surface-2); padding:14px; border-radius:10px; border:1px solid var(--border);">
+                            <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:12px;">👥 Кадровый состав (${assignedTotal}/${maxStaff})</div>
+                            
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:10px 14px; border-radius:8px; border:1px solid var(--border); margin-bottom:8px;">
+                                <div>
+                                    <div style="font-weight:600; font-size:0.9rem;">🎨 Маркетолог</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: ${freeMarketer}</div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'marketer')" ${biz.assigned.marketer===0?'disabled':''} style="background:var(--red-dim); color:var(--red); border:none; width:30px; height:30px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700; ${biz.assigned.marketer===0?'opacity:0.4;cursor:not-allowed;':''}">−</button>
+                                    <span style="font-weight:700; min-width:20px; text-align:center; font-size:1.05rem;">${biz.assigned.marketer}</span>
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'marketer')" ${(isFull||freeMarketer===0)?'disabled':''} style="background:rgba(142,68,173,0.1); color:#8e44ad; border:none; width:30px; height:30px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700; ${(isFull||freeMarketer===0)?'opacity:0.4;cursor:not-allowed;':''}">+</button>
+                                </div>
+                            </div>
+
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:10px 14px; border-radius:8px; border:1px solid var(--border);">
+                                <div>
+                                    <div style="font-weight:600; font-size:0.9rem;">📣 PR-Менеджер</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: ${freePR}</div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'pr_manager')" ${biz.assigned.pr_manager===0?'disabled':''} style="background:var(--red-dim); color:var(--red); border:none; width:30px; height:30px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700; ${biz.assigned.pr_manager===0?'opacity:0.4;cursor:not-allowed;':''}">−</button>
+                                    <span style="font-weight:700; min-width:20px; text-align:center; font-size:1.05rem;">${biz.assigned.pr_manager}</span>
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'pr_manager')" ${(isFull||freePR===0)?'disabled':''} style="background:rgba(52,152,219,0.1); color:var(--blue); border:none; width:30px; height:30px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700; ${(isFull||freePR===0)?'opacity:0.4;cursor:not-allowed;':''}">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>`;
+        });
+
+        if (!hasMarketing) {
+            marketingBody.innerHTML = `
+            <div style="text-align:center; padding:60px 20px;">
+                <div style="font-size:4rem; margin-bottom:16px;">📢</div>
+                <h3 style="color:var(--text); margin:0 0 8px 0;">Нет маркетинговых агентств</h3>
+                <p style="color:var(--text-dim); margin:0 0 24px 0; max-width:400px; margin-left:auto; margin-right:auto;">
+                    Откройте первое агентство, чтобы начать продвижение бренда, запустить таргетированные рекламные кампании и увеличить поток покупателей.
+                </p>
+                <button onclick="PRODUCTION.buyBusiness('marketing_agency')" style="background:linear-gradient(135deg,#8e44ad,#9b59b6); color:white; border:none; padding:14px 32px; border-radius:var(--radius); cursor:pointer; font-weight:700; font-size:1rem; box-shadow:0 4px 15px rgba(142,68,173,0.4);">
+                    + Открыть первое Агентство
+                </button>
+            </div>`;
+        }
+    },
+
+    // Новый хелпер для кнопок выбора кампании
+    setCampaignById(bizUid, campaignId) {
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (!biz) return;
+        biz.campaign = campaignId;
+        this.updateMarketingTab();
+    },
+
+
+    // Отправка товаров с Общего склада в локальный склад Магазина (ПЛАТНАЯ ЛОГИСТИКА)
+    transferToStore(itemKey, cityId) {
+        let storeSelect = document.getElementById(`trans-store-${cityId}-${itemKey}`);
+        let qtyInput = document.getElementById(`trans-qty-${cityId}-${itemKey}`);
+        
+        if (!storeSelect || !qtyInput || !storeSelect.value) return;
+        
+        let storeUid = parseInt(storeSelect.value);
+        let qty = parseInt(qtyInput.value);
+        let store = STATE.company.businesses.find(b => b.uid === storeUid);
+        if (!store) return;
+        
+        let localWh = STATE.company.warehouses[cityId];
+        let globalInv = localWh.inventory[itemKey];
+        if (!globalInv || globalInv.qty < qty) return NOTIFY.error('Ошибка', 'На складе города нет столько товара.');
+        
+        let tpl = RECIPES.BUSINESSES[store.type];
+        let maxVol = tpl.area * (store.level || 1) * (store.locMult || 1.0) * 2;
+        let itemVol = RECIPES.RESOURCES[itemKey].volume || 0.1;
+        
+        let currentVol = 0;
+        if (!store.localInventory) store.localInventory = {};
+        Object.keys(store.localInventory).forEach(ik => currentVol += store.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0));
+        
+        let maxCanFit = itemVol > 0 ? Math.floor((maxVol - currentVol) / itemVol) : qty;
+        if (qty > maxCanFit) {
+            qty = maxCanFit;
+            if (qty <= 0) return NOTIFY.error('Ошибка', `На складе магазина нет места!`);
+        }
+
+        // РАСЧЕТ СТОИМОСТИ ЛОГИСТИКИ (МЕЖДУ ГОРОДАМИ)
+        let sourceCity = cityId;
+        let targetCity = store.city || 'odesa';
+        let dist = typeof GEO !== 'undefined' ? GEO.getDistance(sourceCity, targetCity) : 10;
+        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.015;
+        
+        // Формула: Расстояние * Базовая ставка * Объем груза (м³)
+        let totalVolume = qty * itemVol;
+        let logCost = dist * logBase * totalVolume;
+
+        if (STATE.finances.balance < logCost) {
+            NOTIFY.error('Ошибка логистики', `Не хватает средств на оплату транспортной компании. Нужно $${formatMoney(logCost)}.`);
+            return;
+        }
+
+        // Списываем деньги и записываем в P&L
+        STATE.finances.balance -= logCost;
+        if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', logCost);
+        
+        if (!store.localInventory[itemKey]) store.localInventory[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
+        let locInv = store.localInventory[itemKey];
+        
+        // ВАЖНО: Стоимость доставки ложится в себестоимость товара!
+        let totalOldCost = locInv.qty * locInv.avgCost;
+        let totalNewCost = qty * globalInv.avgCost;
+        locInv.avgCost = (totalOldCost + totalNewCost + logCost) / (locInv.qty + qty);
+        locInv.quality = ((locInv.qty * (locInv.quality || 1)) + (qty * (globalInv.quality || 1))) / (locInv.qty + qty);
+        locInv.qty += qty;
+        
+        globalInv.qty -= qty;
+        if (globalInv.qty === 0) globalInv.avgCost = 0;
+        
+        NOTIFY.success('Успех', `Успешно отгружено ${qty} шт. в "${store.name}". Оплата логистики: $${formatMoney(logCost)}.`);
+        this.update();
+    },
+    
+    // Сохранение выбранной рекламной кампании
+    setCampaign(bizUid) {
+        let select = document.getElementById(`campaign-${bizUid}`);
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (biz && select) {
+            biz.campaign = parseInt(select.value);
+            this.update();
+        }
+    },
+    // Сохранение розничной цены для конкретного магазина
+    saveStorePrice(bizUid, itemKey) {
+        let input = document.getElementById(`price-${bizUid}-${itemKey}`);
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (input && biz) {
+            let val = parseFloat(input.value);
+            if (isNaN(val) || val <= 0) {
+                NOTIFY.error('Ошибка', 'Введите корректную цену (больше 0).');
+                return;
+            }
+            if (!biz.prices) biz.prices = {};
+            biz.prices[itemKey] = val;
+            this.update();
+        }
+    },
+    // Красивое модальное окно Журнала событий
+    showEventLog() {
+        let oldModal = document.getElementById('event-modal');
+        if (oldModal) oldModal.remove();
+
+        let modal = document.createElement('div');
+        modal.id = 'event-modal';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(3px);';
+        
+        let logsHtml = '';
+        if (!STATE.eventLog || STATE.eventLog.length === 0) {
+            logsHtml = '<p style="color:#7f8c8d; text-align:center; padding: 20px;">Новостей и событий пока нет.</p>';
+        } else {
+            logsHtml = '<ul style="list-style:none; padding:0; margin:0; max-height: 400px; overflow-y: auto;">';
+            STATE.eventLog.forEach(log => {
+                let color = log.type === 'good' ? '#27ae60' : (log.type === 'bad' ? '#c0392b' : '#2980b9');
+                logsHtml += `
+                <li style="border-left: 4px solid ${color}; background: #f9f9f9; padding: 10px; margin-bottom: 8px; border-radius: 0 4px 4px 0;">
+                    <small style="color:#7f8c8d; display:block; margin-bottom: 4px;">📅 День ${log.day}</small>
+                    <span style="color:#2c3e50;">${log.msg}</span>
+                </li>`;
+            });
+            logsHtml += '</ul>';
+        }
+
+        modal.innerHTML = `
+            <div style="background:#fff; padding:20px; border-radius:8px; width:500px; max-width:90%; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">
+                    <h2 style="margin:0; color:#2c3e50; font-size: 1.5em;">📜 Журнал компании</h2>
+                    <button onclick="document.getElementById('event-modal').remove()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:#7f8c8d;">&times;</button>
+                </div>
+                ${logsHtml}
+                <button onclick="document.getElementById('event-modal').remove()" style="width:100%; padding:10px; margin-top:15px; background:#ecf0f1; border:none; border-radius:4px; color:#34495e; font-weight: bold; cursor:pointer;">Закрыть</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    },
+
+    // --- УНИВЕРСАЛЬНОЕ ОКНО ВЫБОРА ЛОКАЦИИ (ГЕО-ЭКОНОМИКА) ---
+    showCityModal(actionType, bizType = null) {
+        let oldModal = document.getElementById('city-modal');
+        if (oldModal) oldModal.remove();
+
+        let modal = document.createElement('div');
+        modal.id = 'city-modal';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
+        
+        let title = actionType === 'warehouse' ? 'Где открываем или расширяем склад?' : 'Выберите город для инвестиций';
+        if (bizType && typeof RECIPES !== 'undefined' && RECIPES.BUSINESSES[bizType]) {
+            title = `Открытие: ${RECIPES.BUSINESSES[bizType].name}`;
+        }
+
+        let citiesHtml = '';
+        Object.keys(GEO.CITIES).forEach(cId => {
+            let city = GEO.CITIES[cId];
+            
+            let rentColor = city.rentMult > 1.1 ? '#c0392b' : (city.rentMult < 1 ? '#27ae60' : '#7f8c8d');
+            let salaryColor = city.salaryMult > 1.1 ? '#c0392b' : (city.salaryMult < 1 ? '#27ae60' : '#7f8c8d');
+            let demandColor = city.demandMult > 1.1 ? '#27ae60' : (city.demandMult < 1 ? '#c0392b' : '#7f8c8d');
+
+            let actionCode = '';
+            if (actionType === 'warehouse') {
+                let cost = WAREHOUSE.getUpgradeCost(cId);
+                let currentLvl = STATE.company.warehouses[cId] ? STATE.company.warehouses[cId].level : 0;
+                let lvlText = currentLvl === 0 ? 'Построить новый хаб' : `Расширить до Ур. ${currentLvl + 1}`;
+                
+                actionCode = `document.getElementById('city-modal').remove(); WAREHOUSE.upgrade('${cId}');`;
+                citiesHtml += `
+                <div onclick="${actionCode}" style="background:#fdfefe; border:2px solid #bdc3c7; border-radius:8px; padding:15px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="font-size:1.2em; color:#2c3e50;">${city.name}</strong><br>
+                        <small style="color:#7f8c8d;">${currentLvl > 0 ? 'Уже построен (Ур. ' + currentLvl + ')' : 'Склада в городе нет'}</small>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="display:block; font-size:1.1em; color:#27ae60; font-weight:bold;">$${formatMoney(cost)}</span>
+                        <small style="color:${rentColor};">${lvlText} (Аренда: x${city.rentMult})</small>
+                    </div>
+                </div>`;
+            } else {
+                actionCode = `document.getElementById('city-modal').remove(); PRODUCTION.buyBusiness('${bizType}', '${cId}');`;
+                
+                let recBadge = '';
+                let borderStyle = 'border:1px solid #dcdde1; background:#ffffff;';
+                
+                if (cId === 'kharkiv') {
+                    recBadge = `<div style="margin-top:3px;"><span style="background:#e8f8ee; color:#27ae60; border:1px solid #a3e9b9; padding:2px 6px; border-radius:6px; font-size:0.72em; font-weight:bold;">⭐ Рекомендуется для старта (Низкая аренда)</span></div>`;
+                    borderStyle = 'border:2px solid #27ae60; background:#f6fcf8; box-shadow:0 2px 10px rgba(39,174,96,0.15);';
+                } else if (cId === 'odesa') {
+                    recBadge = `<div style="margin-top:3px;"><span style="background:#e8f4fd; color:#2980b9; border:1px solid #a9d7f9; padding:2px 6px; border-radius:6px; font-size:0.72em; font-weight:bold;">🌊 Высокий спрос (Сбалансировано)</span></div>`;
+                    borderStyle = 'border:2px solid #2980b9; background:#f6faff; box-shadow:0 2px 10px rgba(41,128,185,0.15);';
+                } else if (cId === 'kyiv') {
+                    recBadge = `<div style="margin-top:3px;"><span style="background:#fef5e7; color:#d35400; border:1px solid #f8c471; padding:2px 6px; border-radius:6px; font-size:0.72em; font-weight:bold;">👑 Крупный рынок (Дорогая аренда x1.5)</span></div>`;
+                }
+
+                citiesHtml += `
+                <div onclick="${actionCode}" style="${borderStyle} border-radius:12px; padding:12px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div style="min-width:140px;">
+                        <strong style="font-size:1.15em; color:#2c3e50;">${city.name}</strong>
+                        ${recBadge}
+                        <small style="color:#7f8c8d; display:block; margin-top:2px;">Население: ${(city.population/1000000).toFixed(1)} млн</small>
+                    </div>
+                    <div style="font-size:0.82em; min-width:130px;">
+                        <div style="color:${rentColor};">🏢 Аренда: <strong>x${city.rentMult}</strong></div>
+                        <div style="color:${salaryColor};">💼 Зарплаты: <strong>x${city.salaryMult}</strong></div>
+                    </div>
+                    <div style="text-align:right; min-width:100px;">
+                        <div style="color:${demandColor}; font-size:1.08em; font-weight:bold;">🛒 Спрос: x${city.demandMult}</div>
+                    </div>
+                </div>`;
+            }
+        });
+
+        modal.innerHTML = `
+            <div style="background:#fff; padding:20px 16px; border-radius:16px; width:550px; max-width:94%; box-shadow: 0 20px 50px rgba(0,0,0,0.25); max-height:85vh; display:flex; flex-direction:column;">
+                <h2 style="margin-top:0; color:#2c3e50; font-size: 1.3em; border-bottom:2px solid #ecf0f1; padding-bottom:10px;">🗺️ ${title}</h2>
+                <div style="background: rgba(52, 199, 89, 0.12); border-left: 4px solid #34C759; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.84em; color: #1d1d1f;">
+                    <strong>💡 Рекомендация для старта:</strong> Выбирайте <strong>Харьков</strong> (минимальная аренда x1.0) или <strong>Одессу</strong> (отличный спрос x1.25), чтобы не уйти в кассовый разрыв.
+                </div>
+                <div style="overflow-y: auto; flex: 1; padding-right: 4px;">
+                    ${citiesHtml}
+                </div>
+                <button onclick="document.getElementById('city-modal').remove()" style="width:100%; padding:12px; margin-top:12px; background:#ecf0f1; border:none; border-radius:10px; color:#7f8c8d; font-weight: bold; cursor:pointer; min-height:44px;">Отмена</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    },
+
+    // --- КВЕСТ-ЦЕНТР И СТРАТЕГИЧЕСКИЕ МИССИИ ---
+    renderQuestWidget() {
+        let el = document.getElementById('ui-quest-widget');
+        if (!el || typeof QUESTS === 'undefined') return;
+
+        let curChId = STATE.quests ? (STATE.quests.currentChapter || 1) : 1;
+        let ch = QUESTS.CHAPTERS[curChId] || QUESTS.CHAPTERS[1];
+        let quests = QUESTS.LIST.filter(q => q.chapter === curChId);
+
+        let completedCount = quests.filter(q => STATE.quests.completed && STATE.quests.completed.includes(q.id)).length;
+        let percent = quests.length > 0 ? Math.round((completedCount / quests.length) * 100) : 0;
+
+        let questsHTML = quests.map(q => {
+            let isDone = STATE.quests.completed && STATE.quests.completed.includes(q.id);
+            let isClaimed = STATE.quests.claimed && STATE.quests.claimed.includes(q.id);
+            let prog = q.progress ? q.progress(STATE) : { label: isDone ? 'Готово' : 'В процессе' };
+
+            let actionBtn = '';
+            if (isDone && !isClaimed) {
+                actionBtn = `<button onclick="QUESTS.claimReward('${q.id}')" style="background: var(--green, #34C759); color: white; border: none; padding: 7px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(52,199,89,0.4);">🎁 Забрать награду</button>`;
+            } else if (isClaimed) {
+                actionBtn = `<span style="color: var(--text-dim, #86868B); font-size: 0.85em; font-weight: 600;">✅ Выполнено</span>`;
+            } else {
+                actionBtn = `<span style="background: var(--surface-3, #E8E8ED); color: var(--text-dim, #86868B); padding: 4px 10px; border-radius: 6px; font-size: 0.85em;">${prog.label}</span>`;
+            }
+
+            return `
+                <div style="background: var(--surface-2, #F5F5F7); border: 1px solid var(--border, rgba(0,0,0,0.08)); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 240px;">
+                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                            <span>${isDone ? '✅' : '🎯'}</span>
+                            <strong style="color: var(--text, #1D1D1F); font-size: 0.95em; text-decoration: ${isClaimed ? 'line-through' : 'none'};">${q.title}</strong>
+                        </div>
+                        <div style="color: var(--text-dim, #86868B); font-size: 0.85em; margin-bottom: 3px;">${q.desc}</div>
+                        <div style="color: var(--blue, #007AFF); font-size: 0.8em; font-weight: 500;">Награда: ${q.reward.text}</div>
+                    </div>
+                    <div style="text-align: right; min-width: 140px;">
+                        ${actionBtn}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        el.innerHTML = `
+            <div class="card" style="border-left: 4px solid var(--blue, #007AFF); background: var(--surface, #FFFFFF); margin-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.4em;">${ch.icon}</span>
+                            <h3 style="margin: 0; font-size: 1.15em; color: var(--text, #1D1D1F);">${ch.title}</h3>
+                            <span style="background: var(--blue-dim, rgba(0,122,255,0.1)); color: var(--blue, #007AFF); font-size: 0.75em; padding: 2px 8px; border-radius: 10px; font-weight: bold;">Глава ${curChId}/5</span>
+                        </div>
+                        <p style="margin: 4px 0 0 0; color: var(--text-dim, #86868B); font-size: 0.88em;">${ch.desc}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-weight: bold; color: var(--text, #1D1D1F); font-size: 0.88em;">Прогресс: ${completedCount} / ${quests.length} (${percent}%)</div>
+                        <div style="width: 140px; height: 6px; background: var(--surface-3, #E8E8ED); border-radius: 3px; overflow: hidden; margin-top: 4px; display: inline-block;">
+                            <div style="width: ${percent}%; height: 100%; background: var(--blue, #007AFF); transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    ${questsHTML}
+                </div>
+            </div>
+        `;
+    }
+};
+ + formatMoney(context.parsed); }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                this.charts.bankCredit.data.datasets[0].data = [totalDebt, Math.max(0, availableLimit)];
+                this.charts.bankCredit.update();
+            }
+        }
+        
         if (document.getElementById('ui-rate')) document.getElementById('ui-rate').innerText = (FINANCE.getCurrentRate() * 100).toFixed(1);
         if (document.getElementById('ui-credit-limit')) document.getElementById('ui-credit-limit').innerText = formatMoney(FINANCE.getAvailableLimit());
         

@@ -1095,8 +1095,17 @@
                             <h3 style="margin:0;">Кредитование бизнеса</h3>
                         </div>
                         <div style="margin-bottom: 16px; background:var(--surface-2); padding:16px; border-radius:12px; border:1px solid var(--border);">
-                            <label style="display:block; margin-bottom: 8px; font-size: 0.85em; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.03em;">Сумма кредита ($):</label>
-                            <input type="number" id="input-loan-amount" placeholder="Например: 5000" style="width: 100%; margin-bottom: 16px; font-size:1.05rem; padding:12px; border-radius:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <label style="font-size: 0.85em; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.03em;">Сумма кредита ($):</label>
+                                <div style="display:flex; gap:4px;">
+                                    <button onclick="document.getElementById('input-loan-amount').value = Math.floor(FINANCE.getAvailableLimit() * 0.25); document.getElementById('range-loan-amount').value = 25;" style="padding:4px 8px; font-size:0.7rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">25%</button>
+                                    <button onclick="document.getElementById('input-loan-amount').value = Math.floor(FINANCE.getAvailableLimit() * 0.50); document.getElementById('range-loan-amount').value = 50;" style="padding:4px 8px; font-size:0.7rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">50%</button>
+                                    <button onclick="document.getElementById('input-loan-amount').value = Math.floor(FINANCE.getAvailableLimit()); document.getElementById('range-loan-amount').value = 100;" style="padding:4px 8px; font-size:0.7rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">MAX</button>
+                                </div>
+                            </div>
+                            <input type="number" id="input-loan-amount" placeholder="Например: 5000" style="width: 100%; margin-bottom: 8px; font-size:1.05rem; padding:12px; border-radius:10px;" oninput="document.getElementById('range-loan-amount').value = Math.min(100, (this.value / FINANCE.getAvailableLimit()) * 100) || 0;">
+                            
+                            <input type="range" id="range-loan-amount" min="0" max="100" value="0" style="width: 100%; margin-bottom: 16px; accent-color: var(--blue);" oninput="document.getElementById('input-loan-amount').value = Math.floor(FINANCE.getAvailableLimit() * (this.value / 100));">
 
                             <label style="display:block; margin-bottom: 8px; font-size: 0.85em; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.03em;">Срок кредитования:</label>
                             <select id="select-loan-term" style="width: 100%; font-size:1.05rem; padding:12px; background:var(--surface); border-radius:10px;">
@@ -1121,8 +1130,17 @@
                             </div>
                         </div>
                         <div style="margin-bottom: 16px; background:var(--surface-2); padding:16px; border-radius:12px; border:1px solid var(--border);">
-                            <label style="display:block; margin-bottom: 8px; font-size: 0.85em; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.03em;">Сумма вклада ($):</label>
-                            <input type="number" id="input-dep-amount" placeholder="Например: 10000" style="width: 100%; margin-bottom: 16px; font-size:1.05rem; padding:12px; border-radius:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <label style="font-size: 0.85em; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.03em;">Сумма вклада ($):</label>
+                                <div style="display:flex; gap:4px;">
+                                    <button onclick="document.getElementById('input-dep-amount').value = Math.floor(STATE.finances.balance * 0.25); document.getElementById('range-dep-amount').value = 25;" style="padding:4px 8px; font-size:0.7rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">25%</button>
+                                    <button onclick="document.getElementById('input-dep-amount').value = Math.floor(STATE.finances.balance * 0.50); document.getElementById('range-dep-amount').value = 50;" style="padding:4px 8px; font-size:0.7rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">50%</button>
+                                    <button onclick="document.getElementById('input-dep-amount').value = Math.floor(STATE.finances.balance); document.getElementById('range-dep-amount').value = 100;" style="padding:4px 8px; font-size:0.7rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer;">MAX</button>
+                                </div>
+                            </div>
+                            <input type="number" id="input-dep-amount" placeholder="Например: 10000" style="width: 100%; margin-bottom: 8px; font-size:1.05rem; padding:12px; border-radius:10px;" oninput="document.getElementById('range-dep-amount').value = Math.min(100, (this.value / STATE.finances.balance) * 100) || 0;">
+
+                            <input type="range" id="range-dep-amount" min="0" max="100" value="0" style="width: 100%; margin-bottom: 16px; accent-color: var(--blue);" oninput="document.getElementById('input-dep-amount').value = Math.floor(STATE.finances.balance * (this.value / 100));">
 
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
                                 <div>
@@ -1147,10 +1165,15 @@
                         </div>
                         <button onclick="UI_DASHBOARD.submitDeposit()" style="width: 100%; background: var(--text); padding:14px; font-size:1.05rem; font-weight:700; border-radius:12px;">Открыть депозит</button>
                     </div>
-                </div>
-
-                <!-- ПРАВАЯ КОЛОНКА: ПОРТФЕЛИ -->
+                                <!-- ПРАВАЯ КОЛОНКА: ПОРТФЕЛИ -->
                 <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <div class="card" style="margin-bottom: 0; background:var(--surface);">
+                        <h3 style="margin-bottom:16px; font-size:1.15rem;">Использование кредитного лимита</h3>
+                        <div style="position: relative; height: 180px; width: 100%; display:flex; justify-content:center;">
+                            <canvas id="chart-bank-credit"></canvas>
+                        </div>
+                    </div>
+
                     <div class="card" style="margin-bottom: 0; flex:1; background:var(--surface);">
                         <h3 style="margin-bottom:20px; font-size:1.15rem;">Портфель обязательств (Мои кредиты)</h3>
                         <div id="ui-active-loans" style="display:flex; flex-direction:column; gap:16px;">
