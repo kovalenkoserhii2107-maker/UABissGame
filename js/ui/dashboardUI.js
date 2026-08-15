@@ -1598,9 +1598,11 @@ const UI_DASHBOARD = {
                                     <div style="font-size:0.75rem; color:var(--text-dim);">📍 в ${cName} • ★${(d.quality||1.0).toFixed(2)}</div>
                                 </div>
                             </div>
-                            <div style="text-align:right;">
-                                <div style="color:var(--green); font-weight:700; font-size:0.95rem;">$${formatMoney(d.totalCost)}</div>
-                                <button onclick="MARKET.cancelOrder('${d.id}')" style="background:var(--red-dim); color:var(--red); border:none; padding:4px 8px; border-radius:6px; cursor:pointer; font-size:0.75rem; font-weight:600; margin-top:4px;">Отменить</button>
+                            <div style="text-align:right; min-width:140px;">
+                                <div style="color:var(--green); font-weight:800; font-size:1.1rem; line-height:1;">$${formatMoney(d.totalCost)}</div>
+                                <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">Товар: <span style="font-weight:600;">$${formatMoney(d.cost||0)}</span></div>
+                                <div style="font-size:0.75rem; color:var(--orange); margin-top:2px;">Доставка: <span style="font-weight:600;">$${formatMoney(d.logCost||0)}</span></div>
+                                <button onclick="MARKET.cancelOrder('${d.id}')" style="background:var(--red-dim); color:var(--red); border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.75rem; font-weight:700; margin-top:8px; width:100%; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">Отменить</button>
                             </div>
                         </div>`;
                 });
