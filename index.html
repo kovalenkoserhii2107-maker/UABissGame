@@ -905,6 +905,23 @@
 
         <!-- ВКЛАДКА: МАРКЕТИНГ -->
         <div id="tab-marketing" class="tab-content">
+            <!-- ШАПКА -->
+            <div style="background: linear-gradient(135deg, rgba(142,68,173,0.15), rgba(231,76,60,0.08)); border: 1px solid rgba(142,68,173,0.2); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <h2 style="margin: 0 0 4px 0; background: linear-gradient(135deg, #8e44ad, #e74c3c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">📢 Отдел Маркетинга и PR</h2>
+                    <p style="margin: 0; color: var(--text-dim); font-size: 0.9rem;">Управляйте брендом, запускайте рекламные кампании и отслеживайте общую эффективность.</p>
+                </div>
+                <button onclick="PRODUCTION.buyBusiness('marketing_agency')" style="background: linear-gradient(135deg,#8e44ad,#9b59b6); color:white; border:none; padding:12px 24px; border-radius:var(--radius-sm); cursor:pointer; font-weight:700; font-size:0.95rem; box-shadow: 0 4px 15px rgba(142,68,173,0.35); white-space:nowrap;">
+                    + Открыть Агентство
+                </button>
+            </div>
+
+            <!-- ДАШБОРД ЭФФЕКТИВНОСТИ -->
+            <div id="ui-mkt-dashboard" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 14px; margin-bottom: 20px;">
+                <!-- Заполняется JS -->
+            </div>
+
+            <!-- КАРТОЧКИ АГЕНТСТВ -->
             <div id="ui-marketing-businesses"></div>
         </div>
 
