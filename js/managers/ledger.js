@@ -22,7 +22,7 @@ const LEDGER = {
     },
 
 init() {
-        if (!STATE.ledger || !STATE.ledger.total.hasOwnProperty('exp_logistics')) {
+        if (!STATE.ledger || !STATE.ledger.total || !STATE.ledger.total.hasOwnProperty('exp_logistics')) {
             STATE.ledger = {
                 today: JSON.parse(JSON.stringify(this.categories)),
                 yesterday: JSON.parse(JSON.stringify(this.categories)),

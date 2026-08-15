@@ -3,7 +3,7 @@ const RND = {
     init() {
         if (!STATE.rnd) {
             STATE.rnd = {
-                unlocked: ['microchips', 'parts3d'],
+                unlocked: ['bakery_fab', 'parts3d'],
                 activeProject: null,
                 points: 0,
                 staff: { scientist: 0, lead_scientist: 0 }

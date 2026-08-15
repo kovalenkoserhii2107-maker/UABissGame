@@ -3,7 +3,7 @@ const EVENTS = {
     simulate() {
         if (!STATE.eventLog) STATE.eventLog = [];
         // Храним только последние 30 событий, чтобы не засорять память
-        if (STATE.eventLog.length > 30) STATE.eventLog.pop();
+        while (STATE.eventLog.length > 30) STATE.eventLog.pop();
 
         // Шанс события — 10% каждый день
         if (Math.random() > 0.10) return;

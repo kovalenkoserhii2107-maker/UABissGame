@@ -18,7 +18,7 @@ const B2B_AI = {
         { id: 'npc_10', name: 'Nova Chem', brandMod: 3.5, tier: 3 }
     ],
 
-    allowedItems: ['bread', 'canned_food', 'clothes', 'electronics', 'furniture', 'drones', 'toys'],
+    allowedItems: ['bakery', 'canned_food', 'clothing', 'smart_pc', 'furniture', 'drones', 'toys'],
 
     generateOffers() {
         if (!STATE.b2bOffers) STATE.b2bOffers = [];
@@ -87,21 +87,20 @@ const B2B_AI = {
             LEDGER.record('exp_materials', offer.totalPrice);
         }
 
-        if (!STATE.logistics) STATE.logistics = { deliveries: [] };
+        if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
         
         STATE.logistics.deliveries.push({
             id: 'del_' + Date.now(),
-            itemId: offer.itemId,
+            item: offer.itemId,
             qty: offer.qty,
             cost: offer.totalPrice,
-            from: 'B2B: ' + offer.company,
-            to: targetCity,
+            logCost: 0,
+            totalCost: offer.totalPrice,
+            targetCity: targetCity,
             daysLeft: 1,
-            meta: {
-                quality: offer.quality,
-                brandName: offer.brandName,
-                brandPower: offer.brandPower
-            }
+            isMarketOrder: false,
+            quality: offer.quality,
+            brand: offer.brandPower
         });
 
         offer.accepted = true;
@@ -127,7 +126,7 @@ const B2B_AI = {
             let itemId = possibleItems[Math.floor(Math.random() * possibleItems.length)];
             let res = typeof RECIPES !== 'undefined' ? RECIPES.RESOURCES[itemId] : { basePrice: 10 };
             
-            let corp = this.CORPORATIONS[Math.floor(Math.random() * this.CORPORATIONS.length)];
+            let corp = this.competitors[Math.floor(Math.random() * this.competitors.length)];
             let priceVar = 0.8 + Math.random() * 0.4; // Разброс цены 80-120%
             let price = Math.max(1, Math.round(res.basePrice * priceVar));
             let qty = 10 + Math.floor(Math.random() * 90);
@@ -141,7 +140,7 @@ const B2B_AI = {
                 totalPrice: qty * price,
                 quality: (1.0 + Math.random() * 4.0).toFixed(1),
                 brandName: corp.name,
-                brandPower: corp.powerLevel,
+                brandPower: corp.brandMod,
                 accepted: false,
                 expiresDay: STATE.time.day + (3 + Math.floor(Math.random() * 5))
             });

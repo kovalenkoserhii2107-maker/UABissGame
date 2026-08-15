@@ -132,12 +132,15 @@ const WAREHOUSE = {
                     
                     let oldTotalCost = storeItem.qty * storeItem.avgCost;
                     let transferTotalCost = transferQty * whItem.avgCost;
+                    let oldTotalQ = storeItem.qty * (storeItem.quality || 1.0);
+                    let transferTotalQ = transferQty * (whItem.quality || 1.0);
                     
                     storeItem.qty += transferQty;
                     storeItem.avgCost = (oldTotalCost + transferTotalCost) / storeItem.qty;
+                    storeItem.quality = (oldTotalQ + transferTotalQ) / storeItem.qty;
                     
                     whItem.qty -= transferQty;
-                    if (whItem.qty === 0) whItem.avgCost = 0;
+                    if (whItem.qty === 0) { whItem.avgCost = 0; whItem.quality = 1.0; }
                 }
             });
         });

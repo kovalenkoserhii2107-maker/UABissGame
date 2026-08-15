@@ -4,6 +4,7 @@ const GAME = {
     // Инициализация при старте игры
     init() {
         if (typeof LEDGER !== 'undefined') LEDGER.init();
+        if (typeof MARKET !== 'undefined') MARKET.init();
         if (typeof WAREHOUSE !== 'undefined') WAREHOUSE.init();
         if (typeof QUESTS !== 'undefined') {
             QUESTS.init();

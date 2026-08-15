@@ -151,6 +151,8 @@ const RETAIL = {
                         inv.qty -= itemsSold;
                         if (inv.qty === 0) inv.avgCost = 0;
 
+                        // BUG-5 FIX: Зачисляем выручку на баланс компании
+                        STATE.finances.balance += revenue;
                         totalB2CRevenue += revenue;
 
                         // Запись в статистику магазина

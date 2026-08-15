@@ -358,7 +358,7 @@ const PRODUCTION = {
 
                 let bizSalaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary)) * cityData.salaryMult;
                 
-                let totalProductionCost = materialsCost + bizSalaryCost + dailyAdminCost + inboundLogisticsCost; 
+                let totalProductionCost = materialsCost + bizSalaryCost + inboundLogisticsCost; 
                 biz.lastCogs = totalProductionCost / actualOutput;
 
                 let remainingOutput = actualOutput;

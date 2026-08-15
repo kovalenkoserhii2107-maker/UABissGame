@@ -234,12 +234,11 @@ const QUESTS = {
             desc: 'Достигните общей капитализации компании (Net Worth) не менее $250,000.',
             reward: { money: 30000, score: 50, text: '+$30,000, +50 Скоринг, Переход в 4 Главу!' },
             check: (s) => {
-                let cash = Math.max(0, s.finances.balance);
-                return cash >= 150000;
+                return typeof FINANCE !== 'undefined' ? FINANCE.calculateNetWorth() >= 250000 : false;
             },
             progress: (s) => {
-                let cash = Math.max(0, s.finances.balance);
-                return { current: Math.min(cash, 150000), target: 150000, label: `$${formatMoney(cash)} / $150,000 Cash` };
+                let nw = typeof FINANCE !== 'undefined' ? FINANCE.calculateNetWorth() : 0;
+                return { current: Math.min(nw, 250000), target: 250000, label: `$${formatMoney(nw)} / $250,000 Net Worth` };
             }
         },
 
@@ -318,12 +317,11 @@ const QUESTS = {
             desc: 'Достигните суммарной капитализации компании (Net Worth) от $2,500,000.',
             reward: { money: 1000000, score: 200, text: '🏆 ПОБЕДА! Титул "Промышленный Магнат Украины", +$1,000,000' },
             check: (s) => {
-                let cash = Math.max(0, s.finances.balance);
-                return cash >= 1000000;
+                return typeof FINANCE !== 'undefined' ? FINANCE.calculateNetWorth() >= 2500000 : false;
             },
             progress: (s) => {
-                let cash = Math.max(0, s.finances.balance);
-                return { current: Math.min(cash, 1000000), target: 1000000, label: `$${formatMoney(cash)} / $1,000,000 Cash` };
+                let nw = typeof FINANCE !== 'undefined' ? FINANCE.calculateNetWorth() : 0;
+                return { current: Math.min(nw, 2500000), target: 2500000, label: `$${formatMoney(nw)} / $2,500,000 Net Worth` };
             }
         }
     ],

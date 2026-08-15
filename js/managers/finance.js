@@ -57,7 +57,8 @@ const FINANCE = {
                 let wh = STATE.company.warehouses[cId];
                 if (wh.inventory) {
                     Object.keys(wh.inventory).forEach(k => {
-                        inventoryValue += wh.inventory[k].qty * (wh.inventory[k].avgCost || 0);
+                        let val = (wh.inventory[k].qty || 0) * (wh.inventory[k].avgCost || 0);
+                        if (!isNaN(val)) inventoryValue += val;
                     });
                 }
             });
@@ -66,7 +67,8 @@ const FINANCE = {
             STATE.company.businesses.forEach(b => {
                 if (b.localInventory) {
                     Object.keys(b.localInventory).forEach(k => {
-                        inventoryValue += b.localInventory[k].qty * (b.localInventory[k].avgCost || 0);
+                        let val = (b.localInventory[k].qty || 0) * (b.localInventory[k].avgCost || 0);
+                        if (!isNaN(val)) inventoryValue += val;
                     });
                 }
             });
@@ -134,7 +136,7 @@ const FINANCE = {
                 if (typeof LEDGER !== 'undefined') LEDGER.record('fin_expense', dailyInterest);
                 
                 STATE.finances.loans.splice(idx, 1);
-                STATE.finances.creditScore += 20; // Позитивный эффект на скоринг
+                STATE.finances.creditScore = Math.min(1000, STATE.finances.creditScore + 20); // Позитивный эффект на скоринг
                 
                 NOTIFY.success('Успех', `Кредит досрочно погашен! Списано $${formatMoney(totalToPay)} (в т.ч. проценты за 1 день: $${formatMoney(dailyInterest)}).`);
                 UI_DASHBOARD.update();
@@ -191,11 +193,11 @@ const FINANCE = {
 
             if (loan.remainingDays <= 0) {
                 STATE.finances.loans.splice(i, 1);
-                STATE.finances.creditScore += 15; 
+                STATE.finances.creditScore = Math.min(1000, STATE.finances.creditScore + 15); 
             }
         }
         STATE.finances.balance -= totalDailyPayment;
-        if (STATE.finances.balance < 0) STATE.finances.creditScore -= 10;
+        if (STATE.finances.balance < 0) STATE.finances.creditScore = Math.max(0, STATE.finances.creditScore - 10);
 
         if (!STATE.finances.deposits) STATE.finances.deposits = [];
         for (let i = STATE.finances.deposits.length - 1; i >= 0; i--) {

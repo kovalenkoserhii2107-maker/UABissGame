@@ -56,6 +56,7 @@ const TAXES = {
         } else {
             let loss = Math.abs(STATE.taxes.taxableBase);
             NOTIFY.warning('Налоговая служба', `Период закрыт с убытком $${formatMoney(loss)}. Налог не начислен.`);
+            STATE.taxes.taxableBase = 0;
         }
     }
 };

@@ -1,14 +1,3 @@
-// Глобальные утилиты форматирования
-window.formatMoney = function(amount) {
-    return Number(amount).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-window.formatFinancialResult = function(amount) {
-    if (amount > 0) return '+$' + formatMoney(amount);
-    if (amount < 0) return '-$' + formatMoney(Math.abs(amount));
-    return '$' + formatMoney(0);
-};
-
 // Главный модуль интерфейса (Отрефакторенная версия)
 const UI_DASHBOARD = {
     // Состояния фильтров биржи

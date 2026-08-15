@@ -25,9 +25,11 @@ const MARKET = {
                 this.recipeMap[biz.output] = biz.inputs;
             }
         });
+        this._initialized = true;
     },
 
     init() {
+        if (this._initialized && STATE.market) return;
         if (!STATE.market) STATE.market = { pools: {}, inflationIndex: 1.0, productionModifiers: {} };
         if (STATE.market.inflationIndex === undefined) STATE.market.inflationIndex = 1.0; 
         if (STATE.market.productionModifiers === undefined) STATE.market.productionModifiers = {};
@@ -190,7 +192,7 @@ const MARKET = {
             STATE.logistics.receivables.push({ amount: revenue, cogs: cogs, source: 'B2B', daysLeft: 1 });
             
             let cityName = typeof GEO !== 'undefined' ? GEO.getCity(cityId).name : cityId;
-            NOTIFY.success('Успех', `Партия отгружена со склада ${cityName}. Выручка $${formatMoney(revenue)} поступит завтра.`);
+            if (typeof NOTIFY !== 'undefined') NOTIFY.success('Успех', `Партия отгружена со склада ${cityName}. Выручка $${formatMoney(revenue)} поступит завтра.`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
         } else {
              if (typeof NOTIFY !== 'undefined') NOTIFY.error('Ошибка', 'Недостаточно товара на складе для продажи.');
