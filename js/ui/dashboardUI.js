@@ -1990,6 +1990,7 @@ const UI_DASHBOARD = {
                 STATE.finances.loans.forEach(l => {
                     let currentDailyInterest = (l.remainingPrincipal * l.rate) / 365;
                     let currentDailyPayment = l.dailyPrincipal + currentDailyInterest;
+                    let totalInterestLeft = FINANCE.calculateTotalInterest(l.remainingPrincipal, l.rate, l.remainingDays);
                     
                     loansList.innerHTML += `
                     <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
@@ -2008,8 +2009,8 @@ const UI_DASHBOARD = {
                                 <div style="color:var(--text); font-weight:700; font-size:1rem;">${(l.rate*100).toFixed(1)}%</div>
                             </div>
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Платёж/день</div>
-                                <div style="color:var(--text); font-weight:700; font-size:1rem;">$${formatMoney(currentDailyPayment)}</div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Переплата (Проценты)</div>
+                                <div style="color:var(--red); font-weight:700; font-size:1rem;">$${formatMoney(totalInterestLeft)}</div>
                             </div>
                         </div>
 
@@ -2018,7 +2019,10 @@ const UI_DASHBOARD = {
                             <div style="height:100%; background:var(--orange); width:${Math.max(0, 100 - (l.remainingPrincipal / l.amount) * 100)}%;"></div>
                         </div>
 
-                        <button onclick="FINANCE.payOffLoan(${l.id})" style="width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); font-size:0.85rem; padding:8px; border-radius:8px; font-weight:600; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='var(--surface)'">Досрочно погасить ($${formatMoney(l.remainingPrincipal + currentDailyInterest)})</button>
+                        <div style="display:flex; gap:8px;">
+                            <button onclick="UI_DASHBOARD.showBankModal('loan', ${l.id})" style="flex:1; background:var(--blue-dim); color:var(--blue); border:1px solid var(--blue); font-size:0.85rem; padding:8px; border-radius:8px; font-weight:600; cursor:pointer;">График платежей</button>
+                            <button onclick="FINANCE.payOffLoan(${l.id})" style="flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); font-size:0.85rem; padding:8px; border-radius:8px; font-weight:600; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='var(--surface)'">Погасить ($${formatMoney(l.remainingPrincipal + currentDailyInterest)})</button>
+                        </div>
                     </div>`;
                 });
             }
@@ -2038,7 +2042,7 @@ const UI_DASHBOARD = {
                 STATE.finances.deposits.forEach(d => {
                     let payoutText = d.payoutType === 'daily' ? 'Ежедневно' : 'В конце';
                     let accText = d.payoutType === 'daily' ? 'выплачивается' : `$${formatMoney(d.accrued)}`;
-                    let progress = Math.min(100, (1 - (d.daysLeft / d.term)) * 100);
+                    let progress = Math.min(100, (1 - (d.daysLeft / d.termDays)) * 100);
                     
                     depList.innerHTML += `
                     <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
@@ -2063,9 +2067,11 @@ const UI_DASHBOARD = {
                         </div>
 
                         <!-- Прогресс бар -->
-                        <div style="height:6px; background:rgba(0,0,0,0.05); border-radius:3px; overflow:hidden;">
+                        <div style="height:6px; background:rgba(0,0,0,0.05); border-radius:3px; margin-bottom:16px; overflow:hidden;">
                             <div style="height:100%; background:var(--blue); width:${progress}%;"></div>
                         </div>
+                        
+                        <button onclick="UI_DASHBOARD.showBankModal('deposit', ${d.id})" style="width:100%; background:var(--green-dim); color:var(--green); border:1px solid var(--green); font-size:0.85rem; padding:8px; border-radius:8px; font-weight:600; cursor:pointer;">График доходности</button>
                     </div>`;
                 });
             }
@@ -3553,5 +3559,168 @@ const UI_DASHBOARD = {
                 </div>
             </div>
         `;
+    },
+
+    showBankModal(type, id) {
+        let content = document.getElementById('bank-modal-content');
+        if (!content) return;
+
+        if (type === 'loan') {
+            let loan = STATE.finances.loans.find(l => l.id === id);
+            if (!loan) return;
+
+            let schedule = FINANCE.generatePaymentSchedule(loan);
+            let labels = schedule.map(s => 'День ' + s.day);
+            let principalData = schedule.map(s => s.principal);
+            let interestData = schedule.map(s => s.interest);
+
+            content.innerHTML = `
+                <div style="padding:24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface-2);">
+                    <h2 style="margin:0; font-size:1.4rem;">График платежей: Заём $${formatMoney(loan.amount)}</h2>
+                    <button onclick="UI_DASHBOARD.closeBankModal()" style="background:transparent; border:none; font-size:1.5rem; color:var(--text-dim); cursor:pointer;">&times;</button>
+                </div>
+                <div style="padding:24px;">
+                    <div style="height:300px; position:relative; margin-bottom:24px;">
+                        <canvas id="bankScheduleChart"></canvas>
+                    </div>
+                    <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
+                        <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:right;">
+                            <thead style="background:var(--surface-2); position:sticky; top:0;">
+                                <tr>
+                                    <th style="padding:8px; border-bottom:1px solid var(--border); text-align:center;">День</th>
+                                    <th style="padding:8px; border-bottom:1px solid var(--border);">Тело кредита</th>
+                                    <th style="padding:8px; border-bottom:1px solid var(--border);">Проценты</th>
+                                    <th style="padding:8px; border-bottom:1px solid var(--border);">Остаток</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${schedule.map(s => `
+                                <tr>
+                                    <td style="padding:6px; border-bottom:1px solid var(--border); text-align:center;">${s.day}</td>
+                                    <td style="padding:6px; border-bottom:1px solid var(--border); color:var(--text);">$${formatMoney(s.principal)}</td>
+                                    <td style="padding:6px; border-bottom:1px solid var(--border); color:var(--red);">$${formatMoney(s.interest)}</td>
+                                    <td style="padding:6px; border-bottom:1px solid var(--border); color:var(--orange);">$${formatMoney(s.remaining)}</td>
+                                </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('bank-modal').style.display = 'flex';
+            
+            let ctx = document.getElementById('bankScheduleChart');
+            if (this.bankChartInstance) this.bankChartInstance.destroy();
+            this.bankChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Проценты (Переплата)',
+                            data: interestData,
+                            backgroundColor: 'rgba(255, 59, 48, 0.8)',
+                            stack: 'Stack 0',
+                        },
+                        {
+                            label: 'Тело кредита',
+                            data: principalData,
+                            backgroundColor: 'rgba(0, 122, 255, 0.8)',
+                            stack: 'Stack 0',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, ticks: { callback: v => '$' + v } }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) { return context.dataset.label + ': $' + formatMoney(context.raw); }
+                            }
+                        }
+                    }
+                }
+            });
+        } else if (type === 'deposit') {
+            let deposit = STATE.finances.deposits.find(d => d.id === id);
+            if (!deposit) return;
+
+            let schedule = [];
+            let currentAccrued = deposit.accrued;
+            let dailyInt = (deposit.amount * deposit.rate) / 365;
+            
+            for (let i = 0; i < deposit.daysLeft; i++) {
+                if (deposit.payoutType !== 'daily') currentAccrued += dailyInt;
+                schedule.push({
+                    day: i + 1,
+                    interest: dailyInt,
+                    accrued: currentAccrued
+                });
+            }
+
+            let labels = schedule.map(s => 'День ' + s.day);
+            let accruedData = schedule.map(s => deposit.amount + s.accrued);
+
+            content.innerHTML = `
+                <div style="padding:24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface-2);">
+                    <h2 style="margin:0; font-size:1.4rem;">Прогноз: Депозит $${formatMoney(deposit.amount)}</h2>
+                    <button onclick="UI_DASHBOARD.closeBankModal()" style="background:transparent; border:none; font-size:1.5rem; color:var(--text-dim); cursor:pointer;">&times;</button>
+                </div>
+                <div style="padding:24px;">
+                    <div style="height:300px; position:relative; margin-bottom:24px;">
+                        <canvas id="bankScheduleChart"></canvas>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('bank-modal').style.display = 'flex';
+            
+            let ctx = document.getElementById('bankScheduleChart');
+            if (this.bankChartInstance) this.bankChartInstance.destroy();
+            this.bankChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Общая сумма с процентами',
+                            data: accruedData,
+                            borderColor: 'rgba(52, 199, 89, 1)',
+                            backgroundColor: 'rgba(52, 199, 89, 0.1)',
+                            fill: true,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { ticks: { callback: v => '$' + v } }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) { return 'Сумма: $' + formatMoney(context.raw); }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    },
+
+    closeBankModal() {
+        document.getElementById('bank-modal').style.display = 'none';
+        if (this.bankChartInstance) {
+            this.bankChartInstance.destroy();
+            this.bankChartInstance = null;
+        }
     }
 };

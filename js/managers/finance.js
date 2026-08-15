@@ -146,6 +146,40 @@ const FINANCE = {
         }
     },
 
+    calculateTotalInterest(amount, rate, termDays) {
+        let totalInterest = 0;
+        let remainingPrincipal = amount;
+        let dailyPrincipal = amount / termDays;
+        
+        for (let i = 0; i < termDays; i++) {
+            let dailyInterest = (remainingPrincipal * rate) / 365;
+            totalInterest += dailyInterest;
+            remainingPrincipal -= dailyPrincipal;
+        }
+        return totalInterest;
+    },
+
+    generatePaymentSchedule(loan) {
+        let schedule = [];
+        let remainingPrincipal = loan.remainingPrincipal;
+        let termDays = loan.remainingDays;
+        let rate = loan.rate;
+        let dailyPrincipal = loan.dailyPrincipal;
+        
+        for (let i = 0; i < termDays; i++) {
+            let dailyInterest = (remainingPrincipal * rate) / 365;
+            schedule.push({
+                day: i + 1,
+                principal: dailyPrincipal,
+                interest: dailyInterest,
+                total: dailyPrincipal + dailyInterest,
+                remaining: Math.max(0, remainingPrincipal - dailyPrincipal)
+            });
+            remainingPrincipal -= dailyPrincipal;
+        }
+        return schedule;
+    },
+
     getDepositRate(termDays, payoutType) {
         let base = 0.04; 
         if (termDays >= 30) base = 0.06;  
@@ -217,6 +251,33 @@ const FINANCE = {
                 STATE.finances.balance += dep.amount + dep.accrued;
                 STATE.finances.deposits.splice(i, 1);
             }
+        }
+        
+        // НОВОЕ: Динамический пересчет кредитного рейтинга
+        let nw = this.calculateNetWorth();
+        let totalDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
+        let debtRatio = nw > 0 ? (totalDebt / nw) : (totalDebt > 0 ? 1 : 0);
+        
+        let targetScore = 400; // Базовый скоринг
+        if (nw > 50000) targetScore += 50;
+        if (nw > 250000) targetScore += 100;
+        if (nw > 1000000) targetScore += 150;
+        if (STATE.finances.balance > 100000) targetScore += 100;
+        
+        if (debtRatio < 0.1) targetScore += 150;
+        else if (debtRatio < 0.3) targetScore += 50;
+        else if (debtRatio > 0.7) targetScore -= 100;
+        else if (debtRatio > 1.0) targetScore -= 250;
+        
+        if (STATE.finances.balance < 0) targetScore -= 200;
+        
+        targetScore = Math.max(0, Math.min(1000, targetScore));
+        
+        // Плавное движение текущего рейтинга к целевому (на 2-5 пунктов в день)
+        if (STATE.finances.creditScore < targetScore) {
+            STATE.finances.creditScore = Math.min(targetScore, STATE.finances.creditScore + 3);
+        } else if (STATE.finances.creditScore > targetScore) {
+            STATE.finances.creditScore = Math.max(targetScore, STATE.finances.creditScore - 3);
         }
     }
 };
