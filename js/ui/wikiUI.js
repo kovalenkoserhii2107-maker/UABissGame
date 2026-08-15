@@ -359,23 +359,32 @@ const WIKI = {
         }).join('');
 
         const article = this.ARTICLES[this.currentCategory] || this.ARTICLES['retail'];
+        
+        let imageUrl = '';
+        if (['finance', 'market', 'empire'].includes(this.currentCategory)) imageUrl = 'assets/wiki_finance_1786758956618.jpg';
+        if (['production', 'warehouse'].includes(this.currentCategory)) imageUrl = 'assets/wiki_factory_1786758964128.jpg';
+        if (['rnd'].includes(this.currentCategory)) imageUrl = 'assets/wiki_rnd_1786758971681.jpg';
+        if (['hr', 'retail', 'contracts'].includes(this.currentCategory)) imageUrl = 'assets/wiki_hr_1786758980159.jpg';
+
+        const imageHtml = imageUrl ? `<div style="width: 100%; height: 260px; background-image: url('${imageUrl}'); background-size: cover; background-position: center; border-radius: 16px; margin-bottom: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);"></div>` : '';
 
         container.innerHTML = `
-            <div style="display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start;">
+            <div style="display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start;">
                 <!-- ЛЕВАЯ КОЛОНКА: ОГЛАВЛЕНИЕ -->
-                <div class="card" style="padding: 14px; margin-bottom: 0; background: var(--surface-2, #F5F5F7); border: 1px solid var(--border, rgba(0,0,0,0.08));">
-                    <h4 style="margin: 4px 0 12px 8px; color: var(--text-dim, #86868B); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em;">Разделы базы знаний</h4>
+                <div class="card" style="padding: 16px; margin-bottom: 0; background: var(--surface-2, #F5F5F7); border: 1px solid var(--border, rgba(0,0,0,0.08)); border-radius: 20px;">
+                    <h4 style="margin: 4px 0 16px 8px; color: var(--text-dim, #86868B); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800;">Оглавление</h4>
                     <div>${navHtml}</div>
                 </div>
 
                 <!-- ПРАВАЯ КОЛОНКА: СТАТЬЯ -->
-                <div class="card" style="padding: 24px; margin-bottom: 0; background: var(--surface, #fff);">
+                <div class="card" style="padding: 32px; margin-bottom: 0; background: var(--surface, #fff); border-radius: 20px; box-shadow: var(--shadow-card);">
+                    ${imageHtml}
                     <div style="border-bottom: 1px solid var(--border, rgba(0,0,0,0.08)); padding-bottom: 16px; margin-bottom: 20px;">
-                        <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--blue, #007AFF); font-weight: bold;">UABiz Knowledge Base</span>
-                        <h2 style="margin: 6px 0 4px 0; color: var(--text, #1D1D1F); font-size: 1.45rem;">${article.title}</h2>
-                        <p style="margin: 0; color: var(--text-dim, #86868B); font-size: 0.95rem;">${article.subtitle}</p>
+                        <span style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--blue, #007AFF); font-weight: 800;">UABiz Knowledge Base</span>
+                        <h2 style="margin: 8px 0 6px 0; color: var(--text, #1D1D1F); font-size: 1.8rem;">${article.title}</h2>
+                        <p style="margin: 0; color: var(--text-dim, #86868B); font-size: 1rem; line-height: 1.5;">${article.subtitle}</p>
                     </div>
-                    <div>
+                    <div style="font-size: 1.05rem; line-height: 1.6; color: var(--text);">
                         ${article.content}
                     </div>
                 </div>
