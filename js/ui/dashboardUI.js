@@ -1454,6 +1454,16 @@ const UI_DASHBOARD = {
         container.innerHTML = html;
     },
 
+    // Словарь иконок для ресурсов
+    _resIcons: {
+        grain: '🌾', vegetables: '🍅', meat_raw: '🥩', milk_raw: '🥛', bakery: '🍞', canned_food: '🥫',
+        cotton: '🧶', wood: '🪵', chemicals: '🧪', detergent: '🧼', clothing: '👕', toys: '🧸', furniture: '🪑',
+        plastic: '🧊', glass: '🪟', silicon: '🪨', copper: '🧱', aluminum: '🪙', lithium: '🔋',
+        parts3d: '⚙️', optics: '🔭', chips: '💾', motors: '🦾', batteries: '🔋', camera_mod: '📷', drops: '🪂',
+        software: '💿', ai_core: '🧠', smart_pc: '🖥️', mil_radio: '📻', drones: '🚁', drones_ai: '🛸',
+        retail_display: '🏪', server_rack: '🗄️', machine_tool: '🏗️'
+    },
+
     updateMarketTab() {
         let marketContainer = document.getElementById('ui-market-businesses');
         if (!marketContainer || typeof MARKET === 'undefined') return;
@@ -1480,152 +1490,274 @@ const UI_DASHBOARD = {
         }
 
         if (cityOptions === '') {
-            marketContainer.innerHTML = '<div style="padding: 20px; text-align:center; color:#7f8c8d;">У вас нет ни одного активного склада! Сначала постройте хаб.</div>';
+            marketContainer.innerHTML = '<div style="padding: 40px; text-align:center; color:var(--text-dim);">У вас нет ни одного активного склада! Сначала постройте склад (вкладка Производство или Склады).</div>';
             return;
         }
 
         let filterHtml = `
-        <div style="margin-bottom: 20px; display: flex; gap: 10px;">
-            <button onclick="UI_DASHBOARD.setMarketFilter('all')" style="background: ${this.marketFilter==='all' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='all' ? '#fff' : 'var(--text)'};">Все товары</button>
-            <button onclick="UI_DASHBOARD.setMarketFilter('raw')" style="background: ${this.marketFilter==='raw' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='raw' ? '#fff' : 'var(--text)'};">Только сырье</button>
-            <button onclick="UI_DASHBOARD.setMarketFilter('finished')" style="background: ${this.marketFilter==='finished' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='finished' ? '#fff' : 'var(--text)'};">Готовая продукция</button>
-            <button onclick="UI_DASHBOARD.setMarketFilter('equipment')" style="background: ${this.marketFilter==='equipment' ? 'var(--blue)' : 'var(--surface-3)'}; color: ${this.marketFilter==='equipment' ? '#fff' : 'var(--text)'};">Оборудование / ПК</button>
+        <div style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button onclick="UI_DASHBOARD.setMarketFilter('all')" class="btn-filter ${this.marketFilter==='all' ? 'active' : ''}" style="padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: ${this.marketFilter==='all' ? 'var(--blue)' : 'var(--surface-2)'}; color: ${this.marketFilter==='all' ? '#fff' : 'var(--text-dim)'}; transition: 0.2s;">Все товары</button>
+            <button onclick="UI_DASHBOARD.setMarketFilter('raw')" class="btn-filter ${this.marketFilter==='raw' ? 'active' : ''}" style="padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: ${this.marketFilter==='raw' ? 'var(--blue)' : 'var(--surface-2)'}; color: ${this.marketFilter==='raw' ? '#fff' : 'var(--text-dim)'}; transition: 0.2s;">Только сырье</button>
+            <button onclick="UI_DASHBOARD.setMarketFilter('finished')" class="btn-filter ${this.marketFilter==='finished' ? 'active' : ''}" style="padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: ${this.marketFilter==='finished' ? 'var(--blue)' : 'var(--surface-2)'}; color: ${this.marketFilter==='finished' ? '#fff' : 'var(--text-dim)'}; transition: 0.2s;">Готовая продукция</button>
+            <button onclick="UI_DASHBOARD.setMarketFilter('equipment')" class="btn-filter ${this.marketFilter==='equipment' ? 'active' : ''}" style="padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: ${this.marketFilter==='equipment' ? 'var(--blue)' : 'var(--surface-2)'}; color: ${this.marketFilter==='equipment' ? '#fff' : 'var(--text-dim)'}; transition: 0.2s;">Оборудование</button>
         </div>`;
 
-        // Рендер активных ордеров (Товары в пути)
+        // Активные ордера (Товары в пути)
         let pendingOrdersHtml = '';
         if (STATE.logistics && STATE.logistics.deliveries) {
             let marketOrders = STATE.logistics.deliveries.filter(d => d.isMarketOrder);
             if (marketOrders.length > 0) {
                 pendingOrdersHtml += `
-                <div style="margin-bottom: 20px; background: #fffcf2; border: 1px solid #f1c40f; border-radius: 6px; padding: 15px;">
-                    <h4 style="margin: 0 0 10px 0; color: #d35400;">📦 Оформленные поставки (В пути)</h4>
-                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
-                        <tr style="border-bottom: 1px solid #f1c40f; text-align: left; color: #b9770e;">
-                            <th style="padding: 5px;">Товар</th>
-                            <th style="padding: 5px;">Кол-во</th>
-                            <th style="padding: 5px;">Качество/Бренд</th>
-                            <th style="padding: 5px;">Цена (ед)</th>
-                            <th style="padding: 5px;">Партия</th>
-                            <th style="padding: 5px;">Доставка</th>
-                            <th style="padding: 5px;">Списано</th>
-                            <th style="padding: 5px; text-align: right;">Действие</th>
-                        </tr>
-                `;
+                <div style="margin-bottom: 24px; background: rgba(243,156,18,0.05); border: 1px solid rgba(243,156,18,0.2); border-radius: 12px; padding: 20px;">
+                    <h4 style="margin: 0 0 16px 0; color: var(--orange); display:flex; align-items:center; gap:8px;"><span style="font-size:1.4rem;">📦</span> В пути (Закупки с рынка)</h4>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">`;
                 
                 marketOrders.forEach(d => {
                     let resName = RECIPES.RESOURCES[d.item] ? RECIPES.RESOURCES[d.item].name : d.item;
-                    let unitPrice = d.cost / d.qty;
+                    let icon = this._resIcons && this._resIcons[d.item] ? this._resIcons[d.item] : '📦';
                     let cName = typeof GEO !== 'undefined' ? GEO.getCity(d.targetCity).name : d.targetCity;
-
                     pendingOrdersHtml += `
-                        <tr style="border-bottom: 1px dashed #fdebd0;">
-                            <td style="padding: 8px 5px;"><strong>${resName}</strong><br><small style="color:#7f8c8d;">В г. ${cName}</small></td>
-                            <td style="padding: 8px 5px; color:#2980b9; font-weight:bold;">${d.qty} шт.</td>
-                            <td style="padding: 8px 5px;">★ ${(d.quality||1.0).toFixed(2)}<br><small>Бренд: ${d.brand||0}</small></td>
-                            <td style="padding: 8px 5px;">$${formatMoney(unitPrice)}</td>
-                            <td style="padding: 8px 5px;">$${formatMoney(d.cost)}</td>
-                            <td style="padding: 8px 5px; color:#c0392b;">$${formatMoney(d.logCost)}</td>
-                            <td style="padding: 8px 5px; color:#27ae60; font-weight:bold;">$${formatMoney(d.totalCost)}</td>
-                            <td style="padding: 8px 5px; text-align: right;">
-                                <button onclick="MARKET.cancelOrder('${d.id}')" style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; font-size:0.85em;">Отменить</button>
-                            </td>
-                        </tr>
-                    `;
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; align-items:center; justify-content:space-between;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div style="font-size:2rem;">${icon}</div>
+                                <div>
+                                    <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${resName} <span style="color:var(--text-dim); font-weight:400;">x${d.qty}</span></div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">📍 в ${cName} • ★${(d.quality||1.0).toFixed(2)}</div>
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="color:var(--green); font-weight:700; font-size:0.95rem;">$${formatMoney(d.totalCost)}</div>
+                                <button onclick="MARKET.cancelOrder('${d.id}')" style="background:var(--red-dim); color:var(--red); border:none; padding:4px 8px; border-radius:6px; cursor:pointer; font-size:0.75rem; font-weight:600; margin-top:4px;">Отменить</button>
+                            </div>
+                        </div>`;
                 });
-                
-                pendingOrdersHtml += `</table></div>`;
+                pendingOrdersHtml += `</div></div>`;
             }
         }
 
         let html = `
-        ${filterHtml}
-        <div style="margin-bottom: 15px; padding: 15px; background: #e8f8f5; border: 1px solid #1abc9c; border-radius: 6px; display: flex; align-items: center;">
-            <strong style="color: #16a085; margin-right: 15px;">📍 Склад назначения (доставка):</strong>
-            <select id="market-target-city" style="padding: 6px 10px; font-size: 1em; border-radius: 4px; border: 1px solid #bdc3c7; cursor: pointer; flex-grow: 1; max-width: 400px;">
-                ${cityOptions}
-            </select>
+        <div style="background: linear-gradient(135deg, rgba(52,152,219,0.1), rgba(41,128,185,0.05)); border: 1px solid rgba(52,152,219,0.2); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <h2 style="margin: 0 0 6px 0; color: var(--blue);">🛒 Глобальный Рынок</h2>
+                <p style="margin: 0; color: var(--text-dim); font-size: 0.9rem;">Закупайте сырье и продавайте излишки. Цены формируются динамически.</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; background:var(--surface); padding:8px 14px; border-radius:12px; border:1px solid var(--border);">
+                <span style="font-size:1.2rem;">📍</span>
+                <div style="display:flex; flex-direction:column;">
+                    <span style="font-size:0.7rem; color:var(--text-dim); font-weight:700; text-transform:uppercase;">Склад для доставки</span>
+                    <select id="market-target-city" style="border:none; background:transparent; font-size:0.95rem; font-weight:700; color:var(--text); cursor:pointer; outline:none; padding:0;">
+                        ${cityOptions}
+                    </select>
+                </div>
+            </div>
         </div>
+        ${filterHtml}
         ${pendingOrdersHtml}
-        <table style="width: 100%; border-collapse: collapse; font-size: 0.95em;">
-            <tr style="border-bottom: 2px solid #34495e; text-align: left;">
-                <th style="padding: 10px;">Сырье / Товар</th>
-                <th style="padding: 10px;">Резерв биржи</th>
-                <th style="padding: 10px;">Характеристики</th>
-                <th style="padding: 10px;">Цена (B2B)</th>
-                <th style="padding: 10px;">Ордер на закупку</th>
-            </tr>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
         `;
 
         Object.keys(RECIPES.RESOURCES).forEach(key => {
             let res = RECIPES.RESOURCES[key];
-            
             if (this.marketFilter === 'raw' && !res.isRaw) return;
             if (this.marketFilter === 'finished' && (res.isRaw || res.isEquipment)) return;
             if (this.marketFilter === 'equipment' && !res.isEquipment) return;
 
             let basePrice = MARKET.getCurrentPrice(key);
             let availQty = MARKET.getAvailablePool(key);
-            let b2bQuality = 1.00;
-            let b2bBrand = 0;
+            let icon = this._resIcons && this._resIcons[key] ? this._resIcons[key] : '📦';
             
+            // Инвентарь для продажи
+            let inventoryHtml = '';
             Object.keys(STATE.company.warehouses).forEach(cId => {
                 let wh = STATE.company.warehouses[cId];
                 if (wh.inventory && wh.inventory[key] && wh.inventory[key].qty > 0) {
                     let inv = wh.inventory[key];
                     let finalPrice = basePrice * (inv.quality || 1.0);
                     let cityName = typeof GEO !== 'undefined' ? GEO.getCity(cId).name : cId;
-                    html += `
-                    <tr style="background: #f4f6f7; border-bottom: 2px solid #bdc3c7;">
-                        <td style="padding: 10px; border-left: 4px solid #2980b9;">
-                            <strong>${res.name}</strong><br><small style="color:#2980b9; font-weight: bold;">(Ваш склад: ${cityName})</small>
-                        </td>
-                        <td><strong style="color: #2c3e50;">${inv.qty} шт.</strong></td>
-                        <td><strong style="color:#8e44ad;">★ ${(inv.quality || 1.0).toFixed(2)}</strong></td>
-                        <td><strong style="color:#2c3e50; font-size: 1.1em;">$${formatMoney(finalPrice)}</strong></td>
-                        <td>
-                            <button onclick="MARKET.sell('${key}', ${inv.qty}, '${cId}')" style="background:#e67e22; width: 100%; padding: 6px 12px; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold;">Продать ($${formatMoney(finalPrice * inv.qty)})</button>
-                        </td>
-                    </tr>`;
+                    inventoryHtml += `
+                    <div style="background:rgba(39,174,96,0.08); border:1px solid rgba(39,174,96,0.2); border-radius:8px; padding:10px; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div style="font-size:0.8rem; color:var(--text-dim);">На складе <span style="font-weight:700; color:var(--text);">${cityName}</span></div>
+                            <div style="font-weight:800; color:var(--green); font-size:0.9rem;">${inv.qty} шт</div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="font-size:0.8rem;">★ ${(inv.quality || 1.0).toFixed(2)} <span style="color:var(--text-faint);">($${formatMoney(finalPrice)}/шт)</span></div>
+                            <button onclick="MARKET.sell('${key}', ${inv.qty}, '${cId}')" style="background:var(--green); color:white; border:none; padding:6px 12px; border-radius:6px; font-weight:700; font-size:0.8rem; cursor:pointer;">Продать</button>
+                        </div>
+                    </div>`;
                 }
             });
-            
+
             html += `
-            <tr style="border-bottom: 1px solid #ecf0f1;">
-                <td style="padding: 10px;">
-                    <strong style="color: #2c3e50; font-size: 1.1em;">${res.name}</strong><br>
-                    <small style="color:#7f8c8d;">Объем: ${res.volume || 1} м³/шт</small>
-                </td>
-                <td style="padding: 10px; color:#2980b9; font-weight:bold; font-size: 1.1em;">
-                    ${availQty} шт.
-                </td>
-                <td style="padding: 10px;">
-                    <span style="color:#8e44ad; font-weight:bold;">★ ${b2bQuality.toFixed(2)}</span><br>
-                    <small style="color:#e67e22;">Бренд: ${b2bBrand}</small>
-                </td>
-                <td style="padding: 10px; font-size: 1.2em; color: #27ae60;">
-                    <strong>$${formatMoney(basePrice)}</strong>
-                </td>
-                <td style="padding: 10px; min-width: 220px;">
-                    <div style="display: flex; gap: 5px; margin-bottom: 5px;">
-                        <input type="number" id="buy-qty-${key}" value="10" min="1" style="width: 80px; padding: 6px; border: 1px solid #bdc3c7; border-radius: 4px;">
-                        <button onclick="UI_DASHBOARD.submitBuy('${key}')" style="background:#3498db; color:white; border:none; padding: 6px 15px; border-radius: 4px; cursor:pointer; font-weight: bold;">Купить</button>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-card); overflow:hidden; display:flex; flex-direction:column; transition:transform 0.15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+                <div style="padding:16px; cursor:pointer;" onclick="UI_DASHBOARD.showMarketModal('${key}')">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="font-size:2.4rem;">${icon}</div>
+                            <div>
+                                <h3 style="margin:0; font-size:1.1rem; color:var(--text);">${res.name}</h3>
+                                <div style="color:var(--text-dim); font-size:0.75rem;">Объем: ${res.volume || 1} м³</div>
+                            </div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:1.3rem; font-weight:800; color:var(--text);">$${formatMoney(basePrice)}</div>
+                            <div style="font-size:0.75rem; color:var(--text-faint);">за ед.</div>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 4px;">
-                        <button onclick="document.getElementById('buy-qty-${key}').value = 10" style="font-size:0.8em; padding:3px 6px; background:#ecf0f1; border:1px solid #bdc3c7; border-radius:3px; cursor:pointer;">10</button>
-                        <button onclick="document.getElementById('buy-qty-${key}').value = 100" style="font-size:0.8em; padding:3px 6px; background:#ecf0f1; border:1px solid #bdc3c7; border-radius:3px; cursor:pointer;">100</button>
-                        <button onclick="document.getElementById('buy-qty-${key}').value = 1000" style="font-size:0.8em; padding:3px 6px; background:#ecf0f1; border:1px solid #bdc3c7; border-radius:3px; cursor:pointer;">1k</button>
-                        <button onclick="UI_DASHBOARD.setMaxBuy('${key}')" style="font-size:0.8em; padding:3px 8px; background:#f39c12; color:white; border:none; border-radius:3px; cursor:pointer; font-weight:bold;">MAX</button>
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:8px 12px; border-radius:8px;">
+                        <span style="font-size:0.8rem; color:var(--text-dim);">Доступно на рынке</span>
+                        <span style="font-weight:700; color:var(--blue); font-size:0.95rem;">${availQty} шт</span>
                     </div>
-                </td>
-            </tr>`;
+                </div>
+                
+                <div style="padding:0 16px;">${inventoryHtml}</div>
+
+                <div style="padding:16px; border-top:1px solid var(--border); background:var(--surface-2); margin-top:auto;">
+                    <div style="display:flex; gap:8px;">
+                        <input type="number" id="buy-qty-${key}" value="10" min="1" style="flex:1; width:50px; padding:10px; border:1px solid var(--border); border-radius:8px; font-weight:700; font-size:1rem; text-align:center; background:var(--surface); color:var(--text);">
+                        <button onclick="UI_DASHBOARD.submitBuy('${key}')" style="background:var(--blue); color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:700; font-size:0.95rem; cursor:pointer;">Купить</button>
+                    </div>
+                    <div style="display:flex; gap:6px; margin-top:8px;">
+                        <button onclick="document.getElementById('buy-qty-${key}').value = 100" style="flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:600;">100</button>
+                        <button onclick="document.getElementById('buy-qty-${key}').value = 1000" style="flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:600;">1k</button>
+                        <button onclick="UI_DASHBOARD.setMaxBuy('${key}')" style="flex:2; background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:6px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:700;">MAX</button>
+                    </div>
+                </div>
+            </div>`;
         });
 
-        html += `</table>`;
+        html += `</div>`;
         marketContainer.innerHTML = html;
     },
 
-    // Умный расчет максимально возможной закупки с учетом логистики и товаров в пути
+    showMarketModal(itemKey) {
+        let res = RECIPES.RESOURCES[itemKey];
+        if(!res) return;
+        let icon = this._resIcons && this._resIcons[itemKey] ? this._resIcons[itemKey] : '📦';
+        let basePrice = MARKET.getCurrentPrice(itemKey);
+        
+        let producers = [];
+        let consumers = [];
+        if(RECIPES.BUSINESSES) {
+            Object.values(RECIPES.BUSINESSES).forEach(biz => {
+                if(biz.output === itemKey) producers.push(biz.name);
+                if(biz.inputs && biz.inputs[itemKey]) consumers.push(biz.name);
+            });
+        }
+        
+        let descHtml = `<div style="font-size:0.9rem; color:var(--text-dim); line-height:1.5; margin-bottom:20px;">
+            <p><strong>${res.name}</strong> — ${res.isRaw ? 'Базовое сырье' : res.isEquipment ? 'Оборудование' : 'Готовая продукция'}.
+            Широко используется на глобальном рынке B2B. Цены зависят от спроса и глобальной инфляции.</p>
+            ${producers.length ? `<p><strong>Производится на:</strong> ${producers.join(', ')}</p>` : ''}
+            ${consumers.length ? `<p><strong>Используется на:</strong> ${consumers.join(', ')}</p>` : ''}
+        </div>`;
+
+        let content = document.getElementById('market-modal-content');
+        content.innerHTML = `
+            <div style="padding:24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, rgba(52,152,219,0.05), rgba(41,128,185,0.02));">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <div style="font-size:3rem;">${icon}</div>
+                    <div>
+                        <h2 style="margin:0 0 4px 0; font-size:1.6rem;">${res.name}</h2>
+                        <div style="font-size:1.2rem; font-weight:800; color:var(--blue);">$${formatMoney(basePrice)}</div>
+                    </div>
+                </div>
+                <button onclick="UI_DASHBOARD.closeMarketModal()" style="background:transparent; border:none; font-size:1.5rem; color:var(--text-dim); cursor:pointer;">&times;</button>
+            </div>
+            <div style="padding:24px;">
+                ${descHtml}
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h3 style="margin:0;">📈 Динамика цены</h3>
+                    <div id="chart-buttons" style="display:flex; gap:8px;">
+                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 7)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--blue); background:var(--blue); color:white; font-size:0.8rem; cursor:pointer;">Неделя</button>
+                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 30)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.8rem; cursor:pointer;">Месяц</button>
+                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 365)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.8rem; cursor:pointer;">Год</button>
+                    </div>
+                </div>
+                <div style="height:250px; position:relative;">
+                    <canvas id="marketChart"></canvas>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('market-item-modal').style.display = 'flex';
+        this.updateMarketChart(itemKey, 7);
+    },
+
+    closeMarketModal() {
+        document.getElementById('market-item-modal').style.display = 'none';
+        if(this.marketChartInstance) {
+            this.marketChartInstance.destroy();
+            this.marketChartInstance = null;
+        }
+    },
+
+    updateMarketChart(itemKey, days) {
+        let ctx = document.getElementById('marketChart');
+        if(!ctx) return;
+        
+        let basePrice = MARKET.getCurrentPrice(itemKey);
+        let labels = [];
+        let data = [];
+        let curPrice = basePrice * (1 - (Math.random()*0.2 - 0.1));
+        
+        for(let i=days; i>=0; i--) {
+            if(days <= 30) {
+                let d = STATE.time.day - i;
+                labels.push(`День ${d > 0 ? d : 1}`);
+            } else if(i%30===0) {
+                labels.push(`Мес ${Math.floor(i/30)} назад`);
+            }
+            
+            curPrice = curPrice + (curPrice * (Math.random()*0.06 - 0.03));
+            if(i===0) curPrice = basePrice;
+            
+            if(days <= 30 || i%30===0) data.push(curPrice);
+        }
+
+        if(this.marketChartInstance) this.marketChartInstance.destroy();
+        
+        this.marketChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Цена ($)',
+                    data: data,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52,152,219,0.1)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: days <= 30 ? 3 : 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: false, ticks: { callback: v => '$' + v.toFixed(2) } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+        
+        let btnContainer = document.getElementById('chart-buttons');
+        if (btnContainer) {
+            let btns = btnContainer.querySelectorAll('button');
+            btns.forEach(b => {
+                b.style.background = 'var(--surface-2)'; b.style.color = 'var(--text)'; b.style.borderColor = 'var(--border)';
+                if((days===7 && b.innerText==='Неделя') || (days===30 && b.innerText==='Месяц') || (days===365 && b.innerText==='Год')) {
+                    b.style.background = 'var(--blue)'; b.style.color = 'white'; b.style.borderColor = 'var(--blue)';
+                }
+            });
+        }
+    },
+
     setMaxBuy(itemKey) {
         let citySelect = document.getElementById('market-target-city');
         if (!citySelect) return;
@@ -1639,10 +1771,8 @@ const UI_DASHBOARD = {
         let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.15;
         let logCostPerItem = dist * logBase * itemVol;
 
-        // Ограничение по балансу: стоимость товара + стоимость его доставки
         let maxByMoney = Math.floor(STATE.finances.balance / (price + logCostPerItem));
         
-        // Ограничение по объему с учетом товаров в пути
         let pendingVol = 0;
         if (STATE.logistics && STATE.logistics.deliveries) {
             STATE.logistics.deliveries.forEach(d => {
@@ -1661,7 +1791,6 @@ const UI_DASHBOARD = {
         document.getElementById(`buy-qty-${itemKey}`).value = maxPossible;
     },
 
-// Обработка покупки с рынка
     submitBuy(itemKey) {
         let input = document.getElementById(`buy-qty-${itemKey}`);
         let citySelect = document.getElementById('market-target-city');
@@ -1678,7 +1807,8 @@ const UI_DASHBOARD = {
                 MARKET.buy(itemKey, qty, cityId);
             }
         }
-    },
+    }
+,
 
     // --- 8. БАНК И КРЕДИТЫ ---
     updateBankTab() {
@@ -2363,23 +2493,10 @@ const UI_DASHBOARD = {
         let retailBody = document.getElementById('ui-retail-businesses');
         if (!retailBody) return;
         
-        retailBody.innerHTML = '';
-        
         if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
         
-        // Панель управления магазинами (без блока бренда)
-        retailBody.innerHTML += `
-        <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #dcdde1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-            <div>
-                <h3 style="margin: 0 0 5px 0; color: #2c3e50;">Управление розничной сетью</h3>
-                <small style="color: #7f8c8d;">Стройте магазины, нанимайте персонал и выходите на B2C рынок.</small>
-            </div>
-            <div>
-                <button onclick="PRODUCTION.buyBusiness('retail_store')" style="background: #27ae60; color: white; font-weight: bold; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer;">+ Открыть Фирменный магазин</button>
-            </div>
-        </div>`;
-
         let hasRetail = false;
+        let activeStoresHtml = '';
 
         STATE.company.businesses.forEach(biz => {
             let tpl = RECIPES.BUSINESSES[biz.type];
@@ -2403,6 +2520,9 @@ const UI_DASHBOARD = {
             let currentVol = 0;
             let invHtml = '';
             
+            let totalSold = 0;
+            let totalRev = 0;
+
             if (biz.localInventory) {
                 Object.keys(biz.localInventory).forEach(k => {
                     let inv = biz.localInventory[k];
@@ -2413,100 +2533,182 @@ const UI_DASHBOARD = {
                         if (!biz.prices) biz.prices = {};
                         let retailPrice = biz.prices[k] || (b2bPrice * 2.5);
                         let margin = b2bPrice > 0 ? (retailPrice / b2bPrice) : 1;
-                        let marginColor = margin >= 4 ? '#e74c3c' : (margin >= 2.5 ? '#f39c12' : '#27ae60');
+                        let marginColor = margin >= 4 ? 'var(--red)' : (margin >= 2.5 ? 'var(--orange)' : 'var(--green)');
                         let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
                         let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
 
-                        invHtml += `<tr>
-                            <td style="padding:10px 0; border-bottom:1px solid #f1f2f6;"><strong>${rTpl.name}</strong><br><small style="color:#8e44ad;">★ ${(inv.quality||1.0).toFixed(2)}</small></td>
-                            <td style="border-bottom:1px solid #f1f2f6;"><strong style="color:#2980b9;">${inv.qty} шт.</strong><br><small style="color:#7f8c8d;">Закуп: $${formatMoney(inv.avgCost)}</small></td>
-                            <td style="border-bottom:1px solid #f1f2f6;"><small style="color:#7f8c8d;">Опт: $${formatMoney(b2bPrice)}</small><br>
-                                <div style="display:flex; align-items:center; gap:3px; margin-top:2px;">
-                                    $ <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:70px; padding:3px 4px; font-size:0.9em; border:1px solid #ccc; border-radius:3px;">
-                                    <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:#3498db; color:white; border:none; padding:4px 6px; font-size:0.85em; border-radius:3px; cursor:pointer;">OK</button>
+                        totalSold += soldYesterday;
+                        totalRev += revYesterday;
+
+                        let icon = this._resIcons && this._resIcons[k] ? this._resIcons[k] : '📦';
+
+                        invHtml += `
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 5px rgba(0,0,0,0.02);">
+                            <div style="display:flex; align-items:center; gap:12px; width: 35%;">
+                                <div style="font-size:2rem;">${icon}</div>
+                                <div>
+                                    <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${rTpl.name}</div>
+                                    <div style="font-size:0.75rem; color:var(--blue); font-weight:700;">Сток: ${inv.qty} шт</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">★ ${(inv.quality||1.0).toFixed(2)} • Опт: $${formatMoney(b2bPrice)}</div>
                                 </div>
-                                <small style="color:${marginColor};">Наценка: x${margin.toFixed(2)}</small>
-                            </td>
-                            <td style="border-bottom:1px solid #f1f2f6; text-align:right;">
-                                <strong style="color:#27ae60;">${soldYesterday} шт.</strong><br>
-                                <small style="color:#7f8c8d;">+$${formatMoney(revYesterday)}</small>
-                            </td>
-                        </tr>`;
+                            </div>
+                            
+                            <div style="width: 35%; display:flex; flex-direction:column; gap:4px;">
+                                <div style="font-size:0.75rem; color:var(--text-dim);">Цена на полке (x${margin.toFixed(1)})</div>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span style="color:var(--text); font-weight:700;">$</span>
+                                    <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:70px; padding:6px; border:1px solid var(--border); border-radius:6px; font-weight:700; font-size:0.9rem; background:var(--surface-2); color:var(--text);">
+                                    <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:var(--blue); color:white; border:none; padding:6px 10px; font-size:0.8rem; border-radius:6px; cursor:pointer; font-weight:700;">OK</button>
+                                </div>
+                            </div>
+                            
+                            <div style="width: 30%; text-align:right;">
+                                <div style="font-size:0.75rem; color:var(--text-dim);">Продано вчера</div>
+                                <div style="font-weight:800; color:var(--green); font-size:1.1rem;">${soldYesterday} шт</div>
+                                <div style="font-size:0.8rem; color:var(--text); font-weight:700;">+$${formatMoney(revYesterday)}</div>
+                            </div>
+                        </div>`;
                     }
                 });
             }
-            if (invHtml === '') invHtml = '<tr><td colspan="4" style="text-align:center; color:#7f8c8d; padding:15px;">Товара на полках нет</td></tr>';
+            if (invHtml === '') invHtml = '<div style="text-align:center; padding:20px; color:var(--text-dim); background:var(--surface-2); border-radius:8px; border:1px dashed var(--border);">Товара на полках нет</div>';
             
             let volPercent = Math.min(100, (currentVol/maxVol)*100).toFixed(1);
             let eqCount = biz.equipment.count || 0;
             let maxSlots = level * (tpl.slotsPerLevel || 5);
+            let eqName = RECIPES.RESOURCES[tpl.equipmentType].name;
 
-            retailBody.innerHTML += `
-            <li style="margin-bottom: 25px; background: #fff; padding: 25px; border: 1px solid #dcdde1; border-radius: 8px; list-style-type: none; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
-                <h3 style="margin-top:0; border-bottom: 2px solid #3498db; padding-bottom: 12px; color:#2c3e50; font-size:1.4em;">🏪 ${biz.name}</h3>
-                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 250px;">
-                        <div style="background:#fffcf2; padding:15px; border-radius:6px; border:1px solid #f1c40f;">
-                            <strong style="color:#d35400; font-size:1.1em;">📦 Склад магазина (Занято ${volPercent}%)</strong><br>
-                            <small style="color:#7f8c8d;">Вместимость: ${currentVol.toFixed(1)} / ${maxVol.toFixed(1)} м³</small>
-                            <table style="width:100%; margin-top:12px; font-size:0.95em; border-collapse: collapse;">
-                                <tr style="border-bottom:2px solid #bdc3c7;">
-                                    <th style="text-align:left; padding-bottom:5px;">Товар</th><th style="text-align:left; padding-bottom:5px;">Сток</th><th style="text-align:left; padding-bottom:5px;">Цена</th><th style="text-align:right; padding-bottom:5px;">Продано</th>
-                                </tr>
-                                ${invHtml}
-                            </table>
-                        </div>
-                        <div style="background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 6px; margin-top: 15px;">
-                            <strong style="color:#2c3e50;">МЕБЕЛЬ (${RECIPES.RESOURCES[tpl.equipmentType].name}):</strong><br>
-                            Установлено витрин: <strong>${eqCount} / ${maxSlots}</strong>
-                            <div style="margin-top: 12px; display: flex; gap: 5px;">
-                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:6px; border: 1px solid #ccc; border-radius: 3px;">
-                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="background:#2980b9; flex-grow: 1; border: none; color: white; cursor: pointer; border-radius: 3px;">Докупить витрину</button>
-                            </div>
+            // Рендер диаграммы занятости склада
+            let chartBg = volPercent > 90 ? 'var(--red)' : (volPercent > 70 ? 'var(--orange)' : 'var(--green)');
+
+            activeStoresHtml += `
+            <div style="background:var(--surface); padding:0; border:1px solid var(--border); border-radius:16px; margin-bottom:24px; box-shadow:var(--shadow-card); overflow:hidden;">
+                <!-- ШАПКА МАГАЗИНА -->
+                <div style="background:linear-gradient(135deg, rgba(46,204,113,0.1), rgba(39,174,96,0.05)); padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div style="font-size:2rem; background:white; width:48px; height:48px; display:flex; align-items:center; justify-content:center; border-radius:12px; box-shadow:0 2px 6px rgba(0,0,0,0.1);">🏪</div>
+                        <div>
+                            <h3 style="margin:0; font-size:1.4rem; color:var(--text);">${biz.name}</h3>
+                            <div style="font-size:0.85rem; color:var(--green); font-weight:700;">Уровень ${level} • Аренда $${formatMoney(adminCost)}/дн</div>
                         </div>
                     </div>
-                    <div style="flex: 1; min-width: 250px;">
-                        <p style="margin: 0 0 15px 0; font-size:1.1em;">🏢 Аренда: <strong style="color:#c0392b;">$${formatMoney(adminCost)}</strong>/дн</p>
-                        <div class="retail-staff-card" style="background: var(--surface, #fff); padding: 16px; border-radius: 12px; border: 1px solid var(--border, #dcdde1); box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <strong style="font-size: 1.05em; color: var(--text, #1D1D1F);">👥 КАДРЫ (${assignedTotal} / ${maxStaff} мест):</strong>
-                            </div>
-                            <small style="color: var(--text-dim, #86868B); display: block; margin-bottom: 10px;">Обязателен 1 директор. Остальные — продавцы.</small>
-                            
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f2f6;">
-                                <div>
-                                    <strong>Директор магазина</strong><br>
-                                    <small style="color: var(--text-dim, #86868B);">В резерве: <strong style="color:var(--blue, #007AFF);">${freeMgr}</strong> чел.</small>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager === 0 ? 'disabled' : ''} style="width:34px; height:34px; min-height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:#ff3b30; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer;">-</button> 
-                                    <strong style="display: inline-block; width: 24px; text-align: center; font-size:1.1rem;">${biz.assigned.store_manager}</strong> 
-                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr === 0 ? 'disabled' : ''} style="width:34px; height:34px; min-height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:#34c759; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer; box-shadow:0 2px 8px rgba(52,199,89,0.35);">+</button>
-                                </div>
-                            </div>
-
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; margin-top: 4px;">
-                                <div>
-                                    <strong>Продавец-консультант</strong><br>
-                                    <small style="color: var(--text-dim, #86868B);">В резерве: <strong style="color:var(--blue, #007AFF);">${freeSales}</strong> чел.</small>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman === 0 ? 'disabled' : ''} style="width:34px; height:34px; min-height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:#ff3b30; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer;">-</button> 
-                                    <strong style="display: inline-block; width: 24px; text-align: center; font-size:1.1rem;">${biz.assigned.salesman}</strong> 
-                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales === 0 ? 'disabled' : ''} style="width:34px; height:34px; min-height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; background:#34c759; color:#fff; border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer; box-shadow:0 2px 8px rgba(52,199,89,0.35);">+</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div style="margin-top: 20px; text-align: right;">
-                            <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 10px 15px; border-radius: 4px;">Расширить площадь ($${formatMoney(tpl.area * 50 * level)})</button>
-                        </div>
+                    <div style="text-align:right; background:white; padding:10px 16px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); border:1px solid var(--border);">
+                        <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:800; letter-spacing:0.5px;">ВЫРУЧКА ЗА ВЧЕРА</div>
+                        <div style="font-size:1.4rem; font-weight:800; color:var(--green);">+$${formatMoney(totalRev)} <span style="font-size:0.9rem; color:var(--text-dim); font-weight:400;">(${totalSold} шт)</span></div>
                     </div>
                 </div>
-            </li>`;
+
+                <div style="display:flex; flex-wrap:wrap; gap:0;">
+                    <!-- КОЛОНКА 1: ПОЛКИ И ЗАПАСЫ -->
+                    <div style="flex:1.5; min-width:350px; padding:24px; border-right:1px solid var(--border);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <h4 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">📦 Заполнение склада</h4>
+                            <span style="font-weight:700; color:${chartBg};">${volPercent}%</span>
+                        </div>
+                        <div style="height:8px; background:var(--surface-3); border-radius:4px; margin-bottom:8px; overflow:hidden;">
+                            <div style="height:100%; width:${volPercent}%; background:${chartBg}; transition:0.3s;"></div>
+                        </div>
+                        <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:16px;">
+                            Занято ${currentVol.toFixed(1)} м³ из ${maxVol.toFixed(1)} м³. Доставляйте товары с производственных складов.
+                        </div>
+                        
+                        <div style="max-height: 400px; overflow-y: auto; padding-right:8px;">
+                            ${invHtml}
+                        </div>
+                    </div>
+
+                    <!-- КОЛОНКА 2: МЕБЕЛЬ И ПЕРСОНАЛ -->
+                    <div style="flex:1; min-width:300px; padding:24px; background:var(--surface-2);">
+                        <h4 style="margin:0 0 16px 0; font-size:1.1rem;">Оборудование & Персонал</h4>
+                        
+                        <!-- Мебель -->
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px;">
+                            <div style="font-size:0.85rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; margin-bottom:8px;">Торговое оборудование</div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <div><strong style="color:var(--text);">${eqName}</strong></div>
+                                <div style="font-weight:700; color:var(--blue);">${eqCount} / ${maxSlots}</div>
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:8px; border:1px solid var(--border); border-radius:8px; font-weight:700; text-align:center;">
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="flex:1; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:8px; font-weight:700; cursor:pointer;">Докупить</button>
+                            </div>
+                        </div>
+
+                        <!-- Персонал -->
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                <div style="font-size:0.85rem; color:var(--text-dim); font-weight:700; text-transform:uppercase;">Персонал</div>
+                                <div style="font-weight:700; color:var(--text);">${assignedTotal} / ${maxStaff}</div>
+                            </div>
+
+                            <!-- Директор -->
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed var(--border);">
+                                <div>
+                                    <div style="font-weight:700; font-size:0.95rem;">Директор</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeMgr}</span></div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button> 
+                                    <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${biz.assigned.store_manager}</span> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr === 0 ? 'disabled' : ''} class="btn-hr-plus">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Продавец -->
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-weight:700; font-size:0.95rem;">Продавцы</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeSales}</span></div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button> 
+                                    <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${biz.assigned.salesman}</span> 
+                                    <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales === 0 ? 'disabled' : ''} class="btn-hr-plus">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="width:100%; margin-top:16px; padding:12px; background:var(--orange); color:white; border:none; border-radius:10px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 10px rgba(243,156,18,0.3);">🚀 Расширить магазин ($${formatMoney(tpl.area * 50 * level)})</button>
+                    </div>
+                </div>
+            </div>`;
         });
         
-        if (!hasRetail) retailBody.innerHTML += '<div style="text-align:center; padding: 40px; color:#7f8c8d; font-size:1.2em;">У вас пока нет розничных магазинов.</div>';
-    },
+        let headerHtml = `
+        <div style="background: linear-gradient(135deg, rgba(46,204,113,0.1), rgba(39,174,96,0.05)); border: 1px solid rgba(46,204,113,0.2); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 24px;">
+            <h2 style="margin: 0 0 6px 0; color: var(--green);">🏪 Управление Розницей</h2>
+            <p style="margin: 0; color: var(--text-dim); font-size: 0.95rem;">Ваши действующие магазины. Устанавливайте цены, контролируйте полки и получайте выручку.</p>
+        </div>
+        `;
+
+        if (!hasRetail) {
+            activeStoresHtml = '<div style="text-align:center; padding: 60px 20px; color:var(--text-dim); font-size:1.2rem; background:var(--surface); border-radius:16px; border:1px dashed var(--border); margin-bottom:24px;">У вас пока нет розничных магазинов. Откройте свой первый бизнес!</div>';
+        }
+
+        let newShopHtml = `
+        <div style="background:var(--surface); border-radius:16px; border:1px solid var(--border); padding:30px; text-align:center; box-shadow:var(--shadow-card);">
+            <div style="font-size:3rem; margin-bottom:12px;">🛒</div>
+            <h3 style="margin:0 0 8px 0; font-size:1.5rem; color:var(--text);">Открыть новую точку</h3>
+            <p style="color:var(--text-dim); max-width:400px; margin:0 auto 20px auto;">Расширяйте свою империю! Постройте новый фирменный магазин, чтобы продавать больше продукции B2C.</p>
+            <button onclick="PRODUCTION.buyBusiness('retail_store')" style="background:linear-gradient(135deg, #2ecc71, #27ae60); color:white; font-size:1.1rem; font-weight:800; padding:14px 32px; border:none; border-radius:12px; cursor:pointer; box-shadow:0 6px 20px rgba(46,204,113,0.4); transition:0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">+ Построить Фирменный Магазин</button>
+        </div>`;
+
+        retailBody.innerHTML = headerHtml + activeStoresHtml + newShopHtml;
+        
+        // Добавим стили для кнопок HR если их нет
+        if (!document.getElementById('retail-hr-styles')) {
+            let style = document.createElement('style');
+            style.id = 'retail-hr-styles';
+            style.innerHTML = `
+                .btn-hr-minus { width:32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--red-dim); color:var(--red); border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer; }
+                .btn-hr-minus:disabled { opacity:0.5; cursor:not-allowed; }
+                .btn-hr-plus { width:32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center; background:var(--green-dim); color:var(--green); border:none; border-radius:8px; font-weight:bold; font-size:1.2rem; cursor:pointer; }
+                .btn-hr-plus:disabled { opacity:0.5; cursor:not-allowed; }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+,
 
     // --- 11. НОВАЯ ВКЛАДКА: МАРКЕТИНГ ---
     updateMarketingTab() {
