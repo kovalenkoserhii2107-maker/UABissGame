@@ -870,6 +870,8 @@ const UI_DASHBOARD = {
                 let nextRent = Math.floor(100 * Math.pow(1.5, wh.level) * city.rentMult);
                 let addedRent = nextRent - dailyRent;
 
+                let chartBg = percent > 90 ? 'var(--red)' : (percent > 70 ? 'var(--orange)' : 'var(--blue)');
+
                 let invHtml = '';
                 if (!wh.inventory) wh.inventory = {};
                 
@@ -879,73 +881,106 @@ const UI_DASHBOARD = {
                         let res = RECIPES.RESOURCES[key];
                         let totalVal = inv.qty * inv.avgCost;
                         let volStr = res.volume > 0 ? res.volume + ' м³/шт' : 'Цифровой товар';
+                        let icon = this._resIcons && this._resIcons[key] ? this._resIcons[key] : '📦';
                         
                         let storeOptions = '';
                         STATE.company.businesses.forEach(b => {
                             let bTpl = RECIPES.BUSINESSES[b.type];
                             if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key)) {
                                 let storeCityName = typeof GEO !== 'undefined' ? GEO.getCity(b.city || 'odesa').name : '';
-                                let extraCost = (b.city || 'odesa') !== cId ? ' (Платная логистика)' : '';
+                                let extraCost = (b.city || 'odesa') !== cId ? ' (Платная дост.)' : '';
                                 storeOptions += `<option value="${b.uid}">${b.name} - ${storeCityName}${extraCost}</option>`;
                             }
                         });
                         
                         let transferHtml = '';
                         if (storeOptions !== '') {
-                            transferHtml = `<div style="margin-top: 8px; display: flex; gap: 5px; align-items:center;">
-                                <select id="trans-store-${cId}-${key}" style="font-size:0.85em; padding:4px; max-width:140px; border-radius:3px; border:1px solid #bdc3c7;">
+                            transferHtml = `
+                            <div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:10px;">
+                                <select id="trans-store-${cId}-${key}" style="flex:1; font-size:0.8rem; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text);">
                                     <option value="">В магазин...</option>${storeOptions}
                                 </select>
-                                <input type="number" id="trans-qty-${cId}-${key}" value="${inv.qty}" max="${inv.qty}" style="width:60px; font-size:0.85em; padding:4px; border-radius:3px; border:1px solid #bdc3c7;">
-                                <button onclick="UI_DASHBOARD.transferToStore('${key}', '${cId}')" style="background:#e67e22; color:white; border:none; padding: 4px 10px; border-radius:3px; cursor:pointer;">Отгрузить</button>
+                                <input type="number" id="trans-qty-${cId}-${key}" value="${inv.qty}" max="${inv.qty}" style="width:65px; font-size:0.85rem; font-weight:700; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); text-align:center;">
+                                <button onclick="UI_DASHBOARD.transferToStore('${key}', '${cId}')" style="background:var(--orange); color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.85rem;">Отгрузить</button>
                             </div>`;
+                        } else {
+                            transferHtml = `<div style="margin-top:12px; border-top:1px dashed var(--border); padding-top:10px; font-size:0.75rem; color:var(--text-dim);">У вас нет магазинов для этого товара</div>`;
                         }
 
-                        invHtml += `<tr style="border-bottom: 1px solid #eee;">
-                            <td style="padding: 10px 10px;">
-                                <strong style="font-size:1.1em; color:#2c3e50;">${res.name}</strong><br>
-                                <small style="color: #7f8c8d;">${volStr}</small>
-                                ${transferHtml}
-                            </td>
-                            <td><strong style="color: #2980b9; font-size:1.1em;">${inv.qty} шт.</strong></td>
-                            <td><span style="color: #8e44ad; font-weight: bold;">★ ${(inv.quality || 1.0).toFixed(2)}</span></td>
-                            <td>$${formatMoney(inv.avgCost)}</td>
-                            <td><strong>$${formatMoney(totalVal)}</strong></td>
-                        </tr>`;
+                        let stars = '';
+                        let q = Math.round(inv.quality || 1);
+                        for(let i=0; i<q; i++) stars += '⭐';
+
+                        invHtml += `
+                        <div style="background:var(--surface-2); border-radius:10px; padding:16px; border:1px solid var(--border); display:flex; flex-direction:column; justify-content:space-between;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                <div style="display:flex; align-items:center; gap:12px;">
+                                    <div style="font-size:2.5rem; background:white; padding:8px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.05); line-height:1;">${icon}</div>
+                                    <div>
+                                        <div style="font-weight:800; font-size:1.05rem; color:var(--text);">${res.name}</div>
+                                        <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${volStr}</div>
+                                        <div style="font-size:0.75rem; color:var(--orange); margin-top:2px; font-weight:600;">Качество: ${stars} ${(inv.quality || 1.0).toFixed(2)}</div>
+                                    </div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <div style="font-weight:800; font-size:1.3rem; color:var(--blue);">${inv.qty} шт</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">$${formatMoney(inv.avgCost)}/шт</div>
+                                </div>
+                            </div>
+                            <div style="margin-top:12px; padding-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:0.8rem; color:var(--text-dim);">Общая стоимость:</span>
+                                <span style="font-weight:800; color:var(--green);">$${formatMoney(totalVal)}</span>
+                            </div>
+                            ${transferHtml}
+                        </div>`;
                     }
                 });
                 
-                if (invHtml === '') invHtml = '<tr><td colspan="5" style="text-align:center; padding: 15px; color:#7f8c8d;">Склад пуст. Закупите сырье на бирже или запустите производство.</td></tr>';
+                if (invHtml === '') {
+                    invHtml = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-dim); background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Склад пуст. Закупите продукцию на B2B-рынке или отправьте сюда произведенные товары.</div>';
+                }
 
                 warehouseList.innerHTML += `
-                <li class="card" style="margin-bottom: 20px; list-style-type: none; padding: 0; overflow: hidden; border: 1px solid #dcdde1; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
-                    <div style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fdfefe;">
-                        <div>
-                            <h3 style="margin: 0 0 5px 0; color: #2c3e50; font-size:1.3em;">📍 Логистический хаб: ${city.name} <span style="color:#3498db; font-size:0.8em;">(Ур. ${wh.level})</span></h3>
-                            <p style="margin: 0; color: #7f8c8d; font-size:1.05em;">Аренда земли: <strong style="color:#c0392b;">$${formatMoney(dailyRent)}</strong> / день</p>
+                <li style="background:var(--surface); border-radius:16px; border:1px solid var(--border); box-shadow:var(--shadow-card); overflow:hidden;">
+                    <div style="background:linear-gradient(135deg, rgba(41,128,185,0.1), rgba(46,204,113,0.05)); border-bottom:1px solid var(--border); padding:20px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
+                        <div style="display:flex; align-items:center; gap:16px;">
+                            <div style="font-size:2.5rem; background:white; width:60px; height:60px; display:flex; align-items:center; justify-content:center; border-radius:14px; box-shadow:0 4px 10px rgba(0,0,0,0.1);">🗺️</div>
+                            <div>
+                                <h3 style="margin:0 0 6px 0; color:var(--text); font-size:1.4rem;">Логистический хаб: ${city.name} <span style="background:var(--blue); color:white; padding:2px 8px; border-radius:6px; font-size:0.8rem; vertical-align:middle; margin-left:6px;">Ур. ${wh.level}</span></h3>
+                                <p style="margin:0; color:var(--text-dim); font-size:0.95rem;">Аренда: <strong style="color:var(--red);">$${formatMoney(dailyRent)}</strong> / день</p>
+                            </div>
                         </div>
-                        <div style="text-align: right; min-width: 250px;">
-                            <p style="margin: 0 0 8px 0; font-size:1em; color: #2c3e50;">Занято: <strong>${curVol.toFixed(1)}</strong> м³ из <strong>${maxVol}</strong> м³</p>
-                            <div style="width: 100%; background: var(--surface-3); height: 10px; border-radius: 5px; overflow:hidden;">
-                                <div style="width: ${percent}%; background: ${percent > 90 ? '#e74c3c' : '#3498db'}; height: 100%;"></div>
+                        <div style="display:flex; align-items:center; gap:20px; background:white; padding:14px 20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); border:1px solid var(--border);">
+                            <div>
+                                <div style="font-size:0.75rem; text-transform:uppercase; font-weight:800; color:var(--text-dim); margin-bottom:4px;">Заполненность</div>
+                                <div style="font-size:1.1rem; font-weight:800; color:var(--text);">${curVol.toFixed(1)} <span style="font-size:0.85rem; color:var(--text-dim); font-weight:500;">/ ${maxVol} м³</span></div>
+                            </div>
+                            
+                            <div style="position:relative; width:54px; height:54px;">
+                                <svg viewBox="0 0 36 36" style="width:100%; height:100%; transform: rotate(-90deg);">
+                                    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--surface-3)" stroke-width="4"/>
+                                    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="${chartBg}" stroke-width="4" stroke-dasharray="${percent}, 100" />
+                                </svg>
+                                <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+                                    <span style="font-size:0.8rem; font-weight:800; color:${chartBg};">${percent}%</span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div style="padding: 20px;">
-                        <table style="width: 100%; font-size: 0.9em; border-collapse: collapse;">
-                            <tr style="border-bottom: 2px solid #bdc3c7; text-align: left;">
-                                <th style="padding: 8px 10px;">Товарная позиция</th>
-                                <th style="padding: 8px 10px;">В наличии</th>
-                                <th style="padding: 8px 10px;">Качество</th>
-                                <th style="padding: 8px 10px;">Себестоимость</th>
-                                <th style="padding: 8px 10px;">Итоговая стоимость</th>
-                            </tr>
+                    
+                    <div style="padding:24px;">
+                        <div style="font-size:0.85rem; text-transform:uppercase; font-weight:800; color:var(--text-dim); margin-bottom:16px;">📦 Инвентарь на складе</div>
+                        
+                        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px;">
                             ${invHtml}
-                        </table>
-                        <div style="margin-top: 20px; text-align: right; border-top: 1px dashed #bdc3c7; padding-top: 15px;">
-                            <button onclick="WAREHOUSE.upgrade('${cId}')" style="background: #f39c12; color: white; border: none; cursor: pointer; padding: 8px 16px; border-radius: 4px; font-weight:bold; font-size:1em;">
-                                Расширить площадь ($${formatMoney(upgradeCost)}) <br>
-                                <small style="font-weight:normal;">Даст +${addedVol} м³ | Аренда +$${addedRent}/дн</small>
+                        </div>
+
+                        <div style="margin-top:24px; padding-top:24px; border-top:1px dashed var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+                            <div style="color:var(--text-dim); font-size:0.9rem;">
+                                При расширении: <strong style="color:var(--text);">+${addedVol} м³</strong> вместимости, аренда вырастет на <strong style="color:var(--red);">+$${addedRent}</strong>/дн.
+                            </div>
+                            <button onclick="WAREHOUSE.upgrade('${cId}')" style="background:linear-gradient(135deg, var(--orange), #d35400); color:white; border:none; cursor:pointer; padding:12px 24px; border-radius:10px; font-weight:800; font-size:1rem; box-shadow:0 4px 12px rgba(243,156,18,0.3); transition:0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+                                🏗️ Расширить склад ($${formatMoney(upgradeCost)})
                             </button>
                         </div>
                     </div>
@@ -954,7 +989,7 @@ const UI_DASHBOARD = {
         });
 
         if (!hasWarehouses) {
-            warehouseList.innerHTML = '<div style="text-align:center; padding: 40px; color:#7f8c8d; font-size:1.1em; background: #fff; border-radius: 8px; border: 1px solid #eee;">У вас нет открытых складов. Откройте первый склад, нажав кнопку выше.</div>';
+            warehouseList.innerHTML = '<div style="text-align:center; padding:60px 20px; color:var(--text-dim); font-size:1.2rem; background:var(--surface); border-radius:16px; border:1px dashed var(--border);">У вас нет открытых логистических хабов. Постройте первый склад, чтобы закупать сырье и продавать продукцию.</div>';
         }
     },
 
