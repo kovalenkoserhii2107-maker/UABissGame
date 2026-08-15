@@ -49,6 +49,7 @@ const UI_DASHBOARD = {
     updateTopPanel() {
         if (document.getElementById('ui-day')) document.getElementById('ui-day').innerText = STATE.time.day;
         if (document.getElementById('ui-balance')) document.getElementById('ui-balance').innerText = formatMoney(STATE.finances.balance);
+        if (document.getElementById('ui-header-networth')) document.getElementById('ui-header-networth').innerText = formatMoney(FINANCE.calculateNetWorth());
         if (document.getElementById('ui-credit')) document.getElementById('ui-credit').innerText = STATE.finances.creditScore;
     },
 
