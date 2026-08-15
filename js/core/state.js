@@ -42,5 +42,6 @@ const STATE = {
         isActive: true,
         step: 0
     },
-    ledger: null // Инициализируется менеджером
+    ledger: null, // Инициализируется менеджером
+    b2bOffers: [] // Контракты B2B от AI конкурентов
 };

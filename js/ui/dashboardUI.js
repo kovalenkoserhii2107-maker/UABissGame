@@ -37,6 +37,7 @@ const UI_DASHBOARD = {
             this.updateHRTab();
             this.updateBankTab();
             this.updateFinanceTab();
+            if (typeof this.updateB2BTab === 'function') this.updateB2BTab();
             if (typeof WIKI !== 'undefined') WIKI.render();
             
         } catch (err) {
@@ -1026,6 +1027,59 @@ const UI_DASHBOARD = {
     },
 
     // --- БИРЖА С РАБОЧИМИ ФИЛЬТРАМИ И АКТИВНЫМИ ОРДЕРАМИ ---
+    updateB2BTab() {
+        let container = document.getElementById('ui-b2b-offers-list');
+        if (!container) return;
+
+        let offers = STATE.b2bOffers || [];
+        // Фильтруем только активные (не принятые и не просроченные)
+        let activeOffers = offers.filter(o => !o.accepted && o.expiresDay >= STATE.time.day);
+
+        if (activeOffers.length === 0) {
+            container.innerHTML = '<div style="padding:20px; background:var(--surface); border-radius:12px; color:var(--text-dim); text-align:center;">Нет активных предложений от конкурентов. Контракты появляются каждые 7 дней.</div>';
+            return;
+        }
+
+        let html = '';
+        activeOffers.forEach(offer => {
+            let itemDef = RECIPES[offer.itemId];
+            if (!itemDef) return;
+
+            let icon = itemDef.icon || '📦';
+            let name = itemDef.name || offer.itemId;
+            let daysLeft = offer.expiresDay - STATE.time.day;
+            
+            // Форматируем звезды качества
+            let stars = '';
+            let q = Math.round(offer.quality);
+            for(let i=0; i<q; i++) stars += '⭐';
+
+            html += `
+            <div style="background:var(--surface); border-radius:12px; padding:20px; display:flex; justify-content:space-between; align-items:center; box-shadow: var(--shadow-card); border-left: 4px solid var(--blue);">
+                <div style="display:flex; align-items:center; gap:20px;">
+                    <div style="font-size:32px; background:var(--surface-2); padding:10px; border-radius:12px;">${icon}</div>
+                    <div>
+                        <h3 style="margin:0 0 5px 0;">Контракт от «${offer.company}»</h3>
+                        <div style="color:var(--text-dim); margin-bottom: 5px;">
+                            <strong>Поставка:</strong> ${offer.qty} шт. ${name}
+                        </div>
+                        <div style="display:flex; gap:10px; font-size:0.85rem;">
+                            <span style="background:rgba(255,149,0,0.1); color:var(--orange); padding:2px 8px; border-radius:4px;">Качество: ${stars} (${offer.quality})</span>
+                            <span style="background:rgba(0,122,255,0.1); color:var(--blue); padding:2px 8px; border-radius:4px;">Бренд: +${offer.brandPower}</span>
+                            <span style="background:rgba(255,59,48,0.1); color:var(--red); padding:2px 8px; border-radius:4px;">Истекает: через ${daysLeft} дн.</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:1.2rem; font-weight:bold; color:var(--text); margin-bottom:10px;">$${formatMoney(offer.totalPrice)}</div>
+                    <div style="font-size:0.85rem; color:var(--text-dim); margin-bottom:10px;">Цена за шт: $${formatMoney(offer.price)}</div>
+                    <button class="btn-primary-lg" onclick="B2B_AI.acceptOffer('${offer.id}')" style="background:var(--green);">Выкупить контракт</button>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+    },
+
     updateMarketTab() {
         let marketContainer = document.getElementById('ui-market-businesses');
         if (!marketContainer || typeof MARKET === 'undefined') return;
@@ -1886,6 +1940,7 @@ const UI_DASHBOARD = {
         if (event && event.currentTarget) event.currentTarget.classList.add('active');
         if (tabId === 'tab-wiki' && typeof WIKI !== 'undefined') WIKI.render();
         if (tabId === 'tab-finance') this.updateFinanceTab();
+        if (tabId === 'tab-b2b') this.updateB2BTab();
     },
 
     submitLoan() {

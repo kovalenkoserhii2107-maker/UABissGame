@@ -165,10 +165,10 @@
     .header-inner {
         max-width: 1280px;
         margin: 0 auto;
-        padding: 14px 28px;
+        padding: 12px 24px;
         display: flex;
         align-items: center;
-        gap: 24px;
+        gap: 20px;
         flex-wrap: wrap;
     }
 
@@ -178,21 +178,31 @@
         gap: 8px;
         font-family: var(--font-display);
         font-weight: 700;
-        font-size: 1.05rem;
+        font-size: 1.1rem;
         color: var(--text);
-        margin-right: 8px;
     }
-    .brand-mark .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    .brand-mark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
 
-    .header-block { display: flex; flex-direction: column; gap: 1px; }
-    .header-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; }
-    .header-value { font-size: 1.05rem; font-weight: 600; color: var(--text); }
-    .header-value.balance { color: var(--green); font-size: 1.15rem; }
-    .header-value-sub { font-size: 0.85rem; color: var(--text-faint); font-weight: 500; }
+    .header-metrics {
+        display: flex;
+        gap: 24px;
+        background: var(--surface-2);
+        padding: 6px 16px;
+        border-radius: 12px;
+        border: 1px solid var(--surface-3);
+    }
+
+    .header-block { display: flex; flex-direction: column; gap: 2px; }
+    .header-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
+    .header-value { font-size: 1rem; font-weight: 600; color: var(--text); }
+    .header-value.balance { color: var(--green); font-size: 1.1rem; }
+    .header-value-sub { font-size: 0.8rem; color: var(--text-faint); font-weight: 500; }
 
     .header-spacer { flex: 1; }
 
-    .btn-primary-lg { padding: 11px 20px; font-size: 0.92rem; border-radius: var(--radius-sm); }
+    .btn-primary-lg { padding: 12px 24px; font-size: 0.95rem; border-radius: var(--radius); background: var(--blue); color: white; border: none; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3); transition: transform 0.1s, box-shadow 0.1s; }
+    .btn-primary-lg:active { transform: scale(0.97); box-shadow: 0 2px 6px rgba(0, 122, 255, 0.2); }
+
 
     .ticker-strip {
         height: 28px;
@@ -642,28 +652,27 @@
         <div class="header-inner">
             <div class="brand-mark"><span class="dot"></span> UABiz</div>
 
-            <div class="header-block">
-                <span class="header-label">Операционный день</span>
-                <span class="header-value" id="ui-day">1</span>
-            </div>
-
-            <div class="header-block">
-                <span class="header-label">Баланс корп. счёта</span>
-                <span class="header-value balance">$<span id="ui-balance">25000.00</span></span>
-            </div>
-
-            <div class="header-block">
-                <span class="header-label">Кредитный скоринг</span>
-                <span class="header-value" id="ui-credit">200</span><span class="header-value-sub"> / 1000</span>
+            <div class="header-metrics">
+                <div class="header-block">
+                    <span class="header-label">День</span>
+                    <span class="header-value" id="ui-day">1</span>
+                </div>
+                <div class="header-block">
+                    <span class="header-label">Баланс</span>
+                    <span class="header-value balance">$<span id="ui-balance">25000.00</span></span>
+                </div>
+                <div class="header-block">
+                    <span class="header-label">Скоринг</span>
+                    <span class="header-value"><span id="ui-credit">200</span><span class="header-value-sub"> / 1000</span></span>
+                </div>
             </div>
 
             <div class="header-spacer"></div>
 
-            <!-- Группа основных действий -->
-            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <button class="btn-secondary" onclick="TUTORIAL.restart()" title="Пройти интерактивный курс с нуля">🎓 Обучение</button>
-                <button class="btn-secondary" onclick="UI_DASHBOARD.showEventLog()">📜 Журнал</button>
-                <button class="btn-primary-lg" onclick="GAME.nextDay()">Закрыть операционный день ➔</button>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <button class="btn-secondary" onclick="TUTORIAL.restart()" title="Пройти обучение с нуля">🎓 Обучение</button>
+                <button class="btn-secondary" onclick="UI_DASHBOARD.showEventLog()" title="Бизнес-журнал">📜 Журнал</button>
+                <button class="btn-primary-lg" onclick="GAME.nextDay()">Следующий день ➔</button>
             </div>
         </div>
 
@@ -678,13 +687,14 @@
     <nav class="tabs-wrap">
         <div class="tabs">
             <div class="tab active" onclick="UI_DASHBOARD.switchTab(event, 'tab-dashboard')">📊 Компания</div>
-            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-contracts')">📜 Тендеры</div>
-            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-rnd')">🧪 R&D</div>
-            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-warehouse')">📦 Склады</div> <!-- НОВАЯ ВКЛАДКА -->
-            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-production')">🏭 Производство</div> <!-- ПЕРЕИМЕНОВАНО -->
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-retail')">🏪 Розница</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-production')">🏭 Производство</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-warehouse')">📦 Склады</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-b2b')">🤝 B2B Контракты</div> <!-- НОВАЯ ВКЛАДКА AI -->
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-market')">⚖️ Биржа сырья</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-contracts')">📜 B2G Тендеры</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-marketing')">📢 Маркетинг</div>
-            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-market')">⚖️ Биржа</div>
+            <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-rnd')">🧪 R&D</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-hr')">👥 HR</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-bank')">🏦 Банк</div>
             <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-finance')">📉 Отчетность</div>
@@ -815,6 +825,15 @@
                 <button onclick="UI_DASHBOARD.showCityModal('warehouse')" style="background: var(--blue); font-weight: bold;">+ Построить новый склад</button>
             </div>
             <ul id="ui-warehouse-list" style="padding-left: 0; margin-top: 10px; list-style-type: none;"></ul>
+        </div>
+
+        <!-- ВКЛАДКА: B2B КОНТРАКТЫ (AI КОНКУРЕНТЫ) -->
+        <div id="tab-b2b" class="tab-content">
+            <div style="background: var(--surface); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: var(--shadow-card);">
+                <h2 style="margin: 0 0 10px 0; color: var(--blue);">🤝 B2B Предложения от Корпораций</h2>
+                <p style="color:var(--text-dim); margin-top:0;">Здесь отображаются предложения от других корпораций (NPC). Каждые 7 дней поступают новые контракты на поставку готовой продукции с премиальным брендом и качеством. Выкупайте их для быстрой перепродажи в своих магазинах!</p>
+            </div>
+            <div id="ui-b2b-offers-list" style="display: grid; grid-template-columns: 1fr; gap: 15px;"></div>
         </div>
 
         <!-- ВКЛАДКА: ПРОИЗВОДСТВО -->
@@ -969,7 +988,7 @@
     </main>
 </div>
 
-<!-- Архитектура скриптов (без изменений в путях/порядке ядра) -->
+<!-- Архитектура скриптов -->
 <script src="js/core/state.js"></script>
 <script src="js/core/utils.js"></script>
 <script src="js/ui/notify.js"></script>
@@ -981,6 +1000,7 @@
 <script src="js/managers/production.js"></script>
 <script src="js/managers/hr.js"></script>
 <script src="js/managers/events.js"></script>
+<script src="js/managers/b2bAI.js"></script>
 <script src="js/managers/rnd.js"></script>
 <script src="js/managers/ledger.js"></script>
 <script src="js/managers/warehouse.js"></script>

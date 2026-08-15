@@ -40,6 +40,10 @@ const GAME = {
         RETAIL.processDaily();
         EVENTS.simulate();
         
+        if (typeof B2B_AI !== 'undefined' && STATE.time.day % 7 === 0) {
+            B2B_AI.generateOffers();
+        }
+        
         // 4. Списание налогов и формирование налоговой базы
         if (typeof TAXES !== 'undefined') TAXES.processDaily();
         
