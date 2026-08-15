@@ -138,8 +138,26 @@ const UI_DASHBOARD = {
 
         document.getElementById('dash-kpi-cash').innerText = formatMoney(STATE.finances.balance);
         document.getElementById('dash-kpi-networth').innerText = formatMoney(netWorth);
-        document.getElementById('dash-kpi-brand').innerText = (STATE.retail && STATE.retail.brand) ? STATE.retail.brand.toFixed(1) : '10.0';
-        document.getElementById('dash-kpi-credit').innerText = typeof FINANCE !== 'undefined' ? formatMoney(FINANCE.getAvailableLimit()) : '0.00';
+        
+        let yesterday = (STATE.ledger && STATE.ledger.history && STATE.ledger.history.length > 0) ? STATE.ledger.history[STATE.ledger.history.length - 1] : null;
+        let rev = 0; let burn = 0;
+        if (yesterday) {
+            rev = (yesterday.rev_b2b||0) + (yesterday.rev_b2g||0) + (yesterday.rev_b2c||0) + (yesterday.rev_other||0) + (yesterday.fin_income||0);
+            burn = (yesterday.exp_materials||0) + (yesterday.exp_salary||0) + (yesterday.exp_admin||0) + (yesterday.exp_hr||0) + (yesterday.exp_fines||0) + (yesterday.exp_repair||0) + (yesterday.exp_taxes_payroll||0) + (yesterday.exp_taxes_corp||0) + (yesterday.exp_marketing||0) + (yesterday.fin_expense||0) + (yesterday.fin_fees||0);
+        }
+        
+        if (document.getElementById('dash-kpi-revenue')) document.getElementById('dash-kpi-revenue').innerText = formatMoney(rev);
+        if (document.getElementById('dash-kpi-burn')) document.getElementById('dash-kpi-burn').innerText = formatMoney(burn);
+        
+        if (document.getElementById('dash-kpi-brand')) document.getElementById('dash-kpi-brand').innerText = (STATE.retail && STATE.retail.brand) ? STATE.retail.brand.toFixed(1) : '10.0';
+        if (document.getElementById('dash-kpi-credit')) document.getElementById('dash-kpi-credit').innerText = typeof FINANCE !== 'undefined' ? formatMoney(FINANCE.getAvailableLimit()) : '0.00';
+        
+        let staffCount = typeof HR !== 'undefined' ? HR.getTotalStaff() : 0;
+        if (document.getElementById('dash-kpi-staff')) document.getElementById('dash-kpi-staff').innerText = staffCount;
+        
+        let objCount = STATE.company.businesses.length;
+        if (STATE.company.warehouses) objCount += Object.keys(STATE.company.warehouses).length;
+        if (document.getElementById('dash-kpi-objects')) document.getElementById('dash-kpi-objects').innerText = objCount;
 
         // 2. ОТРИСОВКА ГРАФИКОВ
         if (typeof Chart !== 'undefined') {
@@ -2489,98 +2507,159 @@ const UI_DASHBOARD = {
         if (typeof HR === 'undefined' || !document.getElementById('ui-staff-total')) return;
         HR.init();
         
-        document.getElementById('ui-staff-total').innerText = HR.getTotalStaff();
-        if(document.getElementById('ui-staff-salary')) document.getElementById('ui-staff-salary').innerText = formatMoney(HR.getDailySalaryFund());
+        let totalStaff = HR.getTotalStaff();
+        document.getElementById('ui-staff-total').innerText = totalStaff;
+        if(document.getElementById('ui-staff-salary')) document.getElementById('ui-staff-salary').innerText = '$' + formatMoney(HR.getDailySalaryFund()) + ' / дн.';
         
+        // --- ЧАРТ СТРУКТУРЫ ШТАТА ---
+        this.initCharts();
+        let roleCounts = { factory: 0, rnd: 0, retail: 0, marketing: 0 };
+        Object.keys(HR.GRADES).forEach(grade => {
+            let role = HR.GRADES[grade].role;
+            let count = STATE.hr && STATE.hr.staff ? (STATE.hr.staff[grade] || 0) : 0;
+            if (roleCounts[role] !== undefined) roleCounts[role] += count;
+        });
+
+        if (typeof Chart !== 'undefined' && document.getElementById('chart-hr-staff')) {
+            let ctx = document.getElementById('chart-hr-staff').getContext('2d');
+            let dataArr = [roleCounts.factory, roleCounts.rnd, roleCounts.retail, roleCounts.marketing];
+            
+            if (!this.charts.hrStaff) {
+                this.charts.hrStaff = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Производство', 'R&D', 'Ритейл', 'Маркетинг'],
+                        datasets: [{
+                            data: dataArr,
+                            backgroundColor: ['#3498db', '#9b59b6', '#2ecc71', '#e67e22'],
+                            borderWidth: 0,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '75%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) { return context.label + ': ' + context.parsed + ' чел.'; }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                this.charts.hrStaff.data.datasets[0].data = dataArr;
+                this.charts.hrStaff.update();
+            }
+        }
+
+        // Брейкдаун легенды
         let breakdownDiv = document.getElementById('ui-hr-breakdown');
         if (breakdownDiv) {
             let parts = [];
-            Object.keys(HR.GRADES).forEach(grade => {
-                let total = STATE.hr && STATE.hr.staff ? (STATE.hr.staff[grade] || 0) : 0;
-                if (total > 0) parts.push(`<span style="background:var(--blue-dim); color:var(--blue); padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:600;">${HR.GRADES[grade].name.split(' ')[0]}: ${total}</span>`);
-            });
-            
-            let trainingCount = STATE.hr.trainingQueue.length;
-            if (trainingCount > 0) parts.push(`<span style="background:var(--orange-dim); color:var(--orange); padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:600;">На учебе: ${trainingCount}</span>`);
+            if (roleCounts.factory > 0) parts.push(`<span style="background:rgba(52,152,219,0.1); color:#3498db; padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700;">Производство: ${roleCounts.factory}</span>`);
+            if (roleCounts.rnd > 0) parts.push(`<span style="background:rgba(155,89,182,0.1); color:#9b59b6; padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700;">R&D: ${roleCounts.rnd}</span>`);
+            if (roleCounts.retail > 0) parts.push(`<span style="background:rgba(46,204,113,0.1); color:#2ecc71; padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700;">Ритейл: ${roleCounts.retail}</span>`);
+            if (roleCounts.marketing > 0) parts.push(`<span style="background:rgba(230,126,34,0.1); color:#e67e22; padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700;">Маркетинг: ${roleCounts.marketing}</span>`);
+            if (STATE.hr.trainingQueue.length > 0) parts.push(`<span style="background:var(--orange-dim); color:var(--orange); padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700;">В Академии: ${STATE.hr.trainingQueue.length}</span>`);
             
             breakdownDiv.innerHTML = parts.length > 0 ? parts.join('') : '<span style="color:var(--text-faint); font-size:0.9rem;">Штат пуст</span>';
         }
 
-        let hireFactory = document.getElementById('ui-hire-factory');
-        let hireRnd = document.getElementById('ui-hire-rnd');
-        if (hireFactory && hireRnd) {
-            hireFactory.innerHTML = '';
-            hireRnd.innerHTML = '';
-            
-            Object.keys(HR.GRADES).forEach(grade => {
-                let info = HR.GRADES[grade];
-                let isFactory = info.role === 'factory';
-                
-                let btnHtml = `
-                <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); box-shadow:var(--shadow-card);">
-                    <div>
-                        <div style="font-weight:600; color:var(--text);">${info.name.split(' ')[0]}</div>
-                        <div style="font-size:0.8rem; color:var(--text-dim);">ЗП: $${formatMoney(info.salary)}/дн</div>
-                    </div>
-                    <button onclick="HR.hire('${grade}')" style="background:${isFactory ? 'var(--blue)' : '#1abc9c'}; color:white; border:none; padding:8px 16px; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; font-size:0.85rem; transition:transform 0.1s;">
-                        Найм ($${formatMoney(info.hireCost)})
-                    </button>
-                </div>`;
-                
-                if (isFactory) hireFactory.innerHTML += btnHtml;
-                else hireRnd.innerHTML += btnHtml;
-            });
-        }
+        // --- ДЕПАРТАМЕНТЫ (НАЙМ) ---
+        let uiRoles = {
+            'factory': document.getElementById('ui-hire-factory'),
+            'rnd': document.getElementById('ui-hire-rnd'),
+            'retail': document.getElementById('ui-hire-retail'),
+            'marketing': document.getElementById('ui-hire-marketing')
+        };
         
+        Object.keys(uiRoles).forEach(k => { if (uiRoles[k]) uiRoles[k].innerHTML = ''; });
+        
+        Object.keys(HR.GRADES).forEach(grade => {
+            let info = HR.GRADES[grade];
+            let container = uiRoles[info.role];
+            if (!container) return;
+            
+            let btnHtml = `
+            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-card);">
+                <div>
+                    <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${info.name}</div>
+                    <div style="font-size:0.8rem; color:var(--text-dim);">ЗП: <span style="color:var(--text); font-weight:600;">$${formatMoney(info.salary)}/дн</span></div>
+                </div>
+                <button onclick="HR.hire('${grade}')" class="btn-primary-lg" style="background:var(--blue); color:white; border:none; padding:8px 16px; border-radius:10px; font-weight:700; font-size:0.85rem; cursor:pointer;">
+                    Найм ($${formatMoney(info.hireCost)})
+                </button>
+            </div>`;
+            container.innerHTML += btnHtml;
+        });
+        
+        // --- АКАДЕМИЯ ---
         let trainingDiv = document.getElementById('ui-hr-training-list');
+        if (document.getElementById('ui-training-count')) document.getElementById('ui-training-count').innerText = `Обучается: ${STATE.hr.trainingQueue.length}`;
+        
         if (trainingDiv) {
             if (STATE.hr.trainingQueue.length === 0) {
-                trainingDiv.innerHTML = '<span style="color:var(--text-dim); font-size:0.9rem;">В данный момент никто не проходит обучение.</span>';
+                trainingDiv.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">В данный момент никто не проходит обучение.</div>';
             } else {
-                let tHtml = '<div style="display:flex; flex-direction:column; gap:10px;">';
+                let tHtml = '';
                 STATE.hr.trainingQueue.forEach(t => {
                     let nextName = HR.GRADES[t.toGrade].name.split(' ')[0];
+                    let progress = Math.min(100, Math.max(0, 100 - (t.daysLeft * 10))); // approximate for visual
                     tHtml += `
-                    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
-                        <div>
-                            <span style="font-weight:600; color:var(--text);">Повышение квалификации ➔ ${nextName}</span>
-                            <div style="font-size:0.8rem; color:var(--text-dim);">Сотрудник получает стипендию $${t.salary}/дн</div>
+                    <div style="background:var(--surface-2); padding:12px 16px; border-radius:12px; border:1px solid var(--border);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div>
+                                <span style="font-weight:700; color:var(--text); font-size:0.9rem;">Повышение ➔ ${nextName}</span>
+                                <div style="font-size:0.75rem; color:var(--text-dim);">Стипендия: $${t.salary}/дн</div>
+                            </div>
+                            <div style="background:var(--orange-dim); color:var(--orange); font-weight:bold; padding:4px 8px; border-radius:8px; font-size:0.8rem;">
+                                ${t.daysLeft} дн.
+                            </div>
                         </div>
-                        <div style="background:var(--orange-dim); color:var(--orange); font-weight:bold; padding:6px 12px; border-radius:8px; font-size:0.9rem;">
-                            Осталось ${t.daysLeft} дн.
+                        <div style="height:6px; background:rgba(0,0,0,0.05); border-radius:3px; overflow:hidden;">
+                            <div style="height:100%; background:var(--orange); width:${progress}%;"></div>
                         </div>
                     </div>`;
                 });
-                tHtml += '</div>';
                 trainingDiv.innerHTML = tHtml;
             }
         }
 
+        // --- КАДРОВЫЙ РЕЗЕРВ ---
         let reserveContainer = document.getElementById('ui-hr-reserve-table');
         if (reserveContainer) {
-            let html = `<div style="display:flex; flex-direction:column; gap:10px;">`;
+            let html = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px;">`;
             Object.keys(HR.GRADES).forEach(grade => {
                 let free = HR.getUnassigned(grade);
                 let info = HR.GRADES[grade];
                 
-                let trainCost = grade === 'junior' ? 250 : (grade === 'middle' ? 800 : (grade === 'scientist' ? 1500 : null));
-                let trainDays = grade === 'junior' ? 3 : (grade === 'middle' ? 7 : (grade === 'scientist' ? 10 : null));
-                let nextGradeName = grade === 'junior' ? 'Middle' : (grade === 'middle' ? 'Senior' : (grade === 'scientist' ? 'Ст. Научного' : ''));
+                // New logic based on hr.js
+                let trainCost = grade === 'junior' ? 250 : (grade === 'middle' ? 800 : (grade === 'scientist' ? 1500 : (grade === 'salesman' ? 600 : (grade === 'marketer' ? 1200 : null))));
+                let nextGradeName = grade === 'junior' ? 'Middle' : (grade === 'middle' ? 'Senior' : (grade === 'scientist' ? 'Lead' : (grade === 'salesman' ? 'Director' : (grade === 'marketer' ? 'PR' : ''))));
                 
                 let trainBtn = '';
                 if (trainCost) {
-                    trainBtn = `<button onclick="HR.train('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--blue); color:white; border:none; padding:6px 12px; border-radius:6px; font-size:0.85rem; font-weight:600; cursor:pointer;">Обучить до ${nextGradeName} ($${trainCost})</button>`;
+                    trainBtn = `<button onclick="HR.train('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--blue); color:white; border:none; padding:8px 12px; border-radius:8px; font-size:0.85rem; font-weight:700; cursor:pointer; width:100%;">Обучить до ${nextGradeName} ($${trainCost})</button>`;
+                } else {
+                    trainBtn = `<button disabled style="opacity:0.3; cursor:not-allowed; background:var(--text-dim); color:white; border:none; padding:8px 12px; border-radius:8px; font-size:0.85rem; font-weight:700; width:100%;">Максимальная квал.</button>`;
                 }
 
                 html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm);">
-                    <div>
-                        <strong style="color:var(--text);">${info.name}</strong> 
-                        <span style="color:var(--text-dim); margin-left:8px;">(Доступно: ${free})</span>
+                <div style="background:var(--surface-2); padding:16px; border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; justify-content:space-between;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                        <div>
+                            <div style="font-weight:800; color:var(--text); font-size:1rem; margin-bottom:4px;">${info.name}</div>
+                            <div style="font-size:0.8rem; color:var(--text-dim); background:var(--surface-3); display:inline-block; padding:2px 6px; border-radius:6px;">Отдел: ${info.role}</div>
+                        </div>
+                        <div style="font-size:1.4rem; font-weight:800; color:${free > 0 ? 'var(--blue)' : 'var(--text-dim)'};">${free}</div>
                     </div>
                     <div style="display:flex; gap:8px;">
-                        ${trainBtn} 
-                        <button onclick="HR.fire('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--red-dim); color:var(--red); border:none; padding:6px 12px; border-radius:6px; font-size:0.85rem; font-weight:600; cursor:pointer;">Уволить</button>
+                        <div style="flex:1;">${trainBtn}</div>
+                        <button onclick="HR.fire('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--red-dim); color:var(--red); border:none; padding:8px 12px; border-radius:8px; font-size:0.85rem; font-weight:700; cursor:pointer;">Уволить</button>
                     </div>
                 </div>`;
             });
