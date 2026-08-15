@@ -54,7 +54,7 @@ const UI_DASHBOARD = {
 
     // --- ИНИЦИАЛИЗАЦИЯ ГРАФИКОВ ---
     initCharts() {
-        if (!this.charts) this.charts = { cashflow: null, assets: null };
+        if (!this.charts) this.charts = { cashflow: null, assets: null, rndRP: null };
         if (typeof Chart !== 'undefined') {
             Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
             Chart.defaults.color = '#86868B';
@@ -458,227 +458,390 @@ const UI_DASHBOARD = {
     },
 
     // --- 4. ЛАБОРАТОРИЯ R&D ---
+    // Словарь иконок для технологий
+    _rndTechIcons: {
+        bakery_fab: '🥖', canned_food_fab: '🥫', clothes_fab: '👗',
+        chem_fab: '🧴', furniture_fab: '🪑', optics_fab: '🔭',
+        drone_fab: '🚁', battery_fab: '🔋', solar_fab: '☀️',
+        toy_fab: '🧸', electronics_fab: '📱', auto_fab: '🚗',
+        microchips: '💾', parts3d: '🖨️', smart_pc: '💻',
+        medtech_fab: '💊', agro_fab: '🌾', steel_fab: '⚙️',
+        lab_equip: '🔬', crypto_farm: '₿', textile_fab: '🧵',
+    },
+
     updateRnDTab() {
         if (typeof RND === 'undefined') return;
         RND.init();
-        
-        let rndStaffPanel = document.getElementById('ui-rnd-staff');
-        let lvl = STATE.rnd.facility.level || 0;
 
-        let buyContainer = document.getElementById('ui-buy-businesses');
-        if (buyContainer) {
-            buyContainer.innerHTML = '';
-            Object.keys(RECIPES.BUSINESSES).forEach(key => {
-                let tpl = RECIPES.BUSINESSES[key];
-                
-                // Исключаем магазины и офисы из вкладки заводов
-                if (tpl.isRetail || tpl.isMarketing) return;
+        let lvl = STATE.rnd.facility ? (STATE.rnd.facility.level || 0) : 0;
+        let rpSpeed = RND.getDailyRP();
+        let eqCount = STATE.rnd.facility ? (STATE.rnd.facility.equipment.count || 0) : 0;
+        let cond = STATE.rnd.facility ? (STATE.rnd.facility.equipment.condition !== undefined ? STATE.rnd.facility.equipment.condition : 100) : 100;
+        let maxStaff = RND.getMaxStaff();
+        let curStaff = (STATE.rnd.staff.scientist || 0) + (STATE.rnd.staff.lead_scientist || 0);
 
-                let isUnlocked = (tpl.researchCost === 0) || (STATE.rnd && STATE.rnd.unlocked && STATE.rnd.unlocked.includes(key));
-                if (isUnlocked) {
-                    buyContainer.innerHTML += `<button onclick="PRODUCTION.buyBusiness('${key}')" style="background: #27ae60; color: white; border: none; cursor: pointer; border-radius: 4px; margin-bottom: 5px; margin-right: 5px; padding: 8px 12px;">Построить ${tpl.name} ($${formatMoney(tpl.area * 50)})</button> `;
-                }
-            });
-        }
+        // --- Хедер: общие данные ---
+        let pointsEl = document.getElementById('rnd-points-display');
+        let dailyEl = document.getElementById('rnd-daily-rp-display');
+        if (pointsEl) pointsEl.innerText = STATE.rnd.points || 0;
+        if (dailyEl) dailyEl.innerText = '+' + rpSpeed;
 
-        if (lvl === 0) {
-            if (rndStaffPanel) {
-                rndStaffPanel.innerHTML = `
-                    <div style="background: #fdfefe; padding: 25px; border: 1px dashed #e74c3c; border-radius: 5px; text-align: center;">
-                        <h3 style="margin-top:0; color: #c0392b;">🔬 Нет Научно-Исследовательского Центра</h3>
-                        <p style="color: #7f8c8d; font-size: 1.1em;">Для разработки новых технологий необходимо инвестировать в строительство первого корпуса НИИ.</p>
-                        <button onclick="RND.upgradeFacility()" style="background: #e67e22; padding: 12px 25px; font-size: 1.1em; border-radius: 4px; cursor: pointer;">
-                            Построить корпус НИИ ($${formatMoney(RND.getUpgradeCost())})
-                        </button>
+        // ─── КАРТОЧКА 1: Корпус НИИ ─────────────────────────────────
+        let facilCard = document.getElementById('ui-rnd-facility-card');
+        if (facilCard) {
+            if (lvl === 0) {
+                facilCard.innerHTML = `
+                <div style="text-align:center; padding: 8px 0;">
+                    <div style="font-size: 3rem; margin-bottom: 12px;">🏗️</div>
+                    <h3 style="margin: 0 0 8px 0; color: var(--red);">НИИ не построен</h3>
+                    <p style="color: var(--text-dim); margin: 0 0 16px 0; font-size:0.9rem;">Для разработки технологий постройте первый корпус лаборатории</p>
+                    <button onclick="RND.upgradeFacility()" style="background: linear-gradient(135deg, #8e44ad, #9b59b6); color:white; border:none; padding:12px 28px; border-radius:var(--radius-sm); cursor:pointer; font-weight:700; font-size:1rem; box-shadow: 0 4px 15px rgba(142,68,173,0.4);">
+                        🏛️ Построить НИИ ($${formatMoney(RND.getUpgradeCost())})
+                    </button>
+                </div>`;
+            } else {
+                let capPct = maxStaff > 0 ? Math.round((curStaff/maxStaff)*100) : 0;
+                facilCard.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
+                    <div>
+                        <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:4px;">Корпус НИИ</div>
+                        <div style="font-size:1.4rem; font-weight:800; color:var(--text);">Уровень ${lvl}</div>
                     </div>
-                `;
+                    <div style="background: rgba(142,68,173,0.1); color:#8e44ad; font-weight:700; padding:6px 12px; border-radius:8px; font-size:0.9rem;">
+                        🏢 ${curStaff}/${maxStaff} мест
+                    </div>
+                </div>
+                <div style="background:var(--surface-2); border-radius:8px; height:8px; overflow:hidden; margin-bottom:6px;">
+                    <div style="height:100%; width:${capPct}%; background:linear-gradient(90deg,#8e44ad,#3498db); border-radius:8px; transition:width 0.4s;"></div>
+                </div>
+                <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:16px;">Заполненность: ${capPct}%</div>
+                <button onclick="RND.upgradeFacility()" style="width:100%; background: rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:10px; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; font-size:0.9rem;">
+                    ⬆️ Расширить НИИ ($${formatMoney(RND.getUpgradeCost())})
+                </button>`;
             }
-            if (document.getElementById('ui-rnd-active')) document.getElementById('ui-rnd-active').innerHTML = '';
-            if (document.getElementById('ui-rnd-available')) document.getElementById('ui-rnd-available').innerHTML = '';
-            return; 
         }
 
-        if (rndStaffPanel) {
-            let rpSpeed = RND.getDailyRP();
-            let eqCount = STATE.rnd.facility.equipment.count || 0;
-            let cond = STATE.rnd.facility.equipment.condition !== undefined ? STATE.rnd.facility.equipment.condition : 100;
-            let condColor = cond >= 70 ? '#27ae60' : (cond >= 30 ? '#f39c12' : '#c0392b');
-            let maxStaff = RND.getMaxStaff();
-            let curStaff = (STATE.rnd.staff.scientist || 0) + (STATE.rnd.staff.lead_scientist || 0);
-            
-            let eqWarning = curStaff > eqCount ? `<br><small style="color:#e74c3c;">Внимание: Учёных больше, чем ПК!</small>` : '';
-
-            rndStaffPanel.innerHTML = `
-                <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-                    <div style="flex: 1; min-width: 250px; background: #fff; padding: 15px; border: 1px solid #dcdde1; border-radius: 5px;">
-                        <h4 style="margin:0 0 10px 0;">🏢 Корпус НИИ (Ур. ${lvl})</h4>
-                        <p style="margin:0 0 5px 0;"><strong>Скорость:</strong> <span class="success">+${rpSpeed} RP/день</span></p>
-                        <p style="margin:0 0 10px 0;">Места: ${curStaff} / ${maxStaff}</p>
-                        <button onclick="RND.upgradeFacility()" style="background: #f39c12; width: 100%; padding: 6px;">Расширить НИИ ($${formatMoney(RND.getUpgradeCost())})</button>
+        // ─── КАРТОЧКА 2: Персонал ───────────────────────────────────
+        let staffCard = document.getElementById('ui-rnd-staff-card');
+        if (staffCard) {
+            let sci = STATE.rnd.staff.scientist || 0;
+            let lead = STATE.rnd.staff.lead_scientist || 0;
+            staffCard.innerHTML = `
+            <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">👨‍🔬 Персонал лаборатории</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+                    <div>
+                        <div style="font-weight:600; color:var(--text);">Лаборант</div>
+                        <div style="font-size:0.78rem; color:var(--text-dim);">+1 RP/день • ЗП $${formatMoney(150)}/дн</div>
                     </div>
-
-                    <div style="flex: 1; min-width: 250px; background: #fdfefe; padding: 15px; border: 1px dashed #bdc3c7; border-radius: 5px;">
-                        <h4 style="margin:0 0 10px 0;">💻 Оборудование (ПК)</h4>
-                        Установлено: <strong>${eqCount} / ${maxStaff}</strong> | Износ: <strong style="color:${condColor}">${cond.toFixed(1)}%</strong>${eqWarning}
-                        <div style="margin-top: 10px; display: flex; gap: 5px;">
-                            <input type="number" id="install-pc-qty" value="1" min="1" max="${maxStaff - eqCount}" style="width:60px; padding:4px;">
-                            <button onclick="RND.installEquipment(parseInt(document.getElementById('install-pc-qty').value))" style="background:#2980b9; flex-grow: 1;">Установить</button>
-                            <button onclick="RND.repairEquipment()" style="background:#8e44ad;">ТО</button>
-                        </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button onclick="RND.removeStaff('scientist')" style="background:var(--red-dim); color:var(--red); border:none; width:32px; height:32px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700;">−</button>
+                        <span style="font-weight:700; min-width:20px; text-align:center;">${sci}</span>
+                        <button onclick="RND.assignStaff('scientist')" style="background:rgba(142,68,173,0.1); color:#8e44ad; border:none; width:32px; height:32px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700;">+</button>
                     </div>
                 </div>
-
-                <div style="background: #ecf0f1; padding: 15px; border-radius: 4px; border: 1px solid #bdc3c7;">
-                    <strong style="color: #2c3e50; display: block; margin-bottom: 10px;">ПЕРСОНАЛ (${curStaff}/${maxStaff}):</strong>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <span>Лаборант (Занято: <strong>${STATE.rnd.staff.scientist}</strong>)</span>
-                        <div>
-                            <button onclick="RND.removeStaff('scientist')" style="padding: 2px 10px; background:#e74c3c;">-</button> 
-                            <button onclick="RND.assignStaff('scientist')" style="padding: 2px 10px; background:#2ecc71;">+</button> 
-                        </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
+                    <div>
+                        <div style="font-weight:600; color:var(--text);">Ст. Учёный</div>
+                        <div style="font-size:0.78rem; color:var(--text-dim);">+3 RP/день • ЗП $${formatMoney(400)}/дн</div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Ст. Научный (Занято: <strong>${STATE.rnd.staff.lead_scientist}</strong>)</span>
-                        <div>
-                            <button onclick="RND.removeStaff('lead_scientist')" style="padding: 2px 10px; background:#e74c3c;">-</button> 
-                            <button onclick="RND.assignStaff('lead_scientist')" style="padding: 2px 10px; background:#2ecc71;">+</button>
-                        </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button onclick="RND.removeStaff('lead_scientist')" style="background:var(--red-dim); color:var(--red); border:none; width:32px; height:32px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700;">−</button>
+                        <span style="font-weight:700; min-width:20px; text-align:center;">${lead}</span>
+                        <button onclick="RND.assignStaff('lead_scientist')" style="background:rgba(52,152,219,0.1); color:#3498db; border:none; width:32px; height:32px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700;">+</button>
                     </div>
                 </div>
-            `;
+            </div>`;
         }
 
-        // ВИЗУАЛЬНО РАЗДЕЛЕННЫЕ БЛОКИ (КАРТОЧКИ)
+        // ─── КАРТОЧКА 3: Оборудование ───────────────────────────────
+        let equipCard = document.getElementById('ui-rnd-equip-card');
+        if (equipCard && lvl > 0) {
+            let condColor = cond >= 70 ? 'var(--green)' : (cond >= 30 ? 'var(--orange)' : 'var(--red)');
+            let condPct = Math.max(0, Math.min(100, cond));
+            let freeSlots = maxStaff - eqCount;
+            let warning = curStaff > eqCount ? `<div style="color:var(--orange); font-size:0.82rem; margin-top:8px;">⚠️ Учёных больше, чем рабочих мест (ПК)!</div>` : '';
+            equipCard.innerHTML = `
+            <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">💻 Оборудование (Смарт-ПК)</div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span style="color:var(--text-dim); font-size:0.9rem;">Установлено</span>
+                <span style="font-weight:700; color:var(--text);">${eqCount} / ${maxStaff}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span style="color:var(--text-dim); font-size:0.9rem;">Состояние</span>
+                <span style="font-weight:700; color:${condColor};">${condPct.toFixed(0)}%</span>
+            </div>
+            <div style="background:var(--surface-2); border-radius:6px; height:6px; margin-bottom:4px;">
+                <div style="height:100%; width:${condPct}%; background:${condColor}; border-radius:6px; transition:width 0.4s;"></div>
+            </div>
+            ${warning}
+            <div style="display:flex; gap:8px; margin-top:14px;">
+                <input type="number" id="install-pc-qty" value="1" min="1" max="${Math.max(1,freeSlots)}" style="width:60px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); text-align:center; font-weight:600;">
+                <button onclick="RND.installEquipment(parseInt(document.getElementById('install-pc-qty').value))" style="flex:1; background:rgba(52,152,219,0.1); color:#3498db; border:1px solid rgba(52,152,219,0.3); padding:8px; border-radius:8px; cursor:pointer; font-weight:600;">
+                    ⬇️ Установить ПК
+                </button>
+                <button onclick="RND.repairEquipment()" style="background:rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600;">🔧 ТО</button>
+            </div>`;
+        } else if (equipCard && lvl === 0) {
+            equipCard.innerHTML = `<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:8px;">Постройте НИИ для установки оборудования</div>`;
+        }
+
+        // ─── ГРАФИК: История RP ─────────────────────────────────────
+        let rpHistory = (STATE.history && STATE.history.rp) ? STATE.history.rp : [];
+        let labels = rpHistory.map((_, i) => {
+            let dayNum = STATE.time.day - rpHistory.length + i + 1;
+            return `Д${dayNum}`;
+        });
+        if (labels.length === 0) { labels = ['Нет данных']; rpHistory = [0]; }
+
+        let rndCanvas = document.getElementById('rndRPChart');
+        if (rndCanvas) {
+            if (this.charts.rndRP) {
+                this.charts.rndRP.data.labels = labels;
+                this.charts.rndRP.data.datasets[0].data = rpHistory;
+                this.charts.rndRP.update('none');
+            } else {
+                let ctx = rndCanvas.getContext('2d');
+                let grad = ctx.createLinearGradient(0, 0, 0, 180);
+                grad.addColorStop(0, 'rgba(142,68,173,0.4)');
+                grad.addColorStop(1, 'rgba(142,68,173,0.0)');
+                this.charts.rndRP = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'RP/день',
+                            data: rpHistory,
+                            borderColor: '#8e44ad',
+                            backgroundColor: grad,
+                            borderWidth: 2.5,
+                            pointRadius: rpHistory.length > 10 ? 0 : 4,
+                            pointHoverRadius: 5,
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { maxTicksLimit: 7, font: { size: 10 } } },
+                            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 } } }
+                        }
+                    }
+                });
+            }
+        }
+
+        // ─── АКТИВНЫЙ ПРОЕКТ ────────────────────────────────────────
         let rndActive = document.getElementById('ui-rnd-active');
-        let rndAvail = document.getElementById('ui-rnd-available');
-        if (rndActive && rndAvail) {
-            let activeHTML = '';
-            
-            // 1. Блок текущего проекта
+        if (rndActive) {
+            let icons = this._rndTechIcons;
             if (STATE.rnd.activeProject) {
                 let tpl = RECIPES.BUSINESSES[STATE.rnd.activeProject];
                 let isUnlocked = STATE.rnd.unlocked && STATE.rnd.unlocked.includes(STATE.rnd.activeProject);
-                let targetCost = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost; 
-                let titleName = isUnlocked ? `Совершенствование: ${tpl.name}` : `Изучение: ${tpl.name}`;
-                let percent = targetCost > 0 ? Math.min(100, (STATE.rnd.points / targetCost) * 100).toFixed(1) : '100.0';
-                
-                activeHTML += `
-                    <div style="display: flex; justify-content: space-between; align-items: center; background: #fdfefe; padding: 12px; border: 1px solid #f39c12; border-radius: 6px; margin-bottom: 10px;">
-                        <div>
-                            <strong>${titleName}</strong> — Собрано: ${STATE.rnd.points} / ${targetCost} RP (${percent}%)
-                        </div>
-                        <button onclick="RND.pauseProject()" style="background: #e67e22; padding: 6px 14px; font-size: 0.9em;">Приостановить</button>
+                let targetCost = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost;
+                let titleName = isUnlocked ? `Совершенствование` : `Изучение`;
+                let percent = targetCost > 0 ? Math.min(100, (STATE.rnd.points / targetCost) * 100) : 100;
+                let techIcon = icons[STATE.rnd.activeProject] || '🔬';
+                rndActive.innerHTML = `
+                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">⚡ Активное Исследование</div>
+                <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
+                    <div style="font-size:2.5rem;">${techIcon}</div>
+                    <div>
+                        <div style="font-size:0.75rem; color:var(--orange); text-transform:uppercase; font-weight:700;">${titleName}</div>
+                        <div style="font-weight:700; color:var(--text); font-size:1.05rem;">${tpl.name}</div>
                     </div>
-                `;
-            } else {
-                activeHTML += `<div style="color:#7f8c8d; margin-bottom: 10px;">Нет активных исследований. Выберите проект ниже.</div>`;
-            }
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.82rem; color:var(--text-dim); margin-bottom:6px;">
+                    <span>${STATE.rnd.points} RP</span><span>${targetCost} RP</span>
+                </div>
+                <div style="background:var(--surface-2); border-radius:8px; height:10px; overflow:hidden; margin-bottom:8px;">
+                    <div style="height:100%; width:${percent.toFixed(1)}%; background:linear-gradient(90deg,#8e44ad,#e74c3c); border-radius:8px; transition:width 0.4s;"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:0.85rem; color:#8e44ad; font-weight:700;">${percent.toFixed(1)}% завершено</span>
+                    <button onclick="RND.pauseProject()" style="background:rgba(230,126,34,0.1); color:var(--orange); border:1px solid rgba(230,126,34,0.3); padding:6px 14px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem;">⏸ Пауза</button>
+                </div>`;
 
-            // 2. Блок приостановленных проектов (если они есть > 0 очков)
-            if (STATE.rnd.savedProgress && Object.keys(STATE.rnd.savedProgress).length > 0) {
-                activeHTML += `<div style="background: #fcf3cf; padding: 12px; border-radius: 6px; border: 1px solid #f9e79f; margin-top: 10px;">
-                    <strong style="color: #b7950b; display: block; margin-bottom: 8px;">⏸️ Приостановленные проекты:</strong>
-                    <ul style="padding-left: 0; list-style: none; margin-bottom: 0;">`;
-                
-                Object.keys(STATE.rnd.savedProgress).forEach(bizId => {
-                    let pts = STATE.rnd.savedProgress[bizId];
-                    if (pts > 0) {
-                        let tpl = RECIPES.BUSINESSES[bizId];
-                        let isUnlocked = STATE.rnd.unlocked.includes(bizId);
-                        let targetCost = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost;
-                        let titleName = isUnlocked ? `Совершенствование: ${tpl.name}` : `Изучение: ${tpl.name}`;
-                        let percent = targetCost > 0 ? Math.min(100, (pts / targetCost) * 100).toFixed(1) : '100.0';
-
-                        activeHTML += `
-                            <li style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 8px 10px; margin-bottom: 6px; border-radius: 4px; border: 1px solid #f7dc6f;">
-                                <div><strong>${titleName}</strong> <small style="color:#7f8c8d;">(${pts} / ${targetCost} RP - ${percent}%)</small></div>
-                                <button onclick="RND.startProject('${bizId}')" style="background: #27ae60; padding: 4px 10px; font-size: 0.85em;">Продолжить</button>
-                            </li>
-                        `;
-                    }
-                });
-                activeHTML += `</ul></div>`;
-            }
-
-            rndActive.innerHTML = activeHTML;
-
-            let newTechListHTML = '';
-            let upgradeTechListHTML = '';
-            let maxedTechListHTML = ''; // Блок для полностью изученных
-            
-            let hasNew = false;
-            let hasUpgrade = false;
-            let hasMaxed = false;
-
-            if (!STATE.rnd.unlocked) STATE.rnd.unlocked = ['microchips', 'parts3d'];
-            if (!STATE.rnd.unlocked.includes('microchips')) STATE.rnd.unlocked.push('microchips');
-            if (!STATE.rnd.unlocked.includes('parts3d')) STATE.rnd.unlocked.push('parts3d');
-
-            Object.keys(RECIPES.BUSINESSES).forEach(key => {
-                let tpl = RECIPES.BUSINESSES[key];
-                
-                // Проверяем статус проекта (Активен или на Паузе)
-                let isPaused = STATE.rnd.savedProgress && STATE.rnd.savedProgress[key] > 0;
-                let isResearching = STATE.rnd.activeProject === key;
-
-                // ИСКЛЮЧЕНИЕ: Если проект сейчас изучается или на паузе — не выводим его в нижние списки
-                if (isPaused || isResearching) return;
-
-                if (tpl.researchCost >= 0) {
-                    let isUnlocked = STATE.rnd.unlocked.includes(key);
-                    let currentLevel = (STATE.rnd.techLevels && STATE.rnd.techLevels[key]) ? STATE.rnd.techLevels[key] : 1.0;
-
-                    // ЕСЛИ УЖЕ ОТКРЫТО (Идет в Апгрейд или в Максимум)
-                    if (isUnlocked) {
-                        if (currentLevel >= 2.0) {
-                            hasMaxed = true;
-                            maxedTechListHTML += `<li style="margin-bottom: 10px; padding: 10px; background: #fdfefe; border: 1px solid #dcdde1; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; opacity: 0.8;">
-                                <div><strong>${tpl.name}</strong> <span style="color:#27ae60; font-size: 0.9em; margin-left: 10px;">🏆 Максимальный уровень: v2.00</span></div> 
-                                <span style="color:#27ae60; font-weight: bold;">[Завершено]</span>
-                            </li>`;
-                        } else {
-                            hasUpgrade = true;
-                            let upgradeCost = tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000;
-                            upgradeTechListHTML += `<li style="margin-bottom: 10px; padding: 10px; background: #fff; border: 1px solid #dcdde1; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
-                                <div><strong>${tpl.name}</strong> <span style="color:#3498db; font-size: 0.9em; margin-left: 10px;">Уровень качества: v${currentLevel.toFixed(2)} / 2.0</span></div> 
-                                <button onclick="RND.startProject('${key}')" style="padding: 6px 14px; background:#2980b9;">Улучшить качество (${upgradeCost} RP)</button>
-                            </li>`;
+                // Приостановленные
+                if (STATE.rnd.savedProgress && Object.keys(STATE.rnd.savedProgress).length > 0) {
+                    let pausedHtml = '';
+                    Object.keys(STATE.rnd.savedProgress).forEach(bizId => {
+                        let pts = STATE.rnd.savedProgress[bizId];
+                        if (pts > 0) {
+                            let t = RECIPES.BUSINESSES[bizId];
+                            let tc = STATE.rnd.unlocked.includes(bizId) ? (t.researchCost > 0 ? t.researchCost * 2 : 1000) : t.researchCost;
+                            let p = tc > 0 ? Math.min(100, (pts/tc)*100).toFixed(0) : 100;
+                            let ico = icons[bizId] || '🔬';
+                            pausedHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(243,156,18,0.08); border:1px solid rgba(243,156,18,0.2); padding:10px 14px; border-radius:8px; margin-top:8px;">
+                                <span>${ico} <strong>${t.name}</strong> <span style="color:var(--text-dim); font-size:0.8rem;">${p}%</span></span>
+                                <button onclick="RND.startProject('${bizId}')" style="background:rgba(39,174,96,0.1); color:var(--green); border:1px solid rgba(39,174,96,0.3); padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.82rem; font-weight:600;">▶ Продолжить</button>
+                            </div>`;
                         }
-                    } 
-                    // ЕСЛИ ЕЩЕ НЕ ОТКРЫТО (Идет в Новые технологии)
-                    else if (tpl.researchCost > 0) {
-                        hasNew = true;
-                        newTechListHTML += `<li style="margin-bottom: 10px; padding: 10px; background: #fff; border: 1px solid #dcdde1; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
-                            <div><strong>${tpl.name}</strong> <span style="color:#e67e22; font-size: 0.9em; margin-left: 10px;">[Требует изучения: ${tpl.researchCost} RP]</span></div> 
-                            <button onclick="RND.startProject('${key}')" style="padding: 6px 14px; background:#8e44ad;">Изучить (${tpl.researchCost} RP)</button>
-                        </li>`;
-                    }
+                    });
+                    if (pausedHtml) rndActive.innerHTML += `<div style="margin-top:14px;"><div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:6px;">⏸ На паузе</div>${pausedHtml}</div>`;
                 }
-            });
+            } else {
+                rndActive.innerHTML = `
+                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:12px;">⚡ Активное Исследование</div>
+                <div style="text-align:center; padding: 20px 0; color:var(--text-faint);">
+                    <div style="font-size:2.5rem; margin-bottom:8px;">🧪</div>
+                    <div style="font-size:0.9rem;">Нет активных исследований.</div>
+                    <div style="font-size:0.82rem; margin-top:4px;">Выберите технологию ниже</div>
+                </div>`;
 
-            if (!hasNew) newTechListHTML = '<p style="color:#7f8c8d; font-style: italic; padding: 5px;">Все доступные чертежи изучены.</p>';
-            if (!hasUpgrade) upgradeTechListHTML = '<p style="color:#7f8c8d; font-style: italic; padding: 5px;">Нет доступных для улучшения технологий.</p>';
-            if (!hasMaxed) maxedTechListHTML = '<p style="color:#7f8c8d; font-style: italic; padding: 5px;">Пока нет полностью усовершенствованных технологий.</p>';
-
-            // Рендерим все три блока
-            rndAvail.innerHTML = `
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; margin-bottom: 20px;">
-                    <h4 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #bdc3c7; padding-bottom: 8px;">📜 Новые технологии (Открытие чертежей)</h4>
-                    <ul style="padding-left: 0; list-style: none; margin-bottom: 0;">${newTechListHTML}</ul>
-                </div>
-
-                <div style="background: #f1f8fc; padding: 15px; border-radius: 8px; border: 1px solid #d4e6f1; margin-bottom: 20px;">
-                    <h4 style="margin-top: 0; color: #2980b9; border-bottom: 2px solid #85c1e9; padding-bottom: 8px;">⚙️ Совершенствование производства (Рост качества до v2.0)</h4>
-                    <ul style="padding-left: 0; list-style: none; margin-bottom: 0;">${upgradeTechListHTML}</ul>
-                </div>
-
-                <div style="background: #eafaf1; padding: 15px; border-radius: 8px; border: 1px solid #abebc6;">
-                    <h4 style="margin-top: 0; color: #1e8449; border-bottom: 2px solid #58d68d; padding-bottom: 8px;">🏆 Полностью усовершенствованные (Максимум)</h4>
-                    <ul style="padding-left: 0; list-style: none; margin-bottom: 0;">${maxedTechListHTML}</ul>
-                </div>
-            `;
+                if (STATE.rnd.savedProgress && Object.keys(STATE.rnd.savedProgress).some(k => STATE.rnd.savedProgress[k] > 0)) {
+                    let pausedHtml = '';
+                    Object.keys(STATE.rnd.savedProgress).forEach(bizId => {
+                        let pts = STATE.rnd.savedProgress[bizId];
+                        if (pts > 0) {
+                            let t = RECIPES.BUSINESSES[bizId];
+                            let tc = STATE.rnd.unlocked.includes(bizId) ? (t.researchCost > 0 ? t.researchCost * 2 : 1000) : t.researchCost;
+                            let p = tc > 0 ? Math.min(100, (pts/tc)*100).toFixed(0) : 100;
+                            let ico = icons[bizId] || '🔬';
+                            pausedHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(243,156,18,0.08); border:1px solid rgba(243,156,18,0.2); padding:10px 14px; border-radius:8px; margin-top:8px;">
+                                <span>${ico} <strong>${t.name}</strong> <span style="color:var(--text-dim); font-size:0.8rem;">${p}%</span></span>
+                                <button onclick="RND.startProject('${bizId}')" style="background:rgba(39,174,96,0.1); color:var(--green); border:1px solid rgba(39,174,96,0.3); padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.82rem; font-weight:600;">▶ Продолжить</button>
+                            </div>`;
+                        }
+                    });
+                    if (pausedHtml) rndActive.innerHTML += `<div style="margin-top:4px;"><div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:6px;">⏸ На паузе</div>${pausedHtml}</div>`;
+                }
+            }
         }
+
+        // ─── ДОСТУПНЫЕ ТЕХНОЛОГИИ ────────────────────────────────────
+        let rndAvail = document.getElementById('ui-rnd-available');
+        if (!rndAvail) return;
+
+        let icons = this._rndTechIcons;
+        if (!STATE.rnd.unlocked) STATE.rnd.unlocked = ['microchips', 'parts3d'];
+
+        let newTechs = [], upgradeTechs = [], maxedTechs = [];
+
+        Object.keys(RECIPES.BUSINESSES).forEach(key => {
+            let tpl = RECIPES.BUSINESSES[key];
+            let isPaused = STATE.rnd.savedProgress && STATE.rnd.savedProgress[key] > 0;
+            let isResearching = STATE.rnd.activeProject === key;
+            if (isPaused || isResearching) return;
+            if (tpl.researchCost >= 0) {
+                let isUnlocked = STATE.rnd.unlocked.includes(key);
+                let currentLevel = (STATE.rnd.techLevels && STATE.rnd.techLevels[key]) ? STATE.rnd.techLevels[key] : 1.0;
+                let ico = icons[key] || '🏭';
+                if (isUnlocked) {
+                    if (currentLevel >= 2.0) {
+                        maxedTechs.push({ key, tpl, ico, currentLevel });
+                    } else {
+                        upgradeTechs.push({ key, tpl, ico, currentLevel });
+                    }
+                } else if (tpl.researchCost > 0) {
+                    newTechs.push({ key, tpl, ico });
+                }
+            }
+        });
+
+        const renderTechCard = (item, mode) => {
+            let { key, tpl, ico } = item;
+            if (mode === 'new') {
+                return `
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:10px; box-shadow:var(--shadow-card); transition:transform 0.15s, box-shadow 0.15s;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+                    <div style="font-size:2.2rem; text-align:center;">${ico}</div>
+                    <div style="text-align:center;">
+                        <div style="font-weight:700; font-size:0.95rem; color:var(--text);">${tpl.name}</div>
+                        <div style="font-size:0.78rem; color:var(--text-dim); margin-top:2px;">Требует изучения</div>
+                    </div>
+                    <div style="background:rgba(142,68,173,0.08); border-radius:8px; padding:6px 10px; text-align:center; font-size:0.82rem; font-weight:700; color:#8e44ad;">${tpl.researchCost} RP</div>
+                    <button onclick="RND.startProject('${key}')" style="width:100%; background:linear-gradient(135deg,#8e44ad,#9b59b6); color:white; border:none; padding:9px; border-radius:8px; cursor:pointer; font-weight:700; font-size:0.85rem;">
+                        🔬 Изучить
+                    </button>
+                </div>`;
+            } else if (mode === 'upgrade') {
+                let upgCost = tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000;
+                let lvlPct = ((item.currentLevel - 1.0) * 100).toFixed(0);
+                return `
+                <div style="background:var(--surface); border:1px solid rgba(52,152,219,0.25); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:10px; box-shadow:var(--shadow-card); transition:transform 0.15s, box-shadow 0.15s;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+                    <div style="font-size:2.2rem; text-align:center;">${ico}</div>
+                    <div style="text-align:center;">
+                        <div style="font-weight:700; font-size:0.95rem; color:var(--text);">${tpl.name}</div>
+                        <div style="font-size:0.78rem; color:var(--blue);">v${item.currentLevel.toFixed(2)} / 2.0</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:6px; height:6px; overflow:hidden;">
+                        <div style="height:100%; width:${lvlPct}%; background:linear-gradient(90deg,#3498db,#2ecc71); border-radius:6px;"></div>
+                    </div>
+                    <div style="background:rgba(52,152,219,0.08); border-radius:8px; padding:6px 10px; text-align:center; font-size:0.82rem; font-weight:700; color:#3498db;">${upgCost} RP</div>
+                    <button onclick="RND.startProject('${key}')" style="width:100%; background:linear-gradient(135deg,#3498db,#2980b9); color:white; border:none; padding:9px; border-radius:8px; cursor:pointer; font-weight:700; font-size:0.85rem;">
+                        ⚙️ Улучшить
+                    </button>
+                </div>`;
+            } else {
+                return `
+                <div style="background:var(--surface); border:1px solid rgba(39,174,96,0.25); border-radius:var(--radius); padding:16px; display:flex; flex-direction:column; gap:8px; opacity:0.75;">
+                    <div style="font-size:2.2rem; text-align:center; filter:grayscale(30%);">${ico}</div>
+                    <div style="text-align:center;">
+                        <div style="font-weight:700; font-size:0.95rem; color:var(--text);">${tpl.name}</div>
+                        <div style="font-size:0.78rem; color:var(--green);">🏆 Макс. уровень v2.0</div>
+                    </div>
+                    <div style="text-align:center; font-size:0.8rem; color:var(--green); font-weight:700;">✅ Завершено</div>
+                </div>`;
+            }
+        };
+
+        let html = '';
+
+        if (newTechs.length > 0) {
+            html += `
+            <div style="margin-bottom:24px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid rgba(142,68,173,0.2);">
+                    <span style="font-size:1.2rem;">📜</span>
+                    <h3 style="margin:0; color:#8e44ad;">Новые технологии (Открытие чертежей)</h3>
+                    <span style="background:rgba(142,68,173,0.1); color:#8e44ad; font-size:0.78rem; padding:2px 8px; border-radius:10px; font-weight:700;">${newTechs.length} доступно</span>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px;">
+                    ${newTechs.map(t => renderTechCard(t, 'new')).join('')}
+                </div>
+            </div>`;
+        }
+
+        if (upgradeTechs.length > 0) {
+            html += `
+            <div style="margin-bottom:24px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid rgba(52,152,219,0.2);">
+                    <span style="font-size:1.2rem;">⚙️</span>
+                    <h3 style="margin:0; color:#3498db;">Совершенствование производства</h3>
+                    <span style="background:rgba(52,152,219,0.1); color:#3498db; font-size:0.78rem; padding:2px 8px; border-radius:10px; font-weight:700;">${upgradeTechs.length} технол.</span>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px;">
+                    ${upgradeTechs.map(t => renderTechCard(t, 'upgrade')).join('')}
+                </div>
+            </div>`;
+        }
+
+        if (maxedTechs.length > 0) {
+            html += `
+            <div>
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid rgba(39,174,96,0.2);">
+                    <span style="font-size:1.2rem;">🏆</span>
+                    <h3 style="margin:0; color:var(--green);">Полностью усовершенствованные</h3>
+                    <span style="background:rgba(39,174,96,0.1); color:var(--green); font-size:0.78rem; padding:2px 8px; border-radius:10px; font-weight:700;">${maxedTechs.length} завершено</span>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px;">
+                    ${maxedTechs.map(t => renderTechCard(t, 'maxed')).join('')}
+                </div>
+            </div>`;
+        }
+
+        if (!html) {
+            html = `<div style="text-align:center; padding:40px; color:var(--text-dim);">
+                <div style="font-size:3rem; margin-bottom:12px;">🏆</div>
+                <div style="font-weight:700;">Все технологии исследованы на максимум!</div>
+            </div>`;
+        }
+
+        rndAvail.innerHTML = html;
     },
+
 
     // --- 5. СКЛАДСКИЕ КАРТОЧКИ ---
     updateWarehouseUI() {

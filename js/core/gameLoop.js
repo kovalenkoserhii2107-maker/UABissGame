@@ -34,6 +34,15 @@ const GAME = {
         HR.processDaily();
         CONTRACTS.processDaily();
         RND.processDaily();
+        
+        // Запись истории RP для графика
+        if (!STATE.history) STATE.history = { rp: [] };
+        if (!STATE.history.rp) STATE.history.rp = [];
+        if (typeof RND !== 'undefined') {
+            STATE.history.rp.push(RND.getDailyRP());
+            if (STATE.history.rp.length > 30) STATE.history.rp.shift();
+        }
+
         PRODUCTION.processProduction();
         MARKET.simulate();
         LOGISTICS.processDaily(); // Логистика

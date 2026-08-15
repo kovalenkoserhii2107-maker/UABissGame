@@ -800,20 +800,68 @@
 
         <!-- ВКЛАДКА: ЛАБОРАТОРИЯ -->
         <div id="tab-rnd" class="tab-content">
-            <div class="card">
-                <h3>Управление отделом исследований</h3>
-                <p>Назначайте инженеров для генерации Очков Исследований (RP). Зарплата списывается ежедневно.</p>
-                <div id="ui-rnd-staff" style="background: var(--surface-2); padding: 10px; border-radius: var(--radius-sm); margin-bottom: 15px;"></div>
+            <!-- ШАПКА вкладки -->
+            <div style="background: linear-gradient(135deg, rgba(142,68,173,0.15), rgba(52,152,219,0.1)); border: 1px solid rgba(142,68,173,0.2); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <h2 style="margin: 0 0 4px 0; background: linear-gradient(135deg, #8e44ad, #3498db); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🔬 Центр Исследований и Разработок</h2>
+                    <p style="margin: 0; color: var(--text-dim); font-size: 0.9rem;">Финансируйте учёных, открывайте новые чертежи и прокачивайте технологии до максимального уровня.</p>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <div style="text-align: center; background: var(--surface); padding: 10px 20px; border-radius: 12px; border: 1px solid rgba(142,68,173,0.3);">
+                        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700;">RP Накоплено</div>
+                        <div id="rnd-points-display" style="font-size: 1.4rem; font-weight: 700; color: #8e44ad;">0</div>
+                    </div>
+                    <div style="text-align: center; background: var(--surface); padding: 10px 20px; border-radius: 12px; border: 1px solid rgba(52,152,219,0.3);">
+                        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700;">RP / День</div>
+                        <div id="rnd-daily-rp-display" style="font-size: 1.4rem; font-weight: 700; color: #3498db;">+0</div>
+                    </div>
+                </div>
+            </div>
 
-                <hr>
-                <h4>Текущий проект:</h4>
-                <div id="ui-rnd-active"></div>
+            <!-- ОСНОВНАЯ СЕТКА: Управление + График -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
 
-                <hr>
-                <h4>Доступно для исследования:</h4>
-                <ul id="ui-rnd-available" style="padding-left: 20px;"></ul>
+                <!-- ЛЕВАЯ КОЛОНКА: Управление НИИ -->
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+
+                    <!-- Карточка: Корпус НИИ -->
+                    <div id="ui-rnd-facility-card" style="background: var(--surface); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-card);">
+                        <!-- Рендерится JS -->
+                    </div>
+
+                    <!-- Карточка: Персонал лаборатории -->
+                    <div id="ui-rnd-staff-card" style="background: var(--surface); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-card);">
+                        <!-- Рендерится JS -->
+                    </div>
+
+                    <!-- Карточка: Оборудование -->
+                    <div id="ui-rnd-equip-card" style="background: var(--surface); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-card);">
+                        <!-- Рендерится JS -->
+                    </div>
+                </div>
+
+                <!-- ПРАВАЯ КОЛОНКА: График + Активный проект -->
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+
+                    <!-- Карточка: График RP -->
+                    <div style="background: var(--surface); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-card); flex: 1;">
+                        <h3 style="margin: 0 0 16px 0; font-size: 0.95rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em;">📈 Генерация RP (30 дней)</h3>
+                        <canvas id="rndRPChart" style="max-height: 180px;"></canvas>
+                    </div>
+
+                    <!-- Карточка: Текущий проект -->
+                    <div id="ui-rnd-active" style="background: var(--surface); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); box-shadow: var(--shadow-card);">
+                        <!-- Рендерится JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- НИЖНЯЯ СЕКЦИЯ: Доступные технологии -->
+            <div id="ui-rnd-available">
+                <!-- Рендерится JS -->
             </div>
         </div>
+
 
         <!-- ВКЛАДКА: СКЛАДЫ (ОБНОВЛЕННАЯ) -->
         <div id="tab-warehouse" class="tab-content">
