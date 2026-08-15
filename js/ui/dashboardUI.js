@@ -1843,7 +1843,7 @@ const UI_DASHBOARD = {
         
         let itemVol = RECIPES.RESOURCES[itemKey].volume || 1.0;
         let dist = typeof GEO !== 'undefined' ? Math.max(10, GEO.getDistance('kyiv', cityId)) : 10;
-        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.15;
+        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.015;
         let logCostPerItem = dist * logBase * itemVol;
 
         let maxByMoney = Math.floor(STATE.finances.balance / (price + logCostPerItem));
@@ -3095,7 +3095,7 @@ const UI_DASHBOARD = {
         let sourceCity = cityId;
         let targetCity = store.city || 'odesa';
         let dist = typeof GEO !== 'undefined' ? GEO.getDistance(sourceCity, targetCity) : 10;
-        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.15;
+        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.015;
         
         // Формула: Расстояние * Базовая ставка * Объем груза (м³)
         let totalVolume = qty * itemVol;

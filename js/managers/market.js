@@ -102,7 +102,7 @@ const MARKET = {
 
         // 2. Транспортные расходы от главного оптового хаба (Киева) до целевого склада
         let dist = typeof GEO !== 'undefined' ? Math.max(10, GEO.getDistance('kyiv', cityId)) : 10;
-        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.15;
+        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.015;
         let logCost = dist * logBase * totalVol;
 
         let price = this.getCurrentPrice(itemKey);
