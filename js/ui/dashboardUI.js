@@ -412,17 +412,37 @@ const UI_DASHBOARD = {
         if (availList) {
             availList.innerHTML = '';
             if (STATE.contracts.available.length === 0) {
-                availList.innerHTML = '<li><small style="color:#7f8c8d;">Пока нет новых тендеров. Вернитесь через пару дней.</small></li>';
+                availList.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Пока нет новых тендеров. Вернитесь через пару дней.</div>';
             } else {
                 STATE.contracts.available.forEach(c => {
                     let itemName = RECIPES.RESOURCES[c.item].name;
                     availList.innerHTML += `
-                    <li style="background: #fdfefe; border: 1px solid #d0d3d4; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-                        <strong style="color: #2c3e50;">Заказ: ${itemName} (${c.qty} шт.)</strong><br>
-                        <small>Цена поставки: $${formatMoney(c.price)}/шт (Сумма: <span class="success">$${formatMoney(c.totalReward)}</span>)</small><br>
-                        <small>Жесткий срок: <strong>${c.deadline} дн.</strong> | Штраф: <span class="danger">$${formatMoney(c.penalty)}</span></small><br>
-                        <button onclick="CONTRACTS.accept(${c.id})" style="background: #3498db; width: 100%; margin-top: 5px;">Подписать контракт</button>
-                    </li>`;
+                    <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                            <div>
+                                <div style="font-weight:700; font-size:1.1rem; color:var(--text); margin-bottom:4px;">${itemName}</div>
+                                <div style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Объем: <span style="color:var(--text);">${c.qty} шт.</span></div>
+                            </div>
+                            <div style="background:var(--red-dim); color:var(--red); padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Срок: ${c.deadline} дн.</div>
+                        </div>
+                        
+                        <div style="display:flex; gap:16px; margin-bottom:16px; padding-top:12px; border-top:1px dashed var(--border);">
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Цена за шт.</div>
+                                <div style="color:var(--text); font-weight:700; font-size:1rem;">$${formatMoney(c.price)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Сумма (Оплата)</div>
+                                <div style="color:var(--green); font-weight:700; font-size:1rem;">$${formatMoney(c.totalReward)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Штраф за срыв</div>
+                                <div style="color:var(--red); font-weight:700; font-size:0.9rem;">$${formatMoney(c.penalty)}</div>
+                            </div>
+                        </div>
+
+                        <button onclick="CONTRACTS.accept(${c.id})" style="width:100%; background:var(--blue); border:none; color:white; font-size:0.95rem; padding:10px; border-radius:10px; font-weight:700; cursor:pointer; transition:transform 0.1s;" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1)'">Подписать контракт</button>
+                    </div>`;
                 });
             }
         }
@@ -431,7 +451,7 @@ const UI_DASHBOARD = {
         if (activeList) {
             activeList.innerHTML = '';
             if (STATE.contracts.active.length === 0) {
-                activeList.innerHTML = '<li><small style="color:#7f8c8d;">Нет активных обязательств.</small></li>';
+                activeList.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Нет активных обязательств.</div>';
             } else {
                 STATE.contracts.active.forEach(c => {
                     let itemName = RECIPES.RESOURCES[c.item].name;
@@ -443,16 +463,36 @@ const UI_DASHBOARD = {
                         });
                     }
                     let canFulfill = inv >= c.qty;
-                    
-                    let bg = canFulfill ? '#e8f8f5' : (c.deadline <= 3 ? '#fdedec' : '#fdfefe');
+                    let progress = Math.min(100, (inv / c.qty) * 100);
                     
                     activeList.innerHTML += `
-                    <li style="background: ${bg}; border: 1px solid #d0d3d4; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
-                        <strong>Поставка: ${itemName}</strong><br>
-                        <small>На складе: <strong>${inv} / ${c.qty}</strong> шт. | Оплата: <span class="success">$${formatMoney(c.totalReward)}</span></small><br>
-                        <small>Осталось времени: <strong class="${c.deadline <= 3 ? 'danger' : ''}">${c.deadline} дн.</strong> | Неустойка: <span class="danger">$${formatMoney(c.penalty)}</span></small><br>
-                        <button onclick="CONTRACTS.fulfill(${c.id})" ${!canFulfill ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="background: #27ae60; width: 100%; margin-top: 5px;">Отгрузить партию</button>
-                    </li>`;
+                    <div style="background: ${canFulfill ? 'rgba(52, 199, 89, 0.05)' : 'var(--surface-2)'}; border:1px solid ${canFulfill ? 'rgba(52, 199, 89, 0.3)' : 'var(--border)'}; border-radius:12px; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                            <div>
+                                <div style="font-weight:700; font-size:1.1rem; color:var(--text); margin-bottom:4px;">${itemName}</div>
+                                <div style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Собрано: <span style="color:${canFulfill ? 'var(--green)' : 'var(--text)'};">${inv} / ${c.qty}</span> шт.</div>
+                            </div>
+                            <div style="background:${c.deadline <= 3 ? 'var(--red-dim)' : 'var(--orange-dim)'}; color:${c.deadline <= 3 ? 'var(--red)' : 'var(--orange)'}; padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Осталось: ${c.deadline} дн.</div>
+                        </div>
+                        
+                        <!-- Прогресс бар сборки -->
+                        <div style="height:8px; background:rgba(0,0,0,0.05); border-radius:4px; margin-bottom:16px; overflow:hidden;">
+                            <div style="height:100%; background:${canFulfill ? 'var(--green)' : 'var(--blue)'}; width:${progress}%;"></div>
+                        </div>
+
+                        <div style="display:flex; gap:16px; margin-bottom:16px; padding-top:12px; border-top:1px dashed var(--border);">
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Сумма (Оплата)</div>
+                                <div style="color:var(--green); font-weight:700; font-size:1rem;">$${formatMoney(c.totalReward)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Неустойка</div>
+                                <div style="color:var(--red); font-weight:700; font-size:0.9rem;">$${formatMoney(c.penalty)}</div>
+                            </div>
+                        </div>
+
+                        <button onclick="CONTRACTS.fulfill(${c.id})" ${!canFulfill ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : 'style="cursor:pointer; transition:transform 0.1s;" onmousedown="this.style.transform=\\'scale(0.98)\\'" onmouseup="this.style.transform=\\'scale(1)\\'"'} class="btn-primary-lg" style="width:100%; background:${canFulfill ? 'var(--green)' : 'var(--text-dim)'}; border:none; color:white; font-size:0.95rem; padding:10px; border-radius:10px; font-weight:700;">${canFulfill ? 'Отгрузить партию (Готово!)' : 'Недостаточно товара на складах'}</button>
+                    </div>`;
                 });
             }
         }

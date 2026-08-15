@@ -816,16 +816,31 @@
 
         <!-- ВКЛАДКА: ТЕНДЕРЫ (B2G/B2B) -->
         <div id="tab-contracts" class="tab-content">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
-                <div class="card">
-                    <h3>Биржа контрактов (Доступные)</h3>
-                    <p><small>Государственные и частные заказы. Покупают дороже рынка, но за срыв сроков списывается штраф из баланса.</small></p>
-                    <ul id="ui-contracts-available" style="padding-left: 0; list-style: none;"></ul>
+            <div style="background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(41, 128, 185, 0.15)); border: 1px solid rgba(52, 152, 219, 0.2); border-radius: 20px; padding: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="font-size: 2.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">📜</div>
+                    <div>
+                        <h2 style="margin: 0 0 4px 0; color: var(--text); font-size: 1.6rem;">Государственные Тендеры (B2G)</h2>
+                        <p style="margin: 0; color: var(--text-dim); font-size: 0.95rem;">Высокомаржинальные государственные и частные заказы со строгими дедлайнами.</p>
+                    </div>
                 </div>
-                <div class="card">
-                    <h3>Мои обязательства (В работе)</h3>
-                    <p><small>Произведите товар и нажмите "Отгрузить". Не успеете — заплатите неустойку.</small></p>
-                    <ul id="ui-contracts-active" style="padding-left: 0; list-style: none;"></ul>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px;">
+                <div class="card" style="margin-bottom: 0; background: var(--surface);">
+                    <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 20px;">
+                        <div style="width:40px; height:40px; border-radius:10px; background:var(--blue-dim); display:flex; align-items:center; justify-content:center; font-size:1.3rem;">📋</div>
+                        <h3 style="margin:0; font-size: 1.25rem;">Доступные заказы на бирже</h3>
+                    </div>
+                    <div id="ui-contracts-available" style="display:flex; flex-direction:column; gap:16px;"></div>
+                </div>
+                
+                <div class="card" style="margin-bottom: 0; background: var(--surface);">
+                    <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 20px;">
+                        <div style="width:40px; height:40px; border-radius:10px; background:var(--orange-dim); display:flex; align-items:center; justify-content:center; font-size:1.3rem;">⏳</div>
+                        <h3 style="margin:0; font-size: 1.25rem;">Мои активные обязательства</h3>
+                    </div>
+                    <div id="ui-contracts-active" style="display:flex; flex-direction:column; gap:16px;"></div>
                 </div>
             </div>
         </div>
