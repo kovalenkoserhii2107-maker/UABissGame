@@ -1900,17 +1900,41 @@ const UI_DASHBOARD = {
             
             loansList.innerHTML = '';
             if (STATE.finances.loans.length === 0) {
-                loansList.innerHTML = '<li><small style="color:#7f8c8d;">Нет активных кредитов.</small></li>';
+                loansList.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Нет активных кредитов</div>';
             } else {
                 STATE.finances.loans.forEach(l => {
                     let currentDailyInterest = (l.remainingPrincipal * l.rate) / 365;
                     let currentDailyPayment = l.dailyPrincipal + currentDailyInterest;
                     
-                    loansList.innerHTML += `<li style="margin-bottom: 15px; border-bottom: 1px dashed #eee; padding-bottom: 10px; list-style-type: none;">
-                        <strong>Заём $${formatMoney(l.amount)}</strong> (Осталось: ${l.remainingDays} дн.)<br>
-                        <small>Ставка: ${(l.rate*100).toFixed(1)}% | Долг: <span class="danger">$${formatMoney(l.remainingPrincipal)}</span> | Платёж сегодня: $${formatMoney(currentDailyPayment)}</small><br>
-                        <button onclick="FINANCE.payOffLoan(${l.id})" style="background: #e67e22; font-size: 0.8em; margin-top: 5px; padding: 4px 10px;">Досрочно погасить ($${formatMoney(l.remainingPrincipal + currentDailyInterest)})</button>
-                    </li>`;
+                    loansList.innerHTML += `
+                    <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">Заём $${formatMoney(l.amount)}</div>
+                            <div style="background:var(--orange-dim); color:var(--orange); padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Осталось: ${l.remainingDays} дн.</div>
+                        </div>
+                        
+                        <div style="display:flex; gap:16px; margin-bottom:12px;">
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Остаток Долга</div>
+                                <div style="color:var(--red); font-weight:700; font-size:1rem;">$${formatMoney(l.remainingPrincipal)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Ставка</div>
+                                <div style="color:var(--text); font-weight:700; font-size:1rem;">${(l.rate*100).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Платёж/день</div>
+                                <div style="color:var(--text); font-weight:700; font-size:1rem;">$${formatMoney(currentDailyPayment)}</div>
+                            </div>
+                        </div>
+
+                        <!-- Прогресс бар -->
+                        <div style="height:6px; background:rgba(0,0,0,0.05); border-radius:3px; margin-bottom:16px; overflow:hidden;">
+                            <div style="height:100%; background:var(--orange); width:${Math.max(0, 100 - (l.remainingPrincipal / l.amount) * 100)}%;"></div>
+                        </div>
+
+                        <button onclick="FINANCE.payOffLoan(${l.id})" style="width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); font-size:0.85rem; padding:8px; border-radius:8px; font-weight:600; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='var(--surface)'">Досрочно погасить ($${formatMoney(l.remainingPrincipal + currentDailyInterest)})</button>
+                    </div>`;
                 });
             }
         }
@@ -1918,17 +1942,46 @@ const UI_DASHBOARD = {
         let depList = document.getElementById('ui-active-deposits');
         if (depList) {
             if (!STATE.finances.deposits) STATE.finances.deposits = [];
+            
+            let totalDeposits = STATE.finances.deposits.reduce((sum, d) => sum + d.amount, 0);
+            if (document.getElementById('ui-total-deposits')) document.getElementById('ui-total-deposits').innerText = formatMoney(totalDeposits);
+
             depList.innerHTML = '';
             if (STATE.finances.deposits.length === 0) {
-                depList.innerHTML = '<li><small style="color:#7f8c8d;">Нет открытых вкладов.</small></li>';
+                depList.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Нет открытых вкладов</div>';
             } else {
                 STATE.finances.deposits.forEach(d => {
-                    let payoutText = d.payoutType === 'daily' ? 'Выплата % ежедневно' : 'Капитализация в конце';
+                    let payoutText = d.payoutType === 'daily' ? 'Ежедневно' : 'В конце';
                     let accText = d.payoutType === 'daily' ? 'выплачивается' : `$${formatMoney(d.accrued)}`;
-                    depList.innerHTML += `<li style="margin-bottom: 10px; border-bottom: 1px dashed #eee; padding-bottom: 5px; list-style-type: none;">
-                        <strong>Вклад $${formatMoney(d.amount)}</strong> (Осталось: ${d.daysLeft} дн.)<br>
-                        <small>Ставка: ${(d.rate*100).toFixed(1)}% | ${payoutText} | Накоплено: <span class="success">${accText}</span></small>
-                    </li>`;
+                    let progress = Math.min(100, (1 - (d.daysLeft / d.term)) * 100);
+                    
+                    depList.innerHTML += `
+                    <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">Вклад $${formatMoney(d.amount)}</div>
+                            <div style="background:var(--blue-dim); color:var(--blue); padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Осталось: ${d.daysLeft} дн.</div>
+                        </div>
+                        
+                        <div style="display:flex; gap:16px; margin-bottom:12px;">
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Накоплено</div>
+                                <div style="color:var(--green); font-weight:700; font-size:1rem;">${accText}</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Ставка</div>
+                                <div style="color:var(--text); font-weight:700; font-size:1rem;">${(d.rate*100).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Тип выплаты</div>
+                                <div style="color:var(--text); font-weight:700; font-size:0.85rem;">${payoutText}</div>
+                            </div>
+                        </div>
+
+                        <!-- Прогресс бар -->
+                        <div style="height:6px; background:rgba(0,0,0,0.05); border-radius:3px; overflow:hidden;">
+                            <div style="height:100%; background:var(--blue); width:${progress}%;"></div>
+                        </div>
+                    </div>`;
                 });
             }
         }
