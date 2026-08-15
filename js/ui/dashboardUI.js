@@ -1433,15 +1433,8 @@ const UI_DASHBOARD = {
 
         if (!hasFactories) {
             bizList.innerHTML = `
-            <div style="text-align:center; padding:60px 20px;">
-                <div style="font-size:4rem; margin-bottom:16px;">🏗️</div>
-                <h3 style="color:var(--text); margin:0 0 8px 0;">Нет активных предприятий</h3>
-                <p style="color:var(--text-dim); margin:0 0 24px 0; max-width:400px; margin-left:auto; margin-right:auto;">
-                    Постройте первый завод, чтобы начать производство. Нажмите кнопку «+ Построить предприятие» выше.
-                </p>
-                <button onclick="UI_DASHBOARD.toggleBuyPanel()" style="background:linear-gradient(135deg,#3498db,#2980b9); color:white; border:none; padding:14px 32px; border-radius:var(--radius); cursor:pointer; font-weight:700; font-size:1rem; box-shadow:0 4px 15px rgba(52,152,219,0.4);">
-                    🏗️ Открыть каталог предприятий
-                </button>
+            <div style="text-align:center; padding:60px 20px; color:var(--text-dim); font-size:1.2rem; background:var(--surface); border-radius:16px; border:1px dashed var(--border); margin-bottom: 24px;">
+                У вас нет активных предприятий. Откройте каталог ниже, чтобы построить свой первый завод.
             </div>`;
         }
     },
