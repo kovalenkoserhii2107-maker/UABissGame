@@ -11,6 +11,79 @@ const FINANCE = {
         return (Math.max(0, STATE.finances.balance) * 0.5) + (STATE.finances.creditScore * 50);
     },
 
+    calculateNetWorth() {
+        let cash = Math.max(0, STATE.finances.balance);
+        let realEstateValue = 0;
+        let equipmentValue = 0;
+
+        if (STATE.company && STATE.company.businesses) {
+            STATE.company.businesses.forEach(b => {
+                let tpl = typeof RECIPES !== 'undefined' ? RECIPES.BUSINESSES[b.type] : null;
+                if (!tpl) return;
+                let locMult = b.locMult || 1.0; 
+                realEstateValue += tpl.area * 50 * locMult;
+                for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult); 
+                if (b.equipment && b.equipment.count > 0) {
+                    let eqPrice = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 0;
+                    equipmentValue += (b.equipment.count * eqPrice) * ((b.equipment.condition || 0) / 100);
+                }
+            });
+        }
+        
+        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.level > 0) {
+                    for (let i = 1; i < wh.level; i++) {
+                        realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
+                    }
+                }
+            });
+        }
+        
+        if (STATE.rnd && STATE.rnd.facility && STATE.rnd.facility.level) {
+            let rndLvl = STATE.rnd.facility.level || 0;
+            for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
+            if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
+                let pcPrice = typeof RECIPES !== 'undefined' && RECIPES.RESOURCES['smart_pc'] ? RECIPES.RESOURCES['smart_pc'].basePrice : 800;
+                equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * ((STATE.rnd.facility.equipment.condition || 0) / 100);
+            }
+        }
+        let fixedAssets = realEstateValue + equipmentValue;
+
+        let inventoryValue = 0;
+        if (STATE.company && STATE.company.warehouses) {
+            Object.keys(STATE.company.warehouses).forEach(cId => {
+                let wh = STATE.company.warehouses[cId];
+                if (wh.inventory) {
+                    Object.keys(wh.inventory).forEach(k => {
+                        inventoryValue += wh.inventory[k].qty * (wh.inventory[k].avgCost || 0);
+                    });
+                }
+            });
+        }
+        if (STATE.company && STATE.company.businesses) {
+            STATE.company.businesses.forEach(b => {
+                if (b.localInventory) {
+                    Object.keys(b.localInventory).forEach(k => {
+                        inventoryValue += b.localInventory[k].qty * (b.localInventory[k].avgCost || 0);
+                    });
+                }
+            });
+        }
+
+        let logisticsValue = 0;
+        if (STATE.logistics && STATE.logistics.deliveries) {
+            STATE.logistics.deliveries.forEach(d => { logisticsValue += (d.cost || 0); });
+        }
+
+        let totalLiabilities = 0;
+        if (STATE.finances.loans) STATE.finances.loans.forEach(l => totalLiabilities += l.remainingPrincipal);
+        if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
+
+        return cash + inventoryValue + logisticsValue + fixedAssets - totalLiabilities;
+    },
+
     takeLoan(amount, termDays) {
         let currentDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
         
