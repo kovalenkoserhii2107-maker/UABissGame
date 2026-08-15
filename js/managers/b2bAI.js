@@ -111,8 +111,84 @@ const B2B_AI = {
             UI_DASHBOARD.updateTopPanel();
             if (typeof UI_DASHBOARD.updateB2BTab === 'function') UI_DASHBOARD.updateB2BTab();
         }
+    },
+
+    copyPrompt() {
+        let promptText = `Я играю в бизнес-симулятор.
+Текущий день: ${STATE.time.day}
+Мой баланс: $${STATE.finances.balance}
+
+Сгенерируй 4-6 новых контрактов от лица 10 NPC корпораций. 
+Учитывай экономическую ситуацию. 
+Верни строго ТОЛЬКО JSON-массив в формате:
+[
+  {
+    "company": "Имя NPC (выбери из списка или придумай нового)",
+    "itemId": "id ресурса (например grain, drones, electronics, toys, wood, meat_raw)",
+    "qty": число_шт,
+    "price": цена_за_штуку (должна быть конкурентной),
+    "quality": качество_от_1_до_5,
+    "brandPower": сила_бренда_от_1_до_5
+  }
+]`;
+        let ta = document.getElementById('b2b-ai-prompt');
+        if(ta) {
+            ta.value = promptText;
+            ta.select();
+            document.execCommand('copy');
+            if(typeof NOTIFY !== 'undefined') NOTIFY.success('Скопировано', 'Промпт скопирован в буфер обмена.');
+        }
+    },
+
+    applySync() {
+        let ta = document.getElementById('b2b-ai-response');
+        if(!ta) return;
+        
+        try {
+            let val = ta.value.trim();
+            if(val.startsWith('\`\`\`json')) {
+                val = val.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
+            }
+            
+            let data = JSON.parse(val);
+            if(!Array.isArray(data)) throw new Error('Ожидался массив');
+            
+            if(!STATE.b2bOffers) STATE.b2bOffers = [];
+            
+            // Удаляем старые, чтобы обновить полностью
+            STATE.b2bOffers = STATE.b2bOffers.filter(o => o.accepted || o.expiresDay > STATE.time.day);
+            
+            data.forEach((offer, i) => {
+                STATE.b2bOffers.push({
+                    id: 'b2b_sync_' + Date.now() + '_' + i,
+                    company: offer.company || 'Unknown',
+                    itemId: offer.itemId || 'grain',
+                    qty: offer.qty || 10,
+                    price: offer.price || 10,
+                    totalPrice: (offer.qty || 10) * (offer.price || 10),
+                    quality: offer.quality || 1.0,
+                    brandName: offer.company || 'Unknown',
+                    brandPower: offer.brandPower || 1.0,
+                    accepted: false,
+                    expiresDay: STATE.time.day + 7
+                });
+            });
+            
+            ta.value = '';
+            document.getElementById('b2b-sync-modal').style.display = 'none';
+            if(typeof NOTIFY !== 'undefined') NOTIFY.success('Синхронизация успешна', 'Новые контракты от ИИ добавлены на рынок.');
+            
+            if(typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.updateB2BTab();
+            
+        } catch(e) {
+            if(typeof NOTIFY !== 'undefined') NOTIFY.error('Ошибка JSON', 'Неверный формат ответа от ИИ. Убедитесь, что там только валидный JSON.');
+            console.error(e);
+        }
     }
+
 };
+
+;
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { B2B_AI };

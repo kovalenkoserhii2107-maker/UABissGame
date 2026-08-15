@@ -945,10 +945,38 @@
             <div id="ui-market-businesses"></div>
         </div>
 
-        <!-- МОДАЛЬНОЕ ОКНО ТОВАРА -->
+        <!-- МОДАЛЬНОЕ ОКНО ТОВАРА (РЫНОК) -->
         <div id="market-item-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this)UI_DASHBOARD.closeMarketModal()">
             <div style="background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); width:min(640px,95vw); max-height:90vh; overflow-y:auto; box-shadow:0 24px 80px rgba(0,0,0,0.4);">
                 <div id="market-modal-content"></div>
+            </div>
+        </div>
+
+        <!-- МОДАЛЬНОЕ ОКНО СИНХРОНИЗАЦИИ B2B AI -->
+        <div id="b2b-sync-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this)document.getElementById('b2b-sync-modal').style.display='none'">
+            <div style="background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); width:min(800px,95vw); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.4); overflow:hidden;">
+                <div style="background:linear-gradient(135deg, rgba(142,68,173,0.1), rgba(41,128,185,0.05)); padding:20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="margin:0; color:var(--text); display:flex; align-items:center; gap:10px;"><span style="font-size:1.8rem;">🤖</span> Синхронизация с ИИ-Ассистентом</h2>
+                    <button onclick="document.getElementById('b2b-sync-modal').style.display='none'" style="background:transparent; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+                </div>
+                <div style="padding:20px; overflow-y:auto; flex:1;">
+                    <div style="margin-bottom:20px;">
+                        <h4 style="margin:0 0 10px 0; color:var(--blue);">ШАГ 1: Скопируйте данные для ИИ</h4>
+                        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:8px;">Нажмите кнопку копирования и отправьте этот текст вашему ИИ-ассистенту (ChatGPT/Claude).</p>
+                        <div style="position:relative;">
+                            <textarea id="b2b-ai-prompt" readonly style="width:100%; height:120px; padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); font-family:monospace; font-size:0.8rem; resize:none;"></textarea>
+                            <button onclick="B2B_AI.copyPrompt()" style="position:absolute; top:10px; right:10px; background:var(--blue); color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.2);">Копировать</button>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 style="margin:0 0 10px 0; color:var(--green);">ШАГ 2: Вставьте ответ ИИ</h4>
+                        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:8px;">Скопируйте полученный JSON код от ИИ и вставьте его сюда.</p>
+                        <textarea id="b2b-ai-response" placeholder='Вставьте JSON сюда...' style="width:100%; height:150px; padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:monospace; font-size:0.9rem; resize:none;"></textarea>
+                    </div>
+                </div>
+                <div style="padding:20px; border-top:1px solid var(--border); background:var(--surface-2); text-align:right;">
+                    <button onclick="B2B_AI.applySync()" style="background:var(--green); color:white; border:none; padding:12px 24px; border-radius:8px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 12px rgba(39,174,96,0.3);">🚀 Применить стратегию ИИ</button>
+                </div>
             </div>
         </div>
 
