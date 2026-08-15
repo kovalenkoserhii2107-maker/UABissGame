@@ -2691,14 +2691,23 @@ const UI_DASHBOARD = {
     },
 
     switchTab(event, tabId) {
-        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-        let targetEl = document.getElementById(tabId);
-        if (targetEl) targetEl.classList.add('active');
-        if (event && event.currentTarget) event.currentTarget.classList.add('active');
-        if (tabId === 'tab-wiki' && typeof WIKI !== 'undefined') WIKI.render();
-        if (tabId === 'tab-finance') this.updateFinanceTab();
-        if (tabId === 'tab-b2b') this.updateB2BTab();
+        try {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            let targetEl = document.getElementById(tabId);
+            if (targetEl) targetEl.classList.add('active');
+            if (event && event.currentTarget) event.currentTarget.classList.add('active');
+            
+            if (tabId === 'tab-wiki') {
+                if (typeof WIKI !== 'undefined') WIKI.render();
+                else alert("WIKI is undefined!");
+            }
+            if (tabId === 'tab-finance') this.updateFinanceTab();
+            if (tabId === 'tab-b2b') this.updateB2BTab();
+        } catch (e) {
+            alert("Crash in switchTab (" + tabId + "):\n" + e.message);
+            console.error(e);
+        }
     },
 
     submitLoan() {
