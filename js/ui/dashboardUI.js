@@ -1352,29 +1352,41 @@ const UI_DASHBOARD = {
                             </div>
                         </div>
 
-                        <!-- Общая эффективность -->
-                        <div style="background:${effColor}18; border-radius:10px; padding:16px; border:1px solid ${effColor}30;">
-                            <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:${effColor}; font-weight:700; margin-bottom:12px;">📊 Эффективность</div>
-                            <div style="text-align:center;">
-                                <div style="font-size:2.8rem; font-weight:900; color:${effColor}; line-height:1;">${effPercent}%</div>
-                                <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">${effPercent >= 80 ? '🔥 Завод работает на максимуме!' : effPercent >= 40 ? '⚙️ Есть потенциал роста' : assignedTotal === 0 ? '😴 Назначьте рабочих' : '⚠️ Требует внимания'}</div>
+                        <!-- Общая эффективность (Диаграмма) -->
+                        <div style="background:var(--surface); border-radius:12px; padding:16px; border:1px solid var(--border); box-shadow:0 4px 15px rgba(0,0,0,0.02);">
+                            <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:800; margin-bottom:12px; display:flex; align-items:center; gap:6px;">📊 Эффективность (КПД)</div>
+                            
+                            <div style="position:relative; width:140px; height:140px; margin:0 auto 16px auto;">
+                                <svg viewBox="0 0 36 36" style="width:100%; height:100%; transform: rotate(-90deg);">
+                                    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--surface-3)" stroke-width="3.5" stroke-linecap="round"/>
+                                    <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="${effColor}" stroke-width="3.5" stroke-dasharray="${effPercent}, 100" stroke-linecap="round" style="transition: stroke-dasharray 1s ease-out;"/>
+                                </svg>
+                                <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; padding-top:4px;">
+                                    <span style="font-size:2.2rem; font-weight:900; color:${effColor}; line-height:1;">${effPercent}%</span>
+                                    <span style="font-size:0.7rem; color:var(--text-dim); margin-top:2px;">мощности</span>
+                                </div>
                             </div>
-                            <div style="margin-top:14px; display:flex; flex-direction:column; gap:6px; font-size:0.78rem;">
-                                <div style="display:flex; justify-content:space-between;">
-                                    <span style="color:var(--text-dim);">Кач. оборуд.</span><span style="font-weight:700;">${(biz.equipment.quality||1.0).toFixed(2)}</span>
+                            
+                            <div style="text-align:center; font-size:0.75rem; color:var(--text-dim); margin-bottom:16px; background:${effColor}10; padding:6px; border-radius:6px; font-weight:600; color:${effColor}; border:1px dashed ${effColor}40;">
+                                ${effPercent >= 80 ? '🔥 Идеальная работа' : effPercent >= 40 ? '⚙️ Требуется настройка' : assignedTotal === 0 ? '😴 Назначьте персонал' : '⚠️ Простой производства'}
+                            </div>
+
+                            <div style="display:flex; flex-direction:column; gap:8px; font-size:0.78rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="color:var(--text-dim); display:flex; align-items:center; gap:4px;">⚙️ Кач. оборуд.</span><span style="font-weight:700; background:var(--surface-2); padding:2px 6px; border-radius:4px;">${(biz.equipment.quality||1.0).toFixed(2)}</span>
                                 </div>
-                                <div style="display:flex; justify-content:space-between;">
-                                    <span style="color:var(--text-dim);">Кач. персонала</span><span style="font-weight:700;">${q_hr.toFixed(2)}</span>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="color:var(--text-dim); display:flex; align-items:center; gap:4px;">👥 Кач. персонала</span><span style="font-weight:700; background:var(--surface-2); padding:2px 6px; border-radius:4px;">${q_hr.toFixed(2)}</span>
                                 </div>
-                                <div style="display:flex; justify-content:space-between;">
-                                    <span style="color:var(--text-dim);">Технология</span><span style="font-weight:700; color:#8e44ad;">v${q_tech.toFixed(2)}</span>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="color:var(--text-dim); display:flex; align-items:center; gap:4px;">🔬 Технология</span><span style="font-weight:800; color:#8e44ad; background:rgba(142,68,173,0.1); padding:2px 6px; border-radius:4px;">v${q_tech.toFixed(2)}</span>
                                 </div>
-                                <div style="height:1px; background:var(--border);"></div>
-                                <div style="display:flex; justify-content:space-between;">
-                                    <span style="color:var(--text-dim);">Кач. продукта ★</span><span style="font-weight:800; color:#8e44ad;">${expectedQuality}</span>
+                                <div style="height:1px; background:var(--border); margin:4px 0;"></div>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="color:var(--text-dim); display:flex; align-items:center; gap:4px;">★ Рейтинг продукта</span><span style="font-weight:800; color:#8e44ad;">${expectedQuality}</span>
                                 </div>
-                                <div style="display:flex; justify-content:space-between;">
-                                    <span style="color:var(--text-dim);">Себестоимость</span><span style="font-weight:700; color:var(--red);">$${formatMoney(biz.lastCogs)}/шт</span>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="color:var(--text-dim); display:flex; align-items:center; gap:4px;">💰 Себестоимость</span><span style="font-weight:800; color:var(--red);">$${formatMoney(biz.lastCogs)}/шт</span>
                                 </div>
                             </div>
                         </div>

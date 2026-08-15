@@ -890,27 +890,32 @@
             <div style="background: linear-gradient(135deg, rgba(52,152,219,0.12), rgba(39,174,96,0.08)); border: 1px solid rgba(52,152,219,0.2); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
                 <div>
                     <h2 style="margin: 0 0 4px 0; background: linear-gradient(135deg, #3498db, #27ae60); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🏭 Производственный Комплекс</h2>
-                    <p style="margin: 0; color: var(--text-dim); font-size: 0.9rem;">Постройте заводы, назначьте персонал и управляйте цепочками поставок.</p>
+                    <p style="margin: 0; color: var(--text-dim); font-size: 0.9rem;">Ваши действующие заводы. Управляйте персоналом, логистикой и оборудованием.</p>
                 </div>
-                <button onclick="UI_DASHBOARD.toggleBuyPanel()" id="btn-toggle-buy" style="background: linear-gradient(135deg,#3498db,#2980b9); color:white; border:none; padding:11px 22px; border-radius:var(--radius-sm); cursor:pointer; font-weight:700; font-size:0.9rem; box-shadow: 0 4px 14px rgba(52,152,219,0.4);">
-                    + Построить предприятие
-                </button>
             </div>
 
             <!-- ДАШБОРД ПРОИЗВОДСТВА -->
             <div id="ui-prod-dashboard" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 12px; margin-bottom: 20px;"></div>
 
-            <!-- КАТАЛОГ ПОКУПКИ (скрыт по умолчанию) -->
-            <div id="ui-buy-panel" style="display:none; background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); overflow:hidden; margin-bottom:20px; box-shadow:var(--shadow-card);">
-                <div style="background:linear-gradient(135deg,rgba(52,152,219,0.1),rgba(39,174,96,0.05)); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
-                    <h3 style="margin:0; color:var(--text);">🏗️ Каталог предприятий</h3>
-                    <button onclick="UI_DASHBOARD.toggleBuyPanel()" style="background:var(--surface-2); color:var(--text-dim); border:1px solid var(--border); padding:6px 14px; border-radius:8px; cursor:pointer;">✕ Закрыть</button>
-                </div>
-                <div id="ui-buy-businesses" style="padding:20px; display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px;"></div>
-            </div>
-
             <!-- АКТИВНЫЕ ПРЕДПРИЯТИЯ -->
             <div id="ui-active-businesses"></div>
+
+            <!-- БЛОК ОТКРЫТИЯ НОВОГО (всегда внизу) -->
+            <div id="ui-prod-new-block" style="background:var(--surface); border-radius:16px; border:1px solid var(--border); padding:30px; text-align:center; box-shadow:var(--shadow-card); margin-top:24px;">
+                <div style="font-size:3rem; margin-bottom:12px;">🏗️</div>
+                <h3 style="margin:0 0 8px 0; font-size:1.5rem; color:var(--text);">Построить новый завод</h3>
+                <p style="color:var(--text-dim); max-width:400px; margin:0 auto 20px auto;">Расширяйте производственные мощности. Изучайте новые технологии в R&D для разблокировки передовых предприятий.</p>
+                <button onclick="UI_DASHBOARD.toggleBuyPanel()" id="btn-toggle-buy" style="background:linear-gradient(135deg, #3498db, #2980b9); color:white; font-size:1.1rem; font-weight:800; padding:14px 32px; border:none; border-radius:12px; cursor:pointer; box-shadow:0 6px 20px rgba(52,152,219,0.4); transition:0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">+ Открыть Каталог Предприятий</button>
+            </div>
+
+            <!-- КАТАЛОГ ПОКУПКИ (скрыт по умолчанию, открывается над/под кнопкой) -->
+            <div id="ui-buy-panel" style="display:none; background:var(--surface); border-radius:16px; border:1px solid var(--border); overflow:hidden; margin-top:20px; box-shadow:0 12px 40px rgba(0,0,0,0.15);">
+                <div style="background:linear-gradient(135deg,rgba(52,152,219,0.1),rgba(39,174,96,0.05)); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; color:var(--text);">🏗️ Каталог предприятий</h3>
+                    <button onclick="UI_DASHBOARD.toggleBuyPanel()" style="background:var(--surface-2); color:var(--text-dim); border:1px solid var(--border); padding:6px 14px; border-radius:8px; cursor:pointer; font-weight:700;">✕ Закрыть</button>
+                </div>
+                <div id="ui-buy-businesses" style="padding:20px; display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; max-height: 600px; overflow-y: auto;"></div>
+            </div>
         </div>
 
         <!-- ВКЛАДКА: РИТЕЙЛ -->
