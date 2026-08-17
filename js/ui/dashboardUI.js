@@ -2867,7 +2867,7 @@ const UI_DASHBOARD = {
                                     <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${rTpl.name}</div>
                                     <div style="font-size:0.75rem; color:var(--blue); font-weight:700;">Сток: ${inv.qty} шт</div>
                                     <div style="font-size:0.75rem; color:var(--text-dim);">★ ${(inv.quality||1.0).toFixed(2)} • Опт: $${formatMoney(b2bPrice)}</div>
-                                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Себестоимость остатка: <strong style="color:var(--text);">$${formatMoney(stockCogs)}</strong></div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Себест-ть (1 шт): <strong style="color:var(--red);">$${formatMoney(inv.avgCost)}</strong> <span style="opacity:0.6;">(Всего: $${formatMoney(stockCogs)})</span></div>
                                 </div>
                             </div>
                             
