@@ -2791,6 +2791,9 @@ const UI_DASHBOARD = {
             hasRetail = true;
             
             let level = biz.level || 1;
+            let cityId = biz.city || 'odesa';
+            let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { name: cityId, rentMult: 1.0, salaryMult: 1.0 };
+            
             let locMult = biz.locMult || 1.0;
             let adminCost = tpl.area * 2 * level * locMult;
             
@@ -2800,13 +2803,39 @@ const UI_DASHBOARD = {
             
             let freeSales = typeof HR !== 'undefined' ? HR.getUnassigned('salesman') : 0;
             let freeMgr = typeof HR !== 'undefined' ? HR.getUnassigned('store_manager') : 0;
-            let assignedTotal = biz.assigned.salesman + biz.assigned.store_manager;
+            
+            let mgr = biz.assigned.store_manager || 0;
+            let sales = biz.assigned.salesman || 0;
+            let assignedTotal = sales + mgr;
             let maxStaff = tpl.staffReq * level;
 
+            // Расчет ФОТ и КПД персонала
+            let salaryCost = (sales * HR.GRADES.salesman.salary + mgr * HR.GRADES.store_manager.salary) * cityData.salaryMult;
+            let staffEff = (mgr > 0 && sales > 0) ? Math.min(1.0, assignedTotal / maxStaff) : 0;
+            let staffEffPct = Math.round(staffEff * 100);
+
+            // Расчет Оборудования, износа и ТО
             let maxVol = tpl.area * level * locMult * 2;
+            let eqCount = biz.equipment.count || 0;
+            let maxSlots = level * (tpl.slotsPerLevel || 5);
+            let eqName = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].name : tpl.equipmentType;
+            let eqQuality = biz.equipment.quality || 1.0;
+            let eqCondition = biz.equipment.condition !== undefined ? biz.equipment.condition : 100;
+            let condColor = eqCondition >= 70 ? 'var(--green)' : (eqCondition >= 30 ? 'var(--orange)' : 'var(--red)');
+            let displayEff = (eqCount > 0) ? (0.6 + (Math.min(eqCount, 5) * 0.1) * (eqCondition / 100)) : 0.5;
+            let displayEffPct = Math.round(displayEff * 100);
+            
+            // Стоимость ремонта
+            let eqCost = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 800;
+            let eqDamage = Math.max(0, 100 - eqCondition);
+            let repairCost = (eqCount * eqCost) * 0.10 * (eqDamage / 100);
+
+            // Наличие оборудования на складе города
+            let localWh = STATE.company.warehouses[cityId];
+            let availableEq = (localWh && localWh.inventory && localWh.inventory[tpl.equipmentType]) ? localWh.inventory[tpl.equipmentType].qty : 0;
+
             let currentVol = 0;
             let invHtml = '';
-            
             let totalSold = 0;
             let totalRev = 0;
 
@@ -2823,6 +2852,7 @@ const UI_DASHBOARD = {
                         let marginColor = margin >= 4 ? 'var(--red)' : (margin >= 2.5 ? 'var(--orange)' : 'var(--green)');
                         let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
                         let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
+                        let stockCogs = inv.qty * inv.avgCost; // Себестоимость запаса
 
                         totalSold += soldYesterday;
                         totalRev += revYesterday;
@@ -2837,6 +2867,7 @@ const UI_DASHBOARD = {
                                     <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${rTpl.name}</div>
                                     <div style="font-size:0.75rem; color:var(--blue); font-weight:700;">Сток: ${inv.qty} шт</div>
                                     <div style="font-size:0.75rem; color:var(--text-dim);">★ ${(inv.quality||1.0).toFixed(2)} • Опт: $${formatMoney(b2bPrice)}</div>
+                                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Себестоимость остатка: <strong style="color:var(--text);">$${formatMoney(stockCogs)}</strong></div>
                                 </div>
                             </div>
                             
@@ -2861,11 +2892,6 @@ const UI_DASHBOARD = {
             if (invHtml === '') invHtml = '<div style="text-align:center; padding:20px; color:var(--text-dim); background:var(--surface-2); border-radius:8px; border:1px dashed var(--border);">Товара на полках нет</div>';
             
             let volPercent = Math.min(100, (currentVol/maxVol)*100).toFixed(1);
-            let eqCount = biz.equipment.count || 0;
-            let maxSlots = level * (tpl.slotsPerLevel || 5);
-            let eqName = RECIPES.RESOURCES[tpl.equipmentType].name;
-
-            // Рендер диаграммы занятости склада
             let chartBg = volPercent > 90 ? 'var(--red)' : (volPercent > 70 ? 'var(--orange)' : 'var(--green)');
 
             activeStoresHtml += `
@@ -2908,24 +2934,49 @@ const UI_DASHBOARD = {
                     <div style="flex:1; min-width:300px; padding:24px; background:var(--surface-2);">
                         <h4 style="margin:0 0 16px 0; font-size:1.1rem;">Оборудование & Персонал</h4>
                         
-                        <!-- Мебель -->
+                        <!-- Мебель (ОБНОВЛЕНО) -->
                         <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px;">
-                            <div style="font-size:0.85rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; margin-bottom:8px;">Торговое оборудование</div>
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                <div><strong style="color:var(--text);">${eqName}</strong></div>
-                                <div style="font-weight:700; color:var(--blue);">${eqCount} / ${maxSlots}</div>
+                            <div style="font-size:0.85rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; margin-bottom:12px; display:flex; justify-content:space-between;">
+                                <span>🛒 Торговое оборудование</span>
+                                <span style="color:var(--blue);">КПД: ${displayEffPct}%</span>
                             </div>
+                            
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                <div>
+                                    <strong style="color:var(--text); font-size:1rem;">${eqName}</strong>
+                                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Качество: ★${eqQuality.toFixed(2)} | На складе хаба: ${availableEq} шт</div>
+                                </div>
+                                <div style="font-weight:800; color:var(--blue); font-size:1.2rem;">${eqCount} / ${maxSlots}</div>
+                            </div>
+                            
+                            <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+                                <span style="color:var(--text-dim);">Состояние оборудования</span>
+                                <span style="font-weight:700; color:${condColor};">${eqCondition.toFixed(0)}%</span>
+                            </div>
+                            <div style="height:6px; background:var(--surface-3); border-radius:3px; margin-bottom:12px; overflow:hidden;">
+                                <div style="height:100%; width:${eqCondition}%; background:${condColor}; transition:0.3s;"></div>
+                            </div>
+                            
                             <div style="display:flex; gap:8px;">
-                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${maxSlots - eqCount}" style="width:60px; padding:8px; border:1px solid var(--border); border-radius:8px; font-weight:700; text-align:center;">
-                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="flex:1; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:8px; font-weight:700; cursor:pointer;">Докупить</button>
+                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${Math.max(1, maxSlots - eqCount)}" style="width:50px; padding:6px; border:1px solid var(--border); border-radius:8px; font-weight:700; text-align:center; background:var(--surface-2);">
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="flex:1; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:8px; font-weight:700; cursor:pointer; font-size:0.85rem;">Докупить</button>
+                                <button onclick="PRODUCTION.repairEquipment(${biz.uid})" style="background:rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:6px 10px; border-radius:8px; cursor:pointer; font-weight:700; font-size:0.85rem;">🔧 ТО ($${formatMoney(repairCost)})</button>
                             </div>
                         </div>
 
-                        <!-- Персонал -->
+                        <!-- Персонал (ОБНОВЛЕНО) -->
                         <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                                 <div style="font-size:0.85rem; color:var(--text-dim); font-weight:700; text-transform:uppercase;">Персонал</div>
-                                <div style="font-weight:700; color:var(--text);">${assignedTotal} / ${maxStaff}</div>
+                                <div style="display:flex; gap:12px; align-items:center;">
+                                    <div style="font-size:0.85rem; color:${staffEffPct > 0 ? 'var(--green)' : 'var(--red)'}; font-weight:700;">КПД: ${staffEffPct}%</div>
+                                    <div style="font-weight:700; color:var(--text); font-size:1rem;">${assignedTotal} / ${maxStaff}</div>
+                                </div>
+                            </div>
+                            
+                            <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid var(--border);">
+                                <span>Фонд оплаты труда (ФОТ):</span>
+                                <strong style="color:var(--red);">$${formatMoney(salaryCost)} / дн</strong>
                             </div>
 
                             <!-- Директор -->
@@ -2982,7 +3033,6 @@ const UI_DASHBOARD = {
 
         retailBody.innerHTML = headerHtml + activeStoresHtml + newShopHtml;
         
-        // Добавим стили для кнопок HR если их нет
         if (!document.getElementById('retail-hr-styles')) {
             let style = document.createElement('style');
             style.id = 'retail-hr-styles';
@@ -2994,8 +3044,7 @@ const UI_DASHBOARD = {
             `;
             document.head.appendChild(style);
         }
-    }
-,
+    },
 
     // --- 11. НОВАЯ ВКЛАДКА: МАРКЕТИНГ ---
     updateMarketingTab() {
