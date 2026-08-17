@@ -336,11 +336,10 @@ const PRODUCTION = {
                         globalInv.qty -= takeGlobal; 
                         if (globalInv.qty === 0) globalInv.avgCost = 0;
                         
-                        // Считаем входящую логистику (если берем из другого города)
-                        if (sourceCityId !== cityId && typeof GEO !== 'undefined') {
-                            let dist = GEO.getDistance(cityId, sourceCityId);
+                        // Считаем входящую логистику (с учетом внутригородских/межгородских тарифов)
+                        if (typeof GEO !== 'undefined') {
                             let vol = takeGlobal * (RECIPES.RESOURCES[k].volume || 0.1);
-                            inboundLogisticsCost += dist * GEO.COUNTRIES['ua'].macro.logisticsBaseRate * vol;
+                            inboundLogisticsCost += GEO.getLogisticsCost(sourceCityId, cityId, vol, 'factory', locMult);
                         }
                     }
                 });
@@ -386,13 +385,14 @@ const PRODUCTION = {
                 // Все излишки идут на ЦЕЛЕВОЙ склад (с расчетом исходящей логистики)
                 if (remainingOutput > 0 && targetWh) {
                     let outboundLogisticsCost = 0;
-                    if (targetCityId !== cityId && typeof GEO !== 'undefined') {
-                        let dist = GEO.getDistance(cityId, targetCityId);
+                    if (typeof GEO !== 'undefined') {
                         let vol = remainingOutput * outVol;
-                        outboundLogisticsCost = dist * GEO.COUNTRIES['ua'].macro.logisticsBaseRate * vol;
+                        outboundLogisticsCost = GEO.getLogisticsCost(cityId, targetCityId, vol, 'factory', locMult);
                         
-                        STATE.finances.balance -= outboundLogisticsCost;
-                        if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', outboundLogisticsCost);
+                        if (outboundLogisticsCost > 0) {
+                            STATE.finances.balance -= outboundLogisticsCost;
+                            if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', outboundLogisticsCost);
+                        }
                     }
                     remainingCost += outboundLogisticsCost;
                     addToInventory(targetWh.inventory, tpl.output, remainingOutput, Math.max(0, remainingCost), q_out);
