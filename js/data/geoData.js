@@ -103,6 +103,33 @@ const GEO = {
         let dx = a.x - b.x;
         let dy = a.y - b.y;
         return Math.round(Math.sqrt(dx * dx + dy * dy) * 10);
+    },
+
+    // НОВЫЙ МЕТОД: Универсальный расчет логистики
+    getLogisticsCost(sourceCityId, targetCityId, volume, routeType, locMult = 1.0) {
+        if (volume <= 0) return 0;
+        let dist = 10;
+        
+        if (sourceCityId !== targetCityId) {
+            // Межгородская логистика (реальное расстояние по координатам)
+            dist = this.getDistance(sourceCityId, targetCityId);
+        } else {
+            // Внутригородская логистика
+            if (routeType === 'market') {
+                dist = 50; // Биржа (оптовые базы за городом)
+            } else if (routeType === 'store') {
+                if (locMult > 1.1) dist = 10;      // Центр (пробки, сложный подъезд)
+                else if (locMult < 1.0) dist = 1;  // Пригород (рядом со складом)
+                else dist = 5;                     // Спальный район
+            } else if (routeType === 'factory') {
+                dist = 10; // Заводы находятся в промзонах
+            }
+        }
+        
+        let countryObj = this.COUNTRIES[this.getCity(sourceCityId).country] || this.COUNTRIES['ua'];
+        let baseRate = countryObj.macro.logisticsBaseRate || 0.015;
+        
+        return Number((dist * baseRate * volume).toFixed(2));
     }
 };
 
