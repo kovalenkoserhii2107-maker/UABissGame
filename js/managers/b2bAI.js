@@ -83,9 +83,7 @@ const B2B_AI = {
         let targetCity = citiesWithWh.includes('odesa') ? 'odesa' : citiesWithWh[0];
 
         STATE.finances.balance -= offer.totalPrice;
-        if (typeof LEDGER !== 'undefined') {
-            LEDGER.record('exp_materials', offer.totalPrice);
-        }
+        // Товар становится активом на складе. В расходы (P&L) он пойдет только при фактической продаже.
 
         if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
         
