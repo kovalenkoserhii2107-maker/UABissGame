@@ -346,7 +346,6 @@ const PRODUCTION = {
 
                 // Списываем входящую логистику
                 STATE.finances.balance -= inboundLogisticsCost;
-                if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', inboundLogisticsCost);
 
                 let q_mat = totalInputsCount > 0 ? (sumMatQuality / totalInputsCount) : 1.0;
                 let eqQuality = biz.equipment.quality || 1.0; 
@@ -357,7 +356,8 @@ const PRODUCTION = {
 
                 let bizSalaryCost = ((biz.assigned.junior * HR.GRADES.junior.salary) + (biz.assigned.middle * HR.GRADES.middle.salary) + (biz.assigned.senior * HR.GRADES.senior.salary)) * cityData.salaryMult;
                 
-                let totalProductionCost = materialsCost + bizSalaryCost + inboundLogisticsCost; 
+                // ИСКЛЮЧАЕМ зарплату из себестоимости (она списывается глобально в HR)
+                let totalProductionCost = materialsCost + inboundLogisticsCost; 
                 biz.lastCogs = totalProductionCost / actualOutput;
 
                 let remainingOutput = actualOutput;
@@ -391,7 +391,6 @@ const PRODUCTION = {
                         
                         if (outboundLogisticsCost > 0) {
                             STATE.finances.balance -= outboundLogisticsCost;
-                            if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', outboundLogisticsCost);
                         }
                     }
                     remainingCost += outboundLogisticsCost;
