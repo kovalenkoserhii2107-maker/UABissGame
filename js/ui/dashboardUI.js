@@ -2846,10 +2846,19 @@ const UI_DASHBOARD = {
                         let rTpl = RECIPES.RESOURCES[k];
                         currentVol += inv.qty * (rTpl.volume || 0);
                         let b2bPrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(k) : 0;
+                        let basePrice = (RECIPES.RESOURCES[k] && RECIPES.RESOURCES[k].basePrice) ? RECIPES.RESOURCES[k].basePrice : 1;
+                        let anchorRetailPrice = basePrice * 2.5;
+
                         if (!biz.prices) biz.prices = {};
-                        let retailPrice = biz.prices[k] || (b2bPrice * 2.5);
-                        let margin = b2bPrice > 0 ? (retailPrice / b2bPrice) : 1;
-                        let marginColor = margin >= 4 ? 'var(--red)' : (margin >= 2.5 ? 'var(--orange)' : 'var(--green)');
+                        let retailPrice = biz.prices[k] || anchorRetailPrice;
+                        
+                        // Показываем реальную маржу относительно себестоимости товара!
+                        let margin = inv.avgCost > 0 ? (retailPrice / inv.avgCost) : (retailPrice / basePrice);
+                        
+                        // А вот цвет текста показывает "жадность" относительно ожиданий покупателя
+                        let markupFromAnchor = retailPrice / anchorRetailPrice;
+                        let marginColor = markupFromAnchor > 1.2 ? 'var(--red)' : (markupFromAnchor > 1.0 ? 'var(--orange)' : 'var(--green)');
+
                         let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
                         let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
                         let stockCogs = inv.qty * inv.avgCost; // Себестоимость запаса
@@ -2872,7 +2881,7 @@ const UI_DASHBOARD = {
                             </div>
                             
                             <div style="width: 35%; display:flex; flex-direction:column; gap:4px;">
-                                <div style="font-size:0.75rem; color:var(--text-dim);">Цена на полке (x${margin.toFixed(1)})</div>
+                                <div style="font-size:0.75rem; color:var(--text-dim);">Цена полки <span title="Множитель прибыли относительно себестоимости 1 шт" style="color:${marginColor}; font-weight:700;">(ROI: x${margin.toFixed(1)})</span></div>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span style="color:var(--text); font-weight:700;">$</span>
                                     <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:70px; padding:6px; border:1px solid var(--border); border-radius:6px; font-weight:700; font-size:0.9rem; background:var(--surface-2); color:var(--text);">

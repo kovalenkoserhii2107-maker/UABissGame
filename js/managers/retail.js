@@ -113,19 +113,26 @@ const RETAIL = {
                     let inv = biz.localInventory[itemKey];
                     if (inv.qty <= 0) return;
 
-                    let b2bPrice = MARKET.getCurrentPrice(itemKey) || 1;
-                    let retailPrice = (biz.prices && biz.prices[itemKey]) ? biz.prices[itemKey] : b2bPrice * 1.3;
+                    // Ищем базовую ценность товара
+                    let basePrice = (RECIPES.RESOURCES[itemKey] && RECIPES.RESOURCES[itemKey].basePrice) ? RECIPES.RESOURCES[itemKey].basePrice : 1;
+                    // Ожидаемая (якорная) розничная цена в глазах покупателя:
+                    let anchorRetailPrice = basePrice * 2.5; 
                     
-                    let markup = retailPrice / b2bPrice; // Например, 1.35 = +35% наценка
+                    let b2bPrice = MARKET.getCurrentPrice(itemKey) || 1;
+                    // Если цена не задана, ставим якорную
+                    let retailPrice = (biz.prices && biz.prices[itemKey]) ? biz.prices[itemKey] : anchorRetailPrice;
+                    
+                    // Наценка считается от якорной цены, а не от скачущей оптовой
+                    let markup = retailPrice / anchorRetailPrice; // 1.0 = нормальная розничная цена
 
                     // 3. ЭЛАСТИЧНОСТЬ ЦЕНЫ И КОНВЕРСИЯ
-                    // Базово люди терпят +35% к опту. Сила бренда и реклама расширяют толерантность!
+                    // Базово люди терпят цену до anchorRetailPrice (+20% наценки от якоря).
                     let brandTolerance = (STATE.retail.brand || 5) / 100;
-                    let baseTolerance = 0.35 + brandTolerance; 
+                    let baseTolerance = 0.20 + brandTolerance; 
                     let productBonus = (productBoosts[itemKey] || 0) * 0.15; 
-                    let tolerance = Math.min(2.0, baseTolerance + productBonus); // Сильный бренд позволяет наценку до +200%
+                    let tolerance = Math.min(2.0, baseTolerance + productBonus);
 
-                    // Штраф за завышение цены:
+                    // Штраф за завышение цены относительно якоря:
                     let pricePenalty = 1.0 - ((markup - 1.0) / tolerance);
                     
                     if (pricePenalty < 0) pricePenalty = 0; // Слишком дорого
