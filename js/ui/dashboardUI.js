@@ -1890,9 +1890,7 @@ const UI_DASHBOARD = {
         let availMarket = MARKET.getAvailablePool(itemKey);
         
         let itemVol = RECIPES.RESOURCES[itemKey].volume || 1.0;
-        let dist = typeof GEO !== 'undefined' ? Math.max(10, GEO.getDistance('kyiv', cityId)) : 10;
-        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.015;
-        let logCostPerItem = dist * logBase * itemVol;
+        let logCostPerItem = typeof GEO !== 'undefined' ? GEO.getLogisticsCost('kyiv', cityId, itemVol, 'market') : 0;
 
         let maxByMoney = Math.floor(STATE.finances.balance / (price + logCostPerItem));
         
@@ -3306,15 +3304,11 @@ const UI_DASHBOARD = {
             if (qty <= 0) return NOTIFY.error('Ошибка', `На складе магазина нет места!`);
         }
 
-        // РАСЧЕТ СТОИМОСТИ ЛОГИСТИКИ (МЕЖДУ ГОРОДАМИ)
+        // РАСЧЕТ СТОИМОСТИ ЛОГИСТИКИ (МЕЖДУ ГОРОДАМИ ИЛИ ВНУТРИ ГОРОДА)
         let sourceCity = cityId;
         let targetCity = store.city || 'odesa';
-        let dist = typeof GEO !== 'undefined' ? GEO.getDistance(sourceCity, targetCity) : 10;
-        let logBase = typeof GEO !== 'undefined' ? GEO.COUNTRIES['ua'].macro.logisticsBaseRate : 0.015;
-        
-        // Формула: Расстояние * Базовая ставка * Объем груза (м³)
         let totalVolume = qty * itemVol;
-        let logCost = dist * logBase * totalVolume;
+        let logCost = typeof GEO !== 'undefined' ? GEO.getLogisticsCost(sourceCity, targetCity, totalVolume, 'store', store.locMult || 1.0) : 0;
 
         if (STATE.finances.balance < logCost) {
             NOTIFY.error('Ошибка логистики', `Не хватает средств на оплату транспортной компании. Нужно $${formatMoney(logCost)}.`);
