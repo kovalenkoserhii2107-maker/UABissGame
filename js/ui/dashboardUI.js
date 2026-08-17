@@ -2209,8 +2209,8 @@ const UI_DASHBOARD = {
         let yExpRepair = y.exp_repair || 0; let tExpRepair = t.exp_repair || 0;
         let yExpFines = y.exp_fines || 0; let tExpFines = t.exp_fines || 0;
 
-        let yOpex = (y.exp_salary || 0) + (y.exp_admin || 0) + (y.exp_hr || 0) + yTaxPayroll + yExpMarketing + yExpLogistics + yExpRepair + yExpFines;
-        let tOpex = (t.exp_salary || 0) + (t.exp_admin || 0) + (t.exp_hr || 0) + tTaxPayroll + tExpMarketing + tExpLogistics + tExpRepair + tExpFines;
+        let yOpex = (y.exp_salary || 0) + (y.exp_admin || 0) + (y.exp_hr || 0) + yTaxPayroll + yExpMarketing + yExpRepair + yExpFines;
+        let tOpex = (t.exp_salary || 0) + (t.exp_admin || 0) + (t.exp_hr || 0) + tTaxPayroll + tExpMarketing + tExpRepair + tExpFines;
 
         let yEbitda = yGross - yOpex;
         let tEbitda = tGross - tOpex;
@@ -2340,7 +2340,7 @@ const UI_DASHBOARD = {
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2G Госзакупки и Тендеры</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yRevB2G)}</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(tRevB2G)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Прочие доходы (Гранты)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRevOther)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRevOther)}</td></tr>
                         
-                        <tr style="border-top:1px dashed var(--border);"><td style="text-align:left; padding:4px 0; color:var(--red); font-weight:600;">2. Себестоимость продаж (COGS)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yCogs)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tCogs)}</td></tr>
+                        <tr style="border-top:1px dashed var(--border);"><td style="text-align:left; padding:4px 0; color:var(--red); font-weight:600;">2. Себестоимость (Сырье + Логистика)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yCogs)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tCogs)}</td></tr>
                         
                         <tr style="font-weight:bold; background: rgba(52,199,89,0.06); border-top:1px solid var(--border);"><td style="text-align:left; padding:6px 4px; color:var(--green);">ВАЛОВАЯ ПРИБЫЛЬ (GROSS PROFIT)</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yGross)}</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(tGross)}</td></tr>
                         
@@ -2348,7 +2348,6 @@ const UI_DASHBOARD = {
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Фонд оплаты труда (ЗП)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(y.exp_salary || 0)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(t.exp_salary || 0)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Социальный взнос ЕСВ (22%)</td><td style="text-align:right; color:var(--orange); font-family:var(--font-mono);">$${formatMoney(yTaxPayroll)}</td><td style="text-align:right; color:var(--orange); font-family:var(--font-mono);">$${formatMoney(tTaxPayroll)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Аренда недвижимости</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(y.exp_admin || 0)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(t.exp_admin || 0)}</td></tr>
-                        <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Межгородская логистика</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpLogistics)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpLogistics)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Маркетинг и бренд</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpMarketing)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpMarketing)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- ТО и ремонт оборудования</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpRepair)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpRepair)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Штрафы и непредвиденные</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpFines)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpFines)}</td></tr>
