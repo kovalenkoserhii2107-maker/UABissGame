@@ -113,10 +113,7 @@ const MARKET = {
             STATE.finances.balance -= totalCost; 
             STATE.market.pools[itemKey] = Math.floor(STATE.market.pools[itemKey] - qty);
             
-            // Списываем логистику в P&L
-            if (typeof LEDGER !== 'undefined' && logCost > 0) {
-                LEDGER.record('exp_logistics', logCost);
-            }
+            // Логистика не идет в OPEX напрямую, так как она интегрируется в себестоимость товара (avgCost)
             
             if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
             
