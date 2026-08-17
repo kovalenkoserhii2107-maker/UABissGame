@@ -3315,9 +3315,8 @@ const UI_DASHBOARD = {
             return;
         }
 
-        // Списываем деньги и записываем в P&L
+        // Списываем деньги со счета (в P&L не пишем, логистика уходит в наценку товара)
         STATE.finances.balance -= logCost;
-        if (typeof LEDGER !== 'undefined') LEDGER.record('exp_logistics', logCost);
         
         if (!store.localInventory[itemKey]) store.localInventory[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
         let locInv = store.localInventory[itemKey];
