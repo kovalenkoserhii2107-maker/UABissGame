@@ -430,20 +430,20 @@ const UI_DASHBOARD = {
                                 <div style="font-weight:700; font-size:1.1rem; color:var(--text); margin-bottom:4px;">${itemName}</div>
                                 <div style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Объем: <span style="color:var(--text);">${c.qty} шт.</span></div>
                             </div>
-                            <div style="background:var(--red-dim); color:var(--red); padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Срок: ${c.deadline} дн.</div>
+                            <div style="background:var(--red-dim); color:var(--red); padding:4px 8px; border-radius:8px; font-size:0.85rem; font-weight:700;">Срок: ${c.deadline} дн.</div>
                         </div>
                         
                         <div style="display:flex; gap:16px; margin-bottom:16px; padding-top:12px; border-top:1px dashed var(--border);">
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Цена за шт.</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Цена за шт.</div>
                                 <div style="color:var(--text); font-weight:700; font-size:1rem;">$${formatMoney(c.price)}</div>
                             </div>
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Сумма (Оплата)</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Сумма (Оплата)</div>
                                 <div style="color:var(--green); font-weight:700; font-size:1rem;">$${formatMoney(c.totalReward)}</div>
                             </div>
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Штраф за срыв</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Штраф за срыв</div>
                                 <div style="color:var(--red); font-weight:700; font-size:0.9rem;">$${formatMoney(c.penalty)}</div>
                             </div>
                         </div>
@@ -479,7 +479,7 @@ const UI_DASHBOARD = {
                                 <div style="font-weight:700; font-size:1.1rem; color:var(--text); margin-bottom:4px;">${itemName}</div>
                                 <div style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Собрано: <span style="color:${canFulfill ? 'var(--green)' : 'var(--text)'};">${inv} / ${c.qty}</span> шт.</div>
                             </div>
-                            <div style="background:${c.deadline <= 3 ? 'var(--red-dim)' : 'var(--orange-dim)'}; color:${c.deadline <= 3 ? 'var(--red)' : 'var(--orange)'}; padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Осталось: ${c.deadline} дн.</div>
+                            <div style="background:${c.deadline <= 3 ? 'var(--red-dim)' : 'var(--orange-dim)'}; color:${c.deadline <= 3 ? 'var(--red)' : 'var(--orange)'}; padding:4px 8px; border-radius:8px; font-size:0.85rem; font-weight:700;">Осталось: ${c.deadline} дн.</div>
                         </div>
                         
                         <!-- Прогресс бар сборки -->
@@ -489,11 +489,11 @@ const UI_DASHBOARD = {
 
                         <div style="display:flex; gap:16px; margin-bottom:16px; padding-top:12px; border-top:1px dashed var(--border);">
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Сумма (Оплата)</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Сумма (Оплата)</div>
                                 <div style="color:var(--green); font-weight:700; font-size:1rem;">$${formatMoney(c.totalReward)}</div>
                             </div>
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Неустойка</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Неустойка</div>
                                 <div style="color:var(--red); font-weight:700; font-size:0.9rem;">$${formatMoney(c.penalty)}</div>
                             </div>
                         </div>
@@ -552,7 +552,7 @@ const UI_DASHBOARD = {
                 facilCard.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
                     <div>
-                        <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:4px;">Корпус НИИ</div>
+                        <div style="font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:4px;">Корпус НИИ</div>
                         <div style="font-size:1.4rem; font-weight:800; color:var(--text);">Уровень ${lvl}</div>
                     </div>
                     <div style="background: rgba(142,68,173,0.1); color:#8e44ad; font-weight:700; padding:6px 12px; border-radius:8px; font-size:0.9rem;">
@@ -562,7 +562,7 @@ const UI_DASHBOARD = {
                 <div style="background:var(--surface-2); border-radius:8px; height:8px; overflow:hidden; margin-bottom:6px;">
                     <div style="height:100%; width:${capPct}%; background:linear-gradient(90deg,#8e44ad,#3498db); border-radius:8px; transition:width 0.4s;"></div>
                 </div>
-                <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:16px;">Заполненность: ${capPct}%</div>
+                <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:16px;">Заполненность: ${capPct}%</div>
                 <button onclick="RND.upgradeFacility()" style="width:100%; background: rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:10px; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; font-size:0.9rem;">
                     ⬆️ Расширить НИИ ($${formatMoney(RND.getUpgradeCost())})
                 </button>`;
@@ -575,7 +575,7 @@ const UI_DASHBOARD = {
             let sci = STATE.rnd.staff.scientist || 0;
             let lead = STATE.rnd.staff.lead_scientist || 0;
             staffCard.innerHTML = `
-            <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">👨‍🔬 Персонал лаборатории</div>
+            <div style="font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">👨‍🔬 Персонал лаборатории</div>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
                     <div>
@@ -610,7 +610,7 @@ const UI_DASHBOARD = {
             let freeSlots = maxStaff - eqCount;
             let warning = curStaff > eqCount ? `<div style="color:var(--orange); font-size:0.82rem; margin-top:8px;">⚠️ Учёных больше, чем рабочих мест (ПК)!</div>` : '';
             equipCard.innerHTML = `
-            <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">💻 Оборудование (Смарт-ПК)</div>
+            <div style="font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">💻 Оборудование (Смарт-ПК)</div>
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                 <span style="color:var(--text-dim); font-size:0.9rem;">Установлено</span>
                 <span style="font-weight:700; color:var(--text);">${eqCount} / ${maxStaff}</span>
@@ -694,11 +694,11 @@ const UI_DASHBOARD = {
                 let percent = targetCost > 0 ? Math.min(100, (STATE.rnd.points / targetCost) * 100) : 100;
                 let techIcon = icons[STATE.rnd.activeProject] || '🔬';
                 rndActive.innerHTML = `
-                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">⚡ Активное Исследование</div>
+                <div style="font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:14px;">⚡ Активное Исследование</div>
                 <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
                     <div style="font-size:2.5rem;">${techIcon}</div>
                     <div>
-                        <div style="font-size:0.75rem; color:var(--orange); text-transform:uppercase; font-weight:700;">${titleName}</div>
+                        <div style="font-size:0.85rem; color:var(--orange); text-transform:uppercase; font-weight:700;">${titleName}</div>
                         <div style="font-weight:700; color:var(--text); font-size:1.05rem;">${tpl.name}</div>
                     </div>
                 </div>
@@ -724,16 +724,16 @@ const UI_DASHBOARD = {
                             let p = tc > 0 ? Math.min(100, (pts/tc)*100).toFixed(0) : 100;
                             let ico = icons[bizId] || '🔬';
                             pausedHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(243,156,18,0.08); border:1px solid rgba(243,156,18,0.2); padding:10px 14px; border-radius:8px; margin-top:8px;">
-                                <span>${ico} <strong>${t.name}</strong> <span style="color:var(--text-dim); font-size:0.8rem;">${p}%</span></span>
+                                <span>${ico} <strong>${t.name}</strong> <span style="color:var(--text-dim); font-size:0.9rem;">${p}%</span></span>
                                 <button onclick="RND.startProject('${bizId}')" style="background:rgba(39,174,96,0.1); color:var(--green); border:1px solid rgba(39,174,96,0.3); padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.82rem; font-weight:600;">▶ Продолжить</button>
                             </div>`;
                         }
                     });
-                    if (pausedHtml) rndActive.innerHTML += `<div style="margin-top:14px;"><div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:6px;">⏸ На паузе</div>${pausedHtml}</div>`;
+                    if (pausedHtml) rndActive.innerHTML += `<div style="margin-top:14px;"><div style="font-size:0.85rem; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:6px;">⏸ На паузе</div>${pausedHtml}</div>`;
                 }
             } else {
                 rndActive.innerHTML = `
-                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:12px;">⚡ Активное Исследование</div>
+                <div style="font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:12px;">⚡ Активное Исследование</div>
                 <div style="text-align:center; padding: 20px 0; color:var(--text-faint);">
                     <div style="font-size:2.5rem; margin-bottom:8px;">🧪</div>
                     <div style="font-size:0.9rem;">Нет активных исследований.</div>
@@ -750,12 +750,12 @@ const UI_DASHBOARD = {
                             let p = tc > 0 ? Math.min(100, (pts/tc)*100).toFixed(0) : 100;
                             let ico = icons[bizId] || '🔬';
                             pausedHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(243,156,18,0.08); border:1px solid rgba(243,156,18,0.2); padding:10px 14px; border-radius:8px; margin-top:8px;">
-                                <span>${ico} <strong>${t.name}</strong> <span style="color:var(--text-dim); font-size:0.8rem;">${p}%</span></span>
+                                <span>${ico} <strong>${t.name}</strong> <span style="color:var(--text-dim); font-size:0.9rem;">${p}%</span></span>
                                 <button onclick="RND.startProject('${bizId}')" style="background:rgba(39,174,96,0.1); color:var(--green); border:1px solid rgba(39,174,96,0.3); padding:5px 12px; border-radius:6px; cursor:pointer; font-size:0.82rem; font-weight:600;">▶ Продолжить</button>
                             </div>`;
                         }
                     });
-                    if (pausedHtml) rndActive.innerHTML += `<div style="margin-top:4px;"><div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:6px;">⏸ На паузе</div>${pausedHtml}</div>`;
+                    if (pausedHtml) rndActive.innerHTML += `<div style="margin-top:4px;"><div style="font-size:0.85rem; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:6px;">⏸ На паузе</div>${pausedHtml}</div>`;
                 }
             }
         }
@@ -831,7 +831,7 @@ const UI_DASHBOARD = {
                         <div style="font-weight:700; font-size:0.95rem; color:var(--text);">${tpl.name}</div>
                         <div style="font-size:0.78rem; color:var(--green);">🏆 Макс. уровень v2.0</div>
                     </div>
-                    <div style="text-align:center; font-size:0.8rem; color:var(--green); font-weight:700;">✅ Завершено</div>
+                    <div style="text-align:center; font-size:0.9rem; color:var(--green); font-weight:700;">✅ Завершено</div>
                 </div>`;
             }
         };
@@ -945,14 +945,14 @@ const UI_DASHBOARD = {
                         if (storeOptions !== '') {
                             transferHtml = `
                             <div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:10px;">
-                                <select id="trans-store-${cId}-${key}" style="flex:1; font-size:0.8rem; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text);">
+                                <select id="trans-store-${cId}-${key}" style="flex:1; font-size:0.9rem; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text);">
                                     <option value="">В магазин...</option>${storeOptions}
                                 </select>
-                                <input type="number" id="trans-qty-${cId}-${key}" value="${inv.qty}" max="${inv.qty}" style="width:65px; font-size:0.85rem; font-weight:700; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); text-align:center;">
+                                <input type="number" id="trans-qty-${cId}-${key}" value="${inv.qty}" max="${inv.qty}" style="width:80px; font-size:0.85rem; font-weight:700; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); text-align:center;">
                                 <button onclick="UI_DASHBOARD.transferToStore('${key}', '${cId}')" style="background:var(--orange); color:white; border:none; padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:700; font-size:0.85rem;">Отгрузить</button>
                             </div>`;
                         } else {
-                            transferHtml = `<div style="margin-top:12px; border-top:1px dashed var(--border); padding-top:10px; font-size:0.75rem; color:var(--text-dim);">У вас нет магазинов для этого товара</div>`;
+                            transferHtml = `<div style="margin-top:12px; border-top:1px dashed var(--border); padding-top:10px; font-size:0.85rem; color:var(--text-dim);">У вас нет магазинов для этого товара</div>`;
                         }
 
                         let stars = '';
@@ -966,17 +966,17 @@ const UI_DASHBOARD = {
                                     <div style="font-size:2.5rem; background:white; padding:8px; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.05); line-height:1;">${icon}</div>
                                     <div>
                                         <div style="font-weight:800; font-size:1.05rem; color:var(--text);">${res.name}</div>
-                                        <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${volStr}</div>
-                                        <div style="font-size:0.75rem; color:var(--orange); margin-top:2px; font-weight:600;">Качество: ${stars} ${(inv.quality || 1.0).toFixed(2)}</div>
+                                        <div style="font-size:0.85rem; color:var(--text-dim); margin-top:2px;">${volStr}</div>
+                                        <div style="font-size:0.85rem; color:var(--orange); margin-top:2px; font-weight:600;">Качество: ${stars} ${(inv.quality || 1.0).toFixed(2)}</div>
                                     </div>
                                 </div>
                                 <div style="text-align:right;">
                                     <div style="font-weight:800; font-size:1.3rem; color:var(--blue);">${inv.qty} шт</div>
-                                    <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">$${formatMoney(inv.avgCost)}/шт</div>
+                                    <div style="font-size:0.85rem; color:var(--text-dim); margin-top:2px;">$${formatMoney(inv.avgCost)}/шт</div>
                                 </div>
                             </div>
                             <div style="margin-top:12px; padding-top:8px; display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-size:0.8rem; color:var(--text-dim);">Общая стоимость:</span>
+                                <span style="font-size:0.9rem; color:var(--text-dim);">Общая стоимость:</span>
                                 <span style="font-weight:800; color:var(--green);">$${formatMoney(totalVal)}</span>
                             </div>
                             ${transferHtml}
@@ -994,13 +994,13 @@ const UI_DASHBOARD = {
                         <div style="display:flex; align-items:center; gap:16px;">
                             <div style="font-size:2.5rem; background:white; width:60px; height:60px; display:flex; align-items:center; justify-content:center; border-radius:14px; box-shadow:0 4px 10px rgba(0,0,0,0.1);">🗺️</div>
                             <div>
-                                <h3 style="margin:0 0 6px 0; color:var(--text); font-size:1.4rem;">Логистический хаб: ${city.name} <span style="background:var(--blue); color:white; padding:2px 8px; border-radius:6px; font-size:0.8rem; vertical-align:middle; margin-left:6px;">Ур. ${wh.level}</span></h3>
+                                <h3 style="margin:0 0 6px 0; color:var(--text); font-size:1.4rem;">Логистический хаб: ${city.name} <span style="background:var(--blue); color:white; padding:2px 8px; border-radius:6px; font-size:0.9rem; vertical-align:middle; margin-left:6px;">Ур. ${wh.level}</span></h3>
                                 <p style="margin:0; color:var(--text-dim); font-size:0.95rem;">Аренда: <strong style="color:var(--red);">$${formatMoney(dailyRent)}</strong> / день</p>
                             </div>
                         </div>
                         <div style="display:flex; align-items:center; gap:20px; background:white; padding:14px 20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); border:1px solid var(--border);">
                             <div>
-                                <div style="font-size:0.75rem; text-transform:uppercase; font-weight:800; color:var(--text-dim); margin-bottom:4px;">Заполненность</div>
+                                <div style="font-size:0.85rem; text-transform:uppercase; font-weight:800; color:var(--text-dim); margin-bottom:4px;">Заполненность</div>
                                 <div style="font-size:1.1rem; font-weight:800; color:var(--text);">${curVol.toFixed(1)} <span style="font-size:0.85rem; color:var(--text-dim); font-weight:500;">/ ${maxVol} м³</span></div>
                             </div>
                             
@@ -1010,7 +1010,7 @@ const UI_DASHBOARD = {
                                     <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="${chartBg}" stroke-width="4" stroke-dasharray="${percent}, 100" />
                                 </svg>
                                 <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
-                                    <span style="font-size:0.8rem; font-weight:800; color:${chartBg};">${percent}%</span>
+                                    <span style="font-size:0.9rem; font-weight:800; color:${chartBg};">${percent}%</span>
                                 </div>
                             </div>
                         </div>
@@ -1153,7 +1153,7 @@ const UI_DASHBOARD = {
                             <span style="font-size:1.8rem;">${icon}</span>
                             <div>
                                 <div style="font-weight:700; font-size:0.88rem; color:var(--text);">${tpl.name}</div>
-                                <div style="font-size:0.7rem; color:${color}; font-weight:600;">→ ${outRes ? outRes.name : tpl.output}</div>
+                                <div style="font-size:0.9rem; color:${color}; font-weight:600;">→ ${outRes ? outRes.name : tpl.output}</div>
                             </div>
                         </div>
                         <div style="padding:12px 16px;">
@@ -1248,7 +1248,7 @@ const UI_DASHBOARD = {
                     let hasEnough = inQty >= totalReqPerDay;
                     inputsHtml += `
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:var(--surface); border-radius:6px; border:1px solid var(--border); margin-bottom:4px;">
-                        <span style="font-size:0.8rem; color:var(--text);">${inName}</span>
+                        <span style="font-size:0.9rem; color:var(--text);">${inName}</span>
                         <div style="text-align:right;">
                             <span style="font-weight:700; font-size:0.82rem; color:${hasEnough ? 'var(--green)' : 'var(--red)'};">${inQty} шт</span>
                             <span style="font-size:0.72rem; color:var(--text-dim); margin-left:4px;">(−${totalReqPerDay}/дн)</span>
@@ -1292,15 +1292,15 @@ const UI_DASHBOARD = {
                 routingHtml = viableRoutes.map(r => {
                     let val = biz.routing[r.id] || 0;
                     return `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span style="font-size:0.8rem; color:var(--text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.name}</span>
+                        <span style="font-size:0.9rem; color:var(--text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.name}</span>
                         <div style="display:flex; align-items:center; gap:4px; margin-left:8px;">
-                            <input type="number" id="route-${biz.uid}-${r.id}" value="${val}" min="0" style="width:56px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:0.8rem; text-align:right;">
-                            <span style="font-size:0.75rem; color:var(--text-dim);">шт</span>
+                            <input type="number" id="route-${biz.uid}-${r.id}" value="${val}" min="0" style="width:56px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:0.9rem; text-align:right;">
+                            <span style="font-size:0.85rem; color:var(--text-dim);">шт</span>
                         </div>
                     </div>`;
                 }).join('');
                 let destsStr = viableRoutes.map(r => r.id).join(',');
-                routingHtml += `<button onclick="UI_DASHBOARD.saveRoutes(${biz.uid},'${destsStr}')" style="width:100%; background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:7px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.8rem; margin-top:4px;">💾 Сохранить маршруты</button>`;
+                routingHtml += `<button onclick="UI_DASHBOARD.saveRoutes(${biz.uid},'${destsStr}')" style="width:100%; background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:7px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.9rem; margin-top:4px;">💾 Сохранить маршруты</button>`;
             }
 
             let eqPct = maxSlots > 0 ? Math.round((eqCount/maxSlots)*100) : 0;
@@ -1430,8 +1430,8 @@ const UI_DASHBOARD = {
                             </div>
                             <div style="display:flex; gap:6px;">
                                 <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${Math.max(1,freeSlots)}" style="width:55px; padding:7px 6px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); text-align:center; font-weight:600; font-size:0.85rem;">
-                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="flex:1; background:rgba(52,152,219,0.1); color:var(--blue); border:1px solid rgba(52,152,219,0.3); padding:7px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.8rem;">⬇️ Установить</button>
-                                <button onclick="PRODUCTION.repairEquipment(${biz.uid})" style="background:rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:7px 10px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.8rem;">🔧 ТО</button>
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="flex:1; background:rgba(52,152,219,0.1); color:var(--blue); border:1px solid rgba(52,152,219,0.3); padding:7px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.9rem;">⬇️ Установить</button>
+                                <button onclick="PRODUCTION.repairEquipment(${biz.uid})" style="background:rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:7px 10px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.9rem;">🔧 ТО</button>
                             </div>
                         </div>
 
@@ -1446,11 +1446,11 @@ const UI_DASHBOARD = {
                                 </svg>
                                 <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; padding-top:4px;">
                                     <span style="font-size:2.2rem; font-weight:900; color:${effColor}; line-height:1;">${effPercent}%</span>
-                                    <span style="font-size:0.7rem; color:var(--text-dim); margin-top:2px;">мощности</span>
+                                    <span style="font-size:0.9rem; color:var(--text-dim); margin-top:2px;">мощности</span>
                                 </div>
                             </div>
                             
-                            <div style="text-align:center; font-size:0.75rem; color:var(--text-dim); margin-bottom:16px; background:${effColor}10; padding:6px; border-radius:6px; font-weight:600; color:${effColor}; border:1px dashed ${effColor}40;">
+                            <div style="text-align:center; font-size:0.85rem; color:var(--text-dim); margin-bottom:16px; background:${effColor}10; padding:6px; border-radius:6px; font-weight:600; color:${effColor}; border:1px dashed ${effColor}40;">
                                 ${effPercent >= 80 ? '🔥 Идеальная работа' : effPercent >= 40 ? '⚙️ Требуется настройка' : assignedTotal === 0 ? '😴 Назначьте персонал' : '⚠️ Простой производства'}
                             </div>
 
@@ -1561,7 +1561,7 @@ const UI_DASHBOARD = {
                 <div style="background:var(--surface); padding:16px; border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                         <h4 style="margin:0; font-size:1.1rem; color:var(--text);">${comp.name}</h4>
-                        <span style="background:var(--surface-3); padding:4px 8px; border-radius:6px; font-size:0.8rem; font-weight:700;">Тир ${comp.tier}</span>
+                        <span style="background:var(--surface-3); padding:4px 8px; border-radius:6px; font-size:0.9rem; font-weight:700;">Тир ${comp.tier}</span>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.9rem;">
                         <span style="color:var(--text-dim);">Сила бренда:</span>
@@ -1643,14 +1643,14 @@ const UI_DASHBOARD = {
                                 <div style="font-size:2rem;">${icon}</div>
                                 <div>
                                     <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${resName} <span style="color:var(--text-dim); font-weight:400;">x${d.qty}</span></div>
-                                    <div style="font-size:0.75rem; color:var(--text-dim);">📍 в ${cName} • ★${(d.quality||1.0).toFixed(2)}</div>
+                                    <div style="font-size:0.85rem; color:var(--text-dim);">📍 в ${cName} • ★${(d.quality||1.0).toFixed(2)}</div>
                                 </div>
                             </div>
                             <div style="text-align:right; min-width:140px;">
                                 <div style="color:var(--green); font-weight:800; font-size:1.1rem; line-height:1;">$${formatMoney(d.totalCost)}</div>
-                                <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">Товар: <span style="font-weight:600;">$${formatMoney(d.cost||0)}</span></div>
-                                <div style="font-size:0.75rem; color:var(--orange); margin-top:2px;">Доставка: <span style="font-weight:600;">$${formatMoney(d.logCost||0)}</span></div>
-                                <button onclick="MARKET.cancelOrder('${d.id}')" style="background:var(--red-dim); color:var(--red); border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.75rem; font-weight:700; margin-top:8px; width:100%; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">Отменить</button>
+                                <div style="font-size:0.85rem; color:var(--text-dim); margin-top:6px;">Товар: <span style="font-weight:600;">$${formatMoney(d.cost||0)}</span></div>
+                                <div style="font-size:0.85rem; color:var(--orange); margin-top:2px;">Доставка: <span style="font-weight:600;">$${formatMoney(d.logCost||0)}</span></div>
+                                <button onclick="MARKET.cancelOrder('${d.id}')" style="background:var(--red-dim); color:var(--red); border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.85rem; font-weight:700; margin-top:8px; width:100%; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">Отменить</button>
                             </div>
                         </div>`;
                 });
@@ -1667,7 +1667,7 @@ const UI_DASHBOARD = {
             <div style="display:flex; align-items:center; gap:12px; background:var(--surface); padding:8px 14px; border-radius:12px; border:1px solid var(--border);">
                 <span style="font-size:1.2rem;">📍</span>
                 <div style="display:flex; flex-direction:column;">
-                    <span style="font-size:0.7rem; color:var(--text-dim); font-weight:700; text-transform:uppercase;">Склад для доставки</span>
+                    <span style="font-size:0.9rem; color:var(--text-dim); font-weight:700; text-transform:uppercase;">Склад для доставки</span>
                     <select id="market-target-city" style="border:none; background:transparent; font-size:0.95rem; font-weight:700; color:var(--text); cursor:pointer; outline:none; padding:0;">
                         ${cityOptions}
                     </select>
@@ -1700,12 +1700,12 @@ const UI_DASHBOARD = {
                     inventoryHtml += `
                     <div style="background:rgba(39,174,96,0.08); border:1px solid rgba(39,174,96,0.2); border-radius:8px; padding:10px; margin-bottom:12px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <div style="font-size:0.8rem; color:var(--text-dim);">На складе <span style="font-weight:700; color:var(--text);">${cityName}</span></div>
+                            <div style="font-size:0.9rem; color:var(--text-dim);">На складе <span style="font-weight:700; color:var(--text);">${cityName}</span></div>
                             <div style="font-weight:800; color:var(--green); font-size:0.9rem;">${inv.qty} шт</div>
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div style="font-size:0.8rem;">★ ${(inv.quality || 1.0).toFixed(2)} <span style="color:var(--text-faint);">($${formatMoney(finalPrice)}/шт)</span></div>
-                            <button onclick="MARKET.sell('${key}', ${inv.qty}, '${cId}')" style="background:var(--green); color:white; border:none; padding:6px 12px; border-radius:6px; font-weight:700; font-size:0.8rem; cursor:pointer;">Продать</button>
+                            <div style="font-size:0.9rem;">★ ${(inv.quality || 1.0).toFixed(2)} <span style="color:var(--text-faint);">($${formatMoney(finalPrice)}/шт)</span></div>
+                            <button onclick="MARKET.sell('${key}', ${inv.qty}, '${cId}')" style="background:var(--green); color:white; border:none; padding:6px 12px; border-radius:6px; font-weight:700; font-size:0.9rem; cursor:pointer;">Продать</button>
                         </div>
                     </div>`;
                 }
@@ -1719,16 +1719,16 @@ const UI_DASHBOARD = {
                             <div style="font-size:2.4rem;">${icon}</div>
                             <div>
                                 <h3 style="margin:0; font-size:1.1rem; color:var(--text);">${res.name}</h3>
-                                <div style="color:var(--text-dim); font-size:0.75rem;">Объем: ${res.volume || 1} м³</div>
+                                <div style="color:var(--text-dim); font-size:0.85rem;">Объем: ${res.volume || 1} м³</div>
                             </div>
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:1.3rem; font-weight:800; color:var(--text);">$${formatMoney(basePrice)}</div>
-                            <div style="font-size:0.75rem; color:var(--text-faint);">за ед.</div>
+                            <div style="font-size:0.85rem; color:var(--text-faint);">за ед.</div>
                         </div>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:8px 12px; border-radius:8px;">
-                        <span style="font-size:0.8rem; color:var(--text-dim);">Доступно на рынке</span>
+                        <span style="font-size:0.9rem; color:var(--text-dim);">Доступно на рынке</span>
                         <span style="font-weight:700; color:var(--blue); font-size:0.95rem;">${availQty} шт</span>
                     </div>
                 </div>
@@ -1741,9 +1741,9 @@ const UI_DASHBOARD = {
                         <button onclick="UI_DASHBOARD.submitBuy('${key}')" style="background:var(--blue); color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:700; font-size:0.95rem; cursor:pointer;">Купить</button>
                     </div>
                     <div style="display:flex; gap:6px; margin-top:8px;">
-                        <button onclick="document.getElementById('buy-qty-${key}').value = 100" style="flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:600;">100</button>
-                        <button onclick="document.getElementById('buy-qty-${key}').value = 1000" style="flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:600;">1k</button>
-                        <button onclick="UI_DASHBOARD.setMaxBuy('${key}')" style="flex:2; background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:6px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:700;">MAX</button>
+                        <button onclick="document.getElementById('buy-qty-${key}').value = 100" style="flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:6px; cursor:pointer; font-size:0.9rem; font-weight:600;">100</button>
+                        <button onclick="document.getElementById('buy-qty-${key}').value = 1000" style="flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px; border-radius:6px; cursor:pointer; font-size:0.9rem; font-weight:600;">1k</button>
+                        <button onclick="UI_DASHBOARD.setMaxBuy('${key}')" style="flex:2; background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:6px; border-radius:6px; cursor:pointer; font-size:0.9rem; font-weight:700;">MAX</button>
                     </div>
                 </div>
             </div>`;
@@ -1793,9 +1793,9 @@ const UI_DASHBOARD = {
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                     <h3 style="margin:0;">📈 Динамика цены</h3>
                     <div id="chart-buttons" style="display:flex; gap:8px;">
-                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 7)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--blue); background:var(--blue); color:white; font-size:0.8rem; cursor:pointer;">Неделя</button>
-                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 30)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.8rem; cursor:pointer;">Месяц</button>
-                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 365)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.8rem; cursor:pointer;">Год</button>
+                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 7)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--blue); background:var(--blue); color:white; font-size:0.9rem; cursor:pointer;">Неделя</button>
+                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 30)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.9rem; cursor:pointer;">Месяц</button>
+                        <button onclick="UI_DASHBOARD.updateMarketChart('${itemKey}', 365)" style="padding:4px 10px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:0.9rem; cursor:pointer;">Год</button>
                     </div>
                 </div>
                 <div style="height:250px; position:relative;">
@@ -1994,20 +1994,20 @@ const UI_DASHBOARD = {
                     <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <div style="font-weight:700; font-size:1.05rem; color:var(--text);">Заём $${formatMoney(l.amount)}</div>
-                            <div style="background:var(--orange-dim); color:var(--orange); padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Осталось: ${l.remainingDays} дн.</div>
+                            <div style="background:var(--orange-dim); color:var(--orange); padding:4px 8px; border-radius:8px; font-size:0.85rem; font-weight:700;">Осталось: ${l.remainingDays} дн.</div>
                         </div>
                         
                         <div style="display:flex; gap:16px; margin-bottom:12px;">
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Остаток Долга</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Остаток Долга</div>
                                 <div style="color:var(--red); font-weight:700; font-size:1rem;">$${formatMoney(l.remainingPrincipal)}</div>
                             </div>
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Ставка</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Ставка</div>
                                 <div style="color:var(--text); font-weight:700; font-size:1rem;">${(l.rate*100).toFixed(1)}%</div>
                             </div>
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Переплата (Проценты)</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Переплата (Проценты)</div>
                                 <div style="color:var(--red); font-weight:700; font-size:1rem;">$${formatMoney(totalInterestLeft)}</div>
                             </div>
                         </div>
@@ -2046,20 +2046,20 @@ const UI_DASHBOARD = {
                     <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <div style="font-weight:700; font-size:1.05rem; color:var(--text);">Вклад $${formatMoney(d.amount)}</div>
-                            <div style="background:var(--blue-dim); color:var(--blue); padding:4px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">Осталось: ${d.daysLeft} дн.</div>
+                            <div style="background:var(--blue-dim); color:var(--blue); padding:4px 8px; border-radius:8px; font-size:0.85rem; font-weight:700;">Осталось: ${d.daysLeft} дн.</div>
                         </div>
                         
                         <div style="display:flex; gap:16px; margin-bottom:12px;">
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Накоплено</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Накоплено</div>
                                 <div style="color:var(--green); font-weight:700; font-size:1rem;">${accText}</div>
                             </div>
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Ставка</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Ставка</div>
                                 <div style="color:var(--text); font-weight:700; font-size:1rem;">${(d.rate*100).toFixed(1)}%</div>
                             </div>
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Тип выплаты</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Тип выплаты</div>
                                 <div style="color:var(--text); font-weight:700; font-size:0.85rem;">${payoutText}</div>
                             </div>
                         </div>
@@ -2580,7 +2580,7 @@ const UI_DASHBOARD = {
             <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-card);">
                 <div>
                     <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${info.name}</div>
-                    <div style="font-size:0.8rem; color:var(--text-dim);">ЗП: <span style="color:var(--text); font-weight:600;">$${formatMoney(info.salary)}/дн</span></div>
+                    <div style="font-size:0.9rem; color:var(--text-dim);">ЗП: <span style="color:var(--text); font-weight:600;">$${formatMoney(info.salary)}/дн</span></div>
                 </div>
                 <button onclick="HR.hire('${grade}')" class="btn-primary-lg" style="background:var(--blue); color:white; border:none; padding:8px 16px; border-radius:10px; font-weight:700; font-size:0.85rem; cursor:pointer;">
                     Найм ($${formatMoney(info.hireCost)})
@@ -2606,9 +2606,9 @@ const UI_DASHBOARD = {
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                             <div>
                                 <span style="font-weight:700; color:var(--text); font-size:0.9rem;">Повышение ➔ ${nextName}</span>
-                                <div style="font-size:0.75rem; color:var(--text-dim);">Стипендия: $${t.salary}/дн</div>
+                                <div style="font-size:0.85rem; color:var(--text-dim);">Стипендия: $${t.salary}/дн</div>
                             </div>
-                            <div style="background:var(--orange-dim); color:var(--orange); font-weight:bold; padding:4px 8px; border-radius:8px; font-size:0.8rem;">
+                            <div style="background:var(--orange-dim); color:var(--orange); font-weight:bold; padding:4px 8px; border-radius:8px; font-size:0.9rem;">
                                 ${t.daysLeft} дн.
                             </div>
                         </div>
@@ -2645,7 +2645,7 @@ const UI_DASHBOARD = {
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                         <div>
                             <div style="font-weight:800; color:var(--text); font-size:1rem; margin-bottom:4px;">${info.name}</div>
-                            <div style="font-size:0.8rem; color:var(--text-dim); background:var(--surface-3); display:inline-block; padding:2px 6px; border-radius:6px;">Отдел: ${info.role}</div>
+                            <div style="font-size:0.9rem; color:var(--text-dim); background:var(--surface-3); display:inline-block; padding:2px 6px; border-radius:6px;">Отдел: ${info.role}</div>
                         </div>
                         <div style="font-size:1.4rem; font-weight:800; color:${free > 0 ? 'var(--blue)' : 'var(--text-dim)'};">${free}</div>
                     </div>
@@ -2825,10 +2825,10 @@ const UI_DASHBOARD = {
 
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; border-top:1px solid var(--border); padding-top:12px;">
                     <div>
-                        <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:2px;">Выручка (вчера)</div>
+                        <div style="font-size:0.85rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:2px;">Выручка (вчера)</div>
                         <div style="font-size:1.2rem; font-weight:800; color:var(--green);">+$${formatMoney(totalRev)}</div>
                     </div>
-                    <div style="font-size:0.8rem; color:var(--text-dim); background:var(--surface-2); padding:4px 8px; border-radius:6px; font-weight:600;">
+                    <div style="font-size:0.9rem; color:var(--text-dim); background:var(--surface-2); padding:4px 8px; border-radius:6px; font-weight:600;">
                         ${totalSold} продаж
                     </div>
                 </div>
@@ -2875,7 +2875,7 @@ const UI_DASHBOARD = {
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
         
         modal.innerHTML = `
-            <div style="background:var(--bg-main); width:95%; max-width:1000px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.3); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
+            <div style="background:var(--bg-main); width:95%; max-width:1200px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.3); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
                 <div style="padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
                     <h3 id="store-modal-title" style="margin:0; font-size:1.3rem; color:var(--text);">Магазин</h3>
                     <button onclick="UI_DASHBOARD.closeStoreModal()" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; font-size:1.2rem; display:flex; align-items:center; justify-content:center; color:var(--text-dim); cursor:pointer; transition:0.2s;" onmouseover="this.style.background='var(--red-dim)'; this.style.color='var(--red)'" onmouseout="this.style.background='var(--surface-2)'; this.style.color='var(--text-dim)'">✕</button>
@@ -2989,35 +2989,35 @@ const UI_DASHBOARD = {
                             <div>
                                 ${soldOutBadge}
                                 <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${rTpl.name}</div>
-                                <div style="font-size:0.75rem; color:${inv.qty > 0 ? 'var(--blue)' : 'var(--red)'}; font-weight:700;">Сток: ${inv.qty} шт</div>
-                                <div style="font-size:0.75rem; color:var(--text-dim);">★ ${(inv.quality||1.0).toFixed(2)} • Опт: $${formatMoney(b2bPrice)}</div>
-                                <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Себест-ть (1 шт): <strong style="color:var(--red);">$${formatMoney(inv.avgCost)}</strong> <span style="opacity:0.6;">(Всего: $${formatMoney(stockCogs)})</span></div>
+                                <div style="font-size:0.85rem; color:${inv.qty > 0 ? 'var(--blue)' : 'var(--red)'}; font-weight:700;">Сток: ${inv.qty} шт</div>
+                                <div style="font-size:0.85rem; color:var(--text-dim);">★ ${(inv.quality||1.0).toFixed(2)} • Опт: $${formatMoney(b2bPrice)}</div>
+                                <div style="font-size:0.85rem; color:var(--text-dim); margin-top:2px;">Себест-ть (1 шт): <strong style="color:var(--red);">$${formatMoney(inv.avgCost)}</strong> <span style="opacity:0.6;">(Всего: $${formatMoney(stockCogs)})</span></div>
                             </div>
                         </div>
                         
                         <div style="width: 35%; display:flex; flex-direction:column; gap:8px;">
                             <div>
-                                <div style="font-size:0.7rem; color:var(--text-dim); margin-bottom:2px;">Цена полки <span title="Множитель прибыли относительно себестоимости 1 шт" style="color:${marginColor}; font-weight:700;">(ROI: x${margin.toFixed(1)})</span></div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:2px;">Цена полки <span title="Множитель прибыли относительно себестоимости 1 шт" style="color:${marginColor}; font-weight:700;">(ROI: x${margin.toFixed(1)})</span></div>
                                 <div style="display:flex; align-items:center; gap:4px;">
                                     <span style="color:var(--text); font-weight:700;">$</span>
-                                    <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:65px; padding:4px 6px; border:1px solid var(--border); border-radius:6px; font-weight:700; font-size:0.9rem; background:var(--surface-2); color:var(--text);">
-                                    <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:var(--blue); color:white; border:none; padding:4px 8px; font-size:0.8rem; border-radius:6px; cursor:pointer; font-weight:700;">OK</button>
+                                    <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:80px; padding:4px 6px; border:1px solid var(--border); border-radius:6px; font-weight:700; font-size:0.9rem; background:var(--surface-2); color:var(--text);">
+                                    <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:var(--blue); color:white; border:none; padding:4px 8px; font-size:0.9rem; border-radius:6px; cursor:pointer; font-weight:700;">OK</button>
                                 </div>
                             </div>
                             
                             <div style="background:var(--surface-2); padding:6px; border-radius:6px; border:1px dashed var(--border);">
-                                <div style="font-size:0.7rem; color:var(--text-dim); margin-bottom:4px; font-weight:700;">🔄 АВТО-ЗАКАЗ (ШТ)</div>
+                                <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:4px; font-weight:700;">🔄 АВТО-ЗАКАЗ (ШТ)</div>
                                 <div style="display:flex; align-items:center; gap:4px;">
-                                    <input type="number" id="autosupply-${biz.uid}-${k}" value="${hasAutoSupply}" style="width:65px; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:0.85rem; text-align:center;">
-                                    <button onclick="UI_DASHBOARD.saveAutoSupply(${biz.uid}, '${k}')" style="background:var(--green); color:white; border:none; padding:4px 8px; font-size:0.8rem; border-radius:4px; cursor:pointer; font-weight:700;">Set</button>
+                                    <input type="number" id="autosupply-${biz.uid}-${k}" value="${hasAutoSupply}" style="width:80px; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:0.85rem; text-align:center;">
+                                    <button onclick="UI_DASHBOARD.saveAutoSupply(${biz.uid}, '${k}')" style="background:var(--green); color:white; border:none; padding:4px 8px; font-size:0.9rem; border-radius:4px; cursor:pointer; font-weight:700;">Set</button>
                                 </div>
                             </div>
                         </div>
                         
                         <div style="width: 25%; text-align:right;">
-                            <div style="font-size:0.75rem; color:var(--text-dim);">Продано вчера</div>
+                            <div style="font-size:0.85rem; color:var(--text-dim);">Продано вчера</div>
                             <div style="font-weight:800; color:var(--green); font-size:1.1rem;">${soldYesterday} шт</div>
-                            <div style="font-size:0.8rem; color:var(--text); font-weight:700;">+$${formatMoney(revYesterday)}</div>
+                            <div style="font-size:0.9rem; color:var(--text); font-weight:700;">+$${formatMoney(revYesterday)}</div>
                         </div>
                     </div>`;
                 }
@@ -3029,14 +3029,14 @@ const UI_DASHBOARD = {
         let chartBg = volPercent > 90 ? 'var(--red)' : (volPercent > 70 ? 'var(--orange)' : 'var(--green)');
 
         let titleEl = document.getElementById('store-modal-title');
-        if (titleEl) titleEl.innerText = `${biz.name} (${cityData.name})`;
+        if (titleEl) titleEl.innerText = biz.name;
 
         let bodyEl = document.getElementById('store-modal-body');
         if (bodyEl) {
             bodyEl.innerHTML = `
-            <div style="display:flex; flex-wrap:wrap; gap:24px;">
+            <div style="display:flex; flex-wrap:wrap; gap:32px;">
                 <!-- КОЛОНКА 1: ПОЛКИ И ЗАПАСЫ -->
-                <div style="flex:1.5; min-width:350px;">
+                <div style="flex:1.5; min-width:450px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <h4 style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px;">📦 Заполнение склада</h4>
                         <span style="font-weight:700; color:${chartBg};">${volPercent}%</span>
@@ -3044,7 +3044,7 @@ const UI_DASHBOARD = {
                     <div style="height:8px; background:var(--surface-3); border-radius:4px; margin-bottom:8px; overflow:hidden;">
                         <div style="height:100%; width:${volPercent}%; background:${chartBg}; transition:0.3s;"></div>
                     </div>
-                    <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:16px;">
+                    <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:16px;">
                         Занято ${currentVol.toFixed(1)} м³ из ${maxVol.toFixed(1)} м³. Доставляйте товары с производственных складов.
                     </div>
                     
@@ -3054,10 +3054,10 @@ const UI_DASHBOARD = {
                 </div>
 
                 <!-- КОЛОНКА 2: МЕБЕЛЬ И ПЕРСОНАЛ -->
-                <div style="flex:1; min-width:300px;">
+                <div style="flex:1; min-width:350px;">
                     <!-- Выручка сводка -->
                     <div style="background:linear-gradient(135deg, rgba(46,204,113,0.1), rgba(39,174,96,0.05)); border:1px solid rgba(46,204,113,0.3); border-radius:12px; padding:16px; margin-bottom:16px; text-align:center;">
-                        <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:800;">ВЫРУЧКА ЗА ВЧЕРА</div>
+                        <div style="font-size:0.85rem; color:var(--text-dim); text-transform:uppercase; font-weight:800;">ВЫРУЧКА ЗА ВЧЕРА</div>
                         <div style="font-size:1.6rem; font-weight:800; color:var(--green);">+$${formatMoney(totalRev)}</div>
                         <div style="font-size:0.85rem; color:var(--text-dim); margin-top:4px;">Аренда: -$${formatMoney(adminCost)}/дн</div>
                     </div>
@@ -3074,12 +3074,12 @@ const UI_DASHBOARD = {
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <div>
                                 <strong style="color:var(--text); font-size:1rem;">${eqName}</strong>
-                                <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Качество: ★${eqQuality.toFixed(2)} | На складе хаба: ${availableEq} шт</div>
+                                <div style="font-size:0.85rem; color:var(--text-dim); margin-top:2px;">Качество: ★${eqQuality.toFixed(2)} | На складе хаба: ${availableEq} шт</div>
                             </div>
                             <div style="font-weight:800; color:var(--blue); font-size:1.2rem;">${eqCount} / ${maxSlots}</div>
                         </div>
                         
-                        <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
                             <span style="color:var(--text-dim);">Состояние оборудования</span>
                             <span style="font-weight:700; color:${condColor};">${eqCondition.toFixed(0)}%</span>
                         </div>
@@ -3104,7 +3104,7 @@ const UI_DASHBOARD = {
                             </div>
                         </div>
                         
-                        <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid var(--border);">
+                        <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid var(--border);">
                             <span>Фонд оплаты труда (ФОТ):</span>
                             <strong style="color:var(--red);">$${formatMoney(salaryCost)} / дн</strong>
                         </div>
@@ -3113,7 +3113,7 @@ const UI_DASHBOARD = {
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed var(--border);">
                             <div>
                                 <div style="font-weight:700; font-size:0.95rem;">Директор</div>
-                                <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeMgr}</span></div>
+                                <div style="font-size:0.85rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeMgr}</span></div>
                             </div>
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button> 
@@ -3126,7 +3126,7 @@ const UI_DASHBOARD = {
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div>
                                 <div style="font-weight:700; font-size:0.95rem;">Продавцы</div>
-                                <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeSales}</span></div>
+                                <div style="font-size:0.85rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeSales}</span></div>
                             </div>
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button> 
@@ -3263,8 +3263,8 @@ const UI_DASHBOARD = {
                      title="${c.desc}"
                      style="cursor:pointer; border:2px solid ${isActive ? c.color : 'var(--border)'}; background:${isActive ? 'rgba(0,0,0,0.04)' : 'var(--surface-2)'}; border-radius:10px; padding:10px 12px; text-align:center; transition:all 0.15s; ${isActive ? 'box-shadow: 0 0 0 3px ' + c.color.replace(')', ',0.2)').replace('var(--','rgba(') + ';' : ''}">
                     <div style="font-size:1.5rem; margin-bottom:4px;">${c.icon}</div>
-                    <div style="font-size:0.75rem; font-weight:700; color:${isActive ? c.color : 'var(--text-dim)'};">${c.name}</div>
-                    <div style="font-size:0.7rem; color:var(--text-faint); margin-top:2px;">${c.cost > 0 ? '$' + c.cost + '/дн' : 'Бесплатно'}</div>
+                    <div style="font-size:0.85rem; font-weight:700; color:${isActive ? c.color : 'var(--text-dim)'};">${c.name}</div>
+                    <div style="font-size:0.9rem; color:var(--text-faint); margin-top:2px;">${c.cost > 0 ? '$' + c.cost + '/дн' : 'Бесплатно'}</div>
                     ${isActive ? `<div style="margin-top:4px; background:${c.color}; color:white; border-radius:4px; font-size:0.65rem; font-weight:700; padding:2px 6px;">АКТИВНА</div>` : ''}
                 </div>`;
             }).join('');
@@ -3278,7 +3278,7 @@ const UI_DASHBOARD = {
                         <div style="font-size:2rem;">📢</div>
                         <div>
                             <div style="font-weight:700; font-size:1.05rem; color:var(--text);">${biz.name}</div>
-                            <div style="font-size:0.8rem; color:var(--text-dim);">Уровень ${level} • Аренда <strong style="color:var(--red);">$${formatMoney(adminCost)}</strong>/дн</div>
+                            <div style="font-size:0.9rem; color:var(--text-dim);">Уровень ${level} • Аренда <strong style="color:var(--red);">$${formatMoney(adminCost)}</strong>/дн</div>
                         </div>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
@@ -3356,9 +3356,9 @@ const UI_DASHBOARD = {
                             </div>
                             <div style="background:${effColor}; color:white; border-radius:8px; padding:10px; text-align:center;">
                                 <div style="font-size:1.6rem; font-weight:800;">${effPct}%</div>
-                                <div style="font-size:0.75rem; opacity:0.9;">${effPct >= 75 ? '🔥 Отличная работа!' : effPct >= 40 ? '⚙️ Есть потенциал' : '⚠️ Требует внимания'}</div>
+                                <div style="font-size:0.85rem; opacity:0.9;">${effPct >= 75 ? '🔥 Отличная работа!' : effPct >= 40 ? '⚙️ Есть потенциал' : '⚠️ Требует внимания'}</div>
                             </div>
-                            ${assignedTotal > eqCount ? `<div style="margin-top:10px; background:rgba(230,126,34,0.1); color:var(--orange); border:1px solid rgba(230,126,34,0.3); border-radius:8px; padding:8px; font-size:0.8rem; font-weight:600;">⚠️ Сотрудников больше, чем ПК! Часть команды простаивает.</div>` : ''}
+                            ${assignedTotal > eqCount ? `<div style="margin-top:10px; background:rgba(230,126,34,0.1); color:var(--orange); border:1px solid rgba(230,126,34,0.3); border-radius:8px; padding:8px; font-size:0.9rem; font-weight:600;">⚠️ Сотрудников больше, чем ПК! Часть команды простаивает.</div>` : ''}
                         </div>
 
                         <!-- Управление кадрами -->
@@ -3368,7 +3368,7 @@ const UI_DASHBOARD = {
                             <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:10px 14px; border-radius:8px; border:1px solid var(--border); margin-bottom:8px;">
                                 <div>
                                     <div style="font-weight:600; font-size:0.9rem;">🎨 Маркетолог</div>
-                                    <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: ${freeMarketer}</div>
+                                    <div style="font-size:0.85rem; color:var(--text-dim);">Резерв: ${freeMarketer}</div>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     <button onclick="HR.removeFromBusiness(${biz.uid}, 'marketer')" ${biz.assigned.marketer===0?'disabled':''} style="background:var(--red-dim); color:var(--red); border:none; width:30px; height:30px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700; ${biz.assigned.marketer===0?'opacity:0.4;cursor:not-allowed;':''}">−</button>
@@ -3380,7 +3380,7 @@ const UI_DASHBOARD = {
                             <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:10px 14px; border-radius:8px; border:1px solid var(--border);">
                                 <div>
                                     <div style="font-weight:600; font-size:0.9rem;">📣 PR-Менеджер</div>
-                                    <div style="font-size:0.75rem; color:var(--text-dim);">Резерв: ${freePR}</div>
+                                    <div style="font-size:0.85rem; color:var(--text-dim);">Резерв: ${freePR}</div>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     <button onclick="HR.removeFromBusiness(${biz.uid}, 'pr_manager')" ${biz.assigned.pr_manager===0?'disabled':''} style="background:var(--red-dim); color:var(--red); border:none; width:30px; height:30px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700; ${biz.assigned.pr_manager===0?'opacity:0.4;cursor:not-allowed;':''}">−</button>
