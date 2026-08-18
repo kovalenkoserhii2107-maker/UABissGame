@@ -2842,24 +2842,19 @@ const UI_DASHBOARD = {
             if (biz.localInventory) {
                 Object.keys(biz.localInventory).forEach(k => {
                     let inv = biz.localInventory[k];
-                    if (inv.qty > 0) {
-                        let rTpl = RECIPES.RESOURCES[k];
+                    let rTpl = RECIPES.RESOURCES[k];
+                    if (!rTpl) return;
+
+                    let hasAutoSupply = (biz.autoSupplyRules && biz.autoSupplyRules[k]) ? biz.autoSupplyRules[k] : 0;
+                    let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
+
+                    // УСЛОВИЕ ВИДИМОСТИ: Показываем товар, если он есть на полке, либо заказан, либо продавался вчера
+                    if (inv.qty > 0 || hasAutoSupply > 0 || soldYesterday > 0) {
                         currentVol += inv.qty * (rTpl.volume || 0);
                         let b2bPrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(k) : 0;
-                        let basePrice = (RECIPES.RESOURCES[k] && RECIPES.RESOURCES[k].basePrice) ? RECIPES.RESOURCES[k].basePrice : 1;
-                        let anchorRetailPrice = basePrice * 2.5;
-
                         if (!biz.prices) biz.prices = {};
-                        let retailPrice = biz.prices[k] || anchorRetailPrice;
-                        
-                        // Показываем реальную маржу относительно себестоимости товара!
-                        let margin = inv.avgCost > 0 ? (retailPrice / inv.avgCost) : (retailPrice / basePrice);
-                        
-                        // А вот цвет текста показывает "жадность" относительно ожиданий покупателя
-                        let markupFromAnchor = retailPrice / anchorRetailPrice;
-                        let marginColor = markupFromAnchor > 1.2 ? 'var(--red)' : (markupFromAnchor > 1.0 ? 'var(--orange)' : 'var(--green)');
-
-                        let soldYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].qty : 0;
+                        let retailPrice = biz.prices[k] || (b2bPrice * 2.5);
+                        let margin = b2bPrice > 0 ? (retailPrice / b2bPrice) : 1;
                         let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
                         let stockCogs = inv.qty * inv.avgCost; // Себестоимость запаса
 
@@ -2868,28 +2863,46 @@ const UI_DASHBOARD = {
 
                         let icon = this._resIcons && this._resIcons[k] ? this._resIcons[k] : '📦';
 
+                        // ЛОГИКА "ВЕЧНОЙ ПОЛКИ": Визуальный статус "SOLD OUT" (Нет в наличии)
+                        let opacity = inv.qty === 0 ? '0.6' : '1.0';
+                        let filter = inv.qty === 0 ? 'grayscale(80%)' : 'none';
+                        let soldOutBadge = inv.qty === 0 
+                            ? '<div style="background:var(--red); color:white; font-size:0.65rem; font-weight:800; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; letter-spacing:0.05em;">SOLD OUT</div>' 
+                            : '';
+
                         invHtml += `
-                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 5px rgba(0,0,0,0.02);">
+                        <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 5px rgba(0,0,0,0.02); opacity:${opacity}; filter:${filter}; transition:0.3s;">
                             <div style="display:flex; align-items:center; gap:12px; width: 35%;">
                                 <div style="font-size:2rem;">${icon}</div>
                                 <div>
+                                    ${soldOutBadge}
                                     <div style="font-weight:700; color:var(--text); font-size:0.95rem;">${rTpl.name}</div>
-                                    <div style="font-size:0.75rem; color:var(--blue); font-weight:700;">Сток: ${inv.qty} шт</div>
+                                    <div style="font-size:0.75rem; color:${inv.qty > 0 ? 'var(--blue)' : 'var(--red)'}; font-weight:700;">Сток: ${inv.qty} шт</div>
                                     <div style="font-size:0.75rem; color:var(--text-dim);">★ ${(inv.quality||1.0).toFixed(2)} • Опт: $${formatMoney(b2bPrice)}</div>
                                     <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">Себест-ть (1 шт): <strong style="color:var(--red);">$${formatMoney(inv.avgCost)}</strong> <span style="opacity:0.6;">(Всего: $${formatMoney(stockCogs)})</span></div>
                                 </div>
                             </div>
                             
-                            <div style="width: 35%; display:flex; flex-direction:column; gap:4px;">
-                                <div style="font-size:0.75rem; color:var(--text-dim);">Цена полки <span title="Множитель прибыли относительно себестоимости 1 шт" style="color:${marginColor}; font-weight:700;">(ROI: x${margin.toFixed(1)})</span></div>
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    <span style="color:var(--text); font-weight:700;">$</span>
-                                    <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:70px; padding:6px; border:1px solid var(--border); border-radius:6px; font-weight:700; font-size:0.9rem; background:var(--surface-2); color:var(--text);">
-                                    <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:var(--blue); color:white; border:none; padding:6px 10px; font-size:0.8rem; border-radius:6px; cursor:pointer; font-weight:700;">OK</button>
+                            <div style="width: 35%; display:flex; flex-direction:column; gap:8px;">
+                                <div>
+                                    <div style="font-size:0.7rem; color:var(--text-dim); margin-bottom:2px;">Цена на полке (x${margin.toFixed(1)})</div>
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <span style="color:var(--text); font-weight:700;">$</span>
+                                        <input type="number" id="price-${biz.uid}-${k}" value="${retailPrice.toFixed(0)}" style="width:65px; padding:4px 6px; border:1px solid var(--border); border-radius:6px; font-weight:700; font-size:0.9rem; background:var(--surface-2); color:var(--text);">
+                                        <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:var(--blue); color:white; border:none; padding:4px 8px; font-size:0.8rem; border-radius:6px; cursor:pointer; font-weight:700;">OK</button>
+                                    </div>
+                                </div>
+                                
+                                <div style="background:var(--surface-2); padding:6px; border-radius:6px; border:1px dashed var(--border);">
+                                    <div style="font-size:0.7rem; color:var(--text-dim); margin-bottom:4px; font-weight:700;">🔄 АВТО-ЗАКАЗ (ШТ)</div>
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <input type="number" id="autosupply-${biz.uid}-${k}" value="${hasAutoSupply}" style="width:65px; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:0.85rem; text-align:center;">
+                                        <button onclick="UI_DASHBOARD.saveAutoSupply(${biz.uid}, '${k}')" style="background:var(--green); color:white; border:none; padding:4px 8px; font-size:0.8rem; border-radius:4px; cursor:pointer; font-weight:700;">Set</button>
+                                    </div>
                                 </div>
                             </div>
                             
-                            <div style="width: 30%; text-align:right;">
+                            <div style="width: 25%; text-align:right;">
                                 <div style="font-size:0.75rem; color:var(--text-dim);">Продано вчера</div>
                                 <div style="font-weight:800; color:var(--green); font-size:1.1rem;">${soldYesterday} шт</div>
                                 <div style="font-size:0.8rem; color:var(--text); font-weight:700;">+$${formatMoney(revYesterday)}</div>
@@ -3416,6 +3429,28 @@ const UI_DASHBOARD = {
             this.update();
         }
     },
+
+    // --- НОВАЯ ФУНКЦИЯ: Сохранение правил Автозаказа ---
+    saveAutoSupply(bizUid, itemKey) {
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (!biz) return;
+        
+        let input = document.getElementById(`autosupply-${bizUid}-${itemKey}`);
+        if (!input) return;
+        
+        let qty = parseInt(input.value) || 0;
+        if (!biz.autoSupplyRules) biz.autoSupplyRules = {};
+        
+        if (qty <= 0) {
+            delete biz.autoSupplyRules[itemKey];
+            if (typeof NOTIFY !== 'undefined') NOTIFY.info('Логистика', `Автоматическое пополнение отменено.`);
+        } else {
+            biz.autoSupplyRules[itemKey] = qty;
+            if (typeof NOTIFY !== 'undefined') NOTIFY.success('Логистика', `Автозаказ настроен. Магазин будет поддерживать запас ${qty} шт.`);
+        }
+        this.updateRetailTab(); // Перерисовываем интерфейс
+    },
+    
     // Красивое модальное окно Журнала событий
     showEventLog() {
         let oldModal = document.getElementById('event-modal');
