@@ -2851,9 +2851,9 @@ const UI_DASHBOARD = {
         let newShopHtml = `
         <div style="background:var(--surface); border-radius:16px; border:1px solid var(--border); padding:30px; text-align:center; box-shadow:var(--shadow-card); margin-top:24px;">
             <div style="font-size:3rem; margin-bottom:12px;">🛒</div>
-            <h3 style="margin:0 0 10px 0;">Открыть новый магазин</h3>
-            <p style="color:var(--text-dim); font-size:0.9rem; margin:0 0 20px 0; max-width:400px; margin-left:auto; margin-right:auto;">Масштабируйте свою розничную сеть для увеличения продаж и контроля над ценами.</p>
-            <button onclick="UI_DASHBOARD.showLocationModal('clothing_store')" class="btn-primary-lg">📍 Выбрать локацию для магазина</button>
+            <h3 style="margin:0 0 8px 0; font-size:1.5rem; color:var(--text);">Открыть новую точку</h3>
+            <p style="color:var(--text-dim); max-width:400px; margin:0 auto 20px auto;">Расширяйте свою империю! Постройте новый фирменный магазин, чтобы продавать больше продукции B2C.</p>
+            <button onclick="PRODUCTION.buyBusiness('retail_store')" style="background:linear-gradient(135deg, #2ecc71, #27ae60); color:white; font-size:1.1rem; font-weight:800; padding:14px 32px; border:none; border-radius:12px; cursor:pointer; box-shadow:0 6px 20px rgba(46,204,113,0.4); transition:0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">+ Построить Фирменный Магазин</button>
         </div>`;
 
         retailBody.innerHTML = headerHtml + activeStoresHtml + newShopHtml;
