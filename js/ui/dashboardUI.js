@@ -26,6 +26,7 @@ const UI_DASHBOARD = {
             this.updateHRTab();
             this.updateBankTab();
             this.updateFinanceTab();
+            if (typeof this.updateStockTab === 'function') this.updateStockTab();
             if (typeof this.updateB2BTab === 'function') this.updateB2BTab();
             if (typeof WIKI !== 'undefined') WIKI.render();
             
@@ -2723,11 +2724,96 @@ const UI_DASHBOARD = {
                 else alert("WIKI is undefined!");
             }
             if (tabId === 'tab-finance') this.updateFinanceTab();
+            if (tabId === 'tab-stock') {
+                if (typeof this.updateStockTab === 'function') this.updateStockTab();
+            }
             if (tabId === 'tab-b2b') this.updateB2BTab();
         } catch (e) {
             alert("Crash in switchTab (" + tabId + "):\n" + e.message);
             console.error(e);
         }
+    },
+
+    buyStock(companyId) {
+        let amount = prompt("Введите количество акций для покупки:\n(Комиссия 1.5%)", "1000");
+        if (amount) {
+            STOCK_MARKET.buyShares(companyId, amount);
+        }
+    },
+    
+    sellStock(companyId) {
+        let amount = prompt("Введите количество акций для продажи:\n(Комиссия 1.5%)", "1000");
+        if (amount) {
+            STOCK_MARKET.sellShares(companyId, amount);
+        }
+    },
+
+    updateStockTab() {
+        let container = document.getElementById('ui-stock-container');
+        if (!container || typeof STOCK_MARKET === 'undefined') return;
+        
+        let html = `
+            <div class="card" style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 10px;">Фондовая Биржа 📈</h3>
+                <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 10px;">
+                    Здесь торгуются акции корпораций. Глобальный макро-тренд: 
+                    <strong style="color: ${STATE.stockMarket.macroTrend >= 1.0 ? 'var(--green)' : 'var(--red)'}">
+                        ${(STATE.stockMarket.macroTrend * 100).toFixed(1)}%
+                    </strong>
+                </p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
+        `;
+        
+        Object.values(STATE.stockMarket.companies).forEach(comp => {
+            let hist = comp.netWorthHistory;
+            let change = 0;
+            if (hist.length >= 2) {
+                let oldPrice = hist[hist.length - 2];
+                change = ((comp.sharePrice - oldPrice) / oldPrice) * 100;
+            }
+            let changeColor = change >= 0 ? 'var(--green)' : 'var(--red)';
+            let owned = STATE.stockMarket.portfolio[comp.id] || 0;
+            
+            html += `
+                <div class="card" style="display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden;">
+                    ${comp.isAcquired ? '<div style="position:absolute; top:12px; right:12px; background:var(--blue); color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; font-weight:600;">Дочерняя компания</div>' : ''}
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h4 style="margin:0; font-size: 1.1rem; color: ${comp.isPlayer ? 'var(--blue)' : 'var(--text)'};">${comp.name}</h4>
+                            <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 4px;">Тикер: ${comp.id.toUpperCase()}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.2rem; font-weight: 700; font-family: var(--font-display);">$${comp.sharePrice.toFixed(2)}</div>
+                            <div style="font-size: 0.85rem; font-weight: 600; color: ${changeColor};">${change >= 0 ? '+' : ''}${change.toFixed(2)}%</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; background: var(--surface-2); padding: 8px 12px; border-radius: 8px;">
+                        <div>
+                            <div style="color: var(--text-dim);">Доступно на бирже</div>
+                            <div style="font-weight: 600;">${comp.sharesAvailable.toLocaleString()} шт</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="color: var(--text-dim);">В вашем портфеле</div>
+                            <div style="font-weight: 600; color: ${owned > 0 ? 'var(--blue)' : 'var(--text)'};">${owned.toLocaleString()} шт</div>
+                        </div>
+                    </div>
+                    
+                    ${!comp.isPlayer ? `
+                    <div style="display: flex; gap: 8px; margin-top: 4px;">
+                        <button onclick="UI_DASHBOARD.buyStock('${comp.id}')" style="flex: 1; background: var(--green); box-shadow: 0 4px 10px rgba(52, 199, 89, 0.2);">Купить</button>
+                        ${owned > 0 ? `<button onclick="UI_DASHBOARD.sellStock('${comp.id}')" style="flex: 1; background: var(--red); box-shadow: 0 4px 10px rgba(255, 59, 48, 0.2);">Продать</button>` : ''}
+                    </div>
+                    ` : '<div style="font-size:0.8rem; color:var(--text-dim); text-align:center;">Ваша корпорация</div>'}
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+        container.innerHTML = html;
     },
 
     submitLoan() {

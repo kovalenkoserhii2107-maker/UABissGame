@@ -45,6 +45,7 @@ const GAME = {
         }
 
         PRODUCTION.processProduction();
+        if (typeof STOCK_MARKET !== 'undefined') STOCK_MARKET.processDaily();
         MARKET.simulate();
         if (typeof B2B_AI !== 'undefined' && B2B_AI.simulateMarketActions) {
             B2B_AI.simulateMarketActions();

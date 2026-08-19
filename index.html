@@ -812,6 +812,7 @@
                 <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-hr')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">👥</span> HR</div>
                 <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-bank')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">🏦</span> Банк</div>
                 <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-finance')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📉</span> Отчетность</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-stock')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📊</span> Фондовый рынок</div>
                 <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-wiki')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📖</span> База знаний</div>
             </div>
         </nav>
@@ -1403,6 +1404,11 @@
             <div id="ui-finance-dashboard"></div>
         </div>
 
+        <!-- ВКЛАДКА: ФОНДОВЫЙ РЫНОК -->
+        <div id="tab-stock" class="tab-content">
+            <div id="ui-stock-container"></div>
+        </div>
+
         <!-- ВКЛАДКА: ВНУТРЕННЯЯ БАЗА ЗНАНИЙ (WIKI) -->
         <div id="tab-wiki" class="tab-content">
             <div id="ui-wiki-container"></div>
@@ -1424,6 +1430,7 @@
 <script src="js/managers/hr.js"></script>
 <script src="js/managers/events.js"></script>
 <script src="js/managers/b2bAI.js"></script>
+<script src="js/managers/stockMarket.js"></script>
 <script src="js/managers/rnd.js"></script>
 <script src="js/managers/ledger.js"></script>
 <script src="js/managers/warehouse.js"></script>
