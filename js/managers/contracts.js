@@ -106,7 +106,17 @@ const CONTRACTS = {
                 STATE.contracts.active.splice(i, 1);
             }
         }
-        if (Math.random() < 0.15 && STATE.contracts.available.length > 0) STATE.contracts.available.shift();
+        if (Math.random() < 0.15 && STATE.contracts.available.length > 0) {
+            let stolen = STATE.contracts.available.shift();
+            if (typeof B2B_AI !== 'undefined' && B2B_AI.competitors) {
+                let comp = B2B_AI.competitors[Math.floor(Math.random() * B2B_AI.competitors.length)];
+                if (typeof NOTIFY !== 'undefined') {
+                    let itemName = (typeof RECIPES !== 'undefined' && RECIPES.RESOURCES[stolen.item]) ? RECIPES.RESOURCES[stolen.item].name : stolen.item;
+                    NOTIFY.error('Тендер перехвачен', `Корпорация ${comp.name} перехватила госзаказ на ${stolen.qty} шт. "${itemName}" (Сумма: $${formatMoney(stolen.totalReward)}).`);
+                }
+            }
+            if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
+        }
         if (Math.random() < 0.3) this.generateContract();
     }
 };

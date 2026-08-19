@@ -46,6 +46,9 @@ const GAME = {
 
         PRODUCTION.processProduction();
         MARKET.simulate();
+        if (typeof B2B_AI !== 'undefined' && B2B_AI.simulateMarketActions) {
+            B2B_AI.simulateMarketActions();
+        }
         LOGISTICS.processDaily(); // Логистика
         RETAIL.processDaily();
         EVENTS.simulate();

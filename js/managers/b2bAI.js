@@ -150,6 +150,50 @@ const B2B_AI = {
         
         if(typeof NOTIFY !== 'undefined') NOTIFY.success('ИИ-Стратегия применена', 'Сгенерированы уникальные контракты от мега-корпораций.');
         if(typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.updateB2BTab();
+    },
+
+    simulateMarketActions() {
+        if (typeof MARKET === 'undefined' || typeof RECIPES === 'undefined' || !STATE.market || !STATE.market.pools) return;
+        
+        let marketLog = [];
+
+        this.competitors.forEach(comp => {
+            // 1. Поведение: Выкуп сырья с рынка (если цена упала ниже базовой)
+            let rawItems = Object.keys(RECIPES.RESOURCES).filter(k => RECIPES.RESOURCES[k].isRaw);
+            let targetRaw = rawItems[Math.floor(Math.random() * rawItems.length)];
+            
+            let basePriceRaw = RECIPES.RESOURCES[targetRaw].basePrice;
+            let currentPriceRaw = MARKET.getCurrentPrice(targetRaw);
+            
+            if (currentPriceRaw < basePriceRaw * 0.95 && STATE.market.pools[targetRaw] > 100) {
+                // ИИ выкупает 10-30% пула, создавая дефицит
+                let buyAmount = Math.floor(STATE.market.pools[targetRaw] * (0.1 + Math.random() * 0.2));
+                if (buyAmount > 0) {
+                    STATE.market.pools[targetRaw] -= buyAmount;
+                    if (Math.random() < 0.05) marketLog.push(`${comp.name} массово выкупает "${RECIPES.RESOURCES[targetRaw].name}" с биржи.`);
+                }
+            }
+
+            // 2. Поведение: Демпинг готовой продукции (если цена высока)
+            let finishedItems = Object.keys(RECIPES.RESOURCES).filter(k => !RECIPES.RESOURCES[k].isRaw && !RECIPES.RESOURCES[k].isEquipment);
+            let targetFinished = finishedItems[Math.floor(Math.random() * finishedItems.length)];
+            
+            let basePriceFin = RECIPES.RESOURCES[targetFinished].basePrice;
+            let currentPriceFin = MARKET.getCurrentPrice(targetFinished);
+            
+            if (currentPriceFin > basePriceFin * 1.05) {
+                // ИИ выбрасывает товар на рынок, обваливая цену
+                let dailyPool = RECIPES.RESOURCES[targetFinished].dailyMarketPool || 100;
+                let dumpAmount = Math.floor(dailyPool * (0.5 + Math.random() * 1.5 * comp.tier));
+                STATE.market.pools[targetFinished] = (STATE.market.pools[targetFinished] || 0) + dumpAmount;
+                if (Math.random() < 0.05) marketLog.push(`${comp.name} устраивает демпинг товара "${RECIPES.RESOURCES[targetFinished].name}".`);
+            }
+        });
+
+        if (marketLog.length > 0 && typeof NOTIFY !== 'undefined') {
+            // Показываем максимум 1 сообщение в день, чтобы не спамить
+            NOTIFY.info('Рыночная активность ИИ', marketLog[0]);
+        }
     }
 
 };
