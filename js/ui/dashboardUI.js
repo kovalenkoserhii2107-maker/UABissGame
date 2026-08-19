@@ -2758,72 +2758,227 @@ const UI_DASHBOARD = {
         }
     },
 
+    selectStock(companyId) {
+        if (!STATE.stockMarket) return;
+        STATE.stockMarket.selectedStock = companyId;
+        this.updateStockTab();
+    },
+
+    drawTerminalChart(companyId) {
+        let canvas = document.getElementById('terminalChart');
+        if (!canvas) return;
+        
+        let comp = STATE.stockMarket.companies[companyId];
+        if (!comp) return;
+
+        let ctx = canvas.getContext('2d');
+        if (this.terminalChartInstance) {
+            this.terminalChartInstance.destroy();
+        }
+
+        let history = comp.netWorthHistory || [];
+        let labels = history.map((_, i) => `D-${history.length - i}`);
+        
+        // Bloomberg style line: orange on black
+        let color = '#FF9500';
+
+        this.terminalChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: comp.name,
+                    data: history,
+                    borderColor: color,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    tension: 0.1,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        titleColor: '#fff',
+                        bodyColor: color,
+                        borderColor: '#333',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: {
+                        display: false,
+                        grid: { display: false }
+                    },
+                    y: {
+                        position: 'right',
+                        grid: {
+                            color: '#333',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: '#888',
+                            font: { family: 'monospace', size: 10 },
+                            callback: function(value) {
+                                return value.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+    },
+
     updateStockTab() {
         let container = document.getElementById('ui-stock-container');
         if (!container || typeof STOCK_MARKET === 'undefined' || !STATE.stockMarket) return;
         
+        if (!STATE.stockMarket.selectedStock) {
+            STATE.stockMarket.selectedStock = 'player';
+        }
+
+        let macroChange = (STATE.stockMarket.macroTrend - 1.0) * 100;
+        let macroColor = macroChange >= 0 ? '#34C759' : '#FF3B30';
+
         let html = `
-            <div class="card" style="margin-bottom: 20px;">
-                <h3 style="margin-bottom: 10px;">Фондовая Биржа 📈</h3>
-                <p style="font-size: 0.9rem; color: var(--text-dim); margin-bottom: 10px;">
-                    Здесь торгуются акции корпораций. Глобальный макро-тренд: 
-                    <strong style="color: ${STATE.stockMarket.macroTrend >= 1.0 ? 'var(--green)' : 'var(--red)'}">
-                        ${(STATE.stockMarket.macroTrend * 100).toFixed(1)}%
-                    </strong>
-                </p>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
+            <div style="background: #0d0d0d; color: #d4d4d4; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; border-radius: 8px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                <!-- Top bar -->
+                <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #333; padding-bottom: 12px; margin-bottom: 20px;">
+                    <div style="font-size: 1.4rem; color: #fff; font-weight: bold; letter-spacing: 1px;">
+                        MARKET TERMINAL <span style="font-size: 0.7rem; color: #666; font-weight: normal;">PRO</span>
+                    </div>
+                    <div style="font-size: 0.9rem;">
+                        GLOBAL MACRO: <span style="color: ${macroColor}; font-weight: bold;">${macroChange >= 0 ? '+' : ''}${macroChange.toFixed(2)}%</span>
+                    </div>
+                </div>
+                
+                <!-- Main Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                    
+                    <!-- Left: Table -->
+                    <div style="overflow-x: auto;">
+                        <div style="font-size: 0.75rem; font-weight: bold; margin-bottom: 8px; color: #888; text-transform: uppercase;">Market Instruments</div>
+                        <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.85rem;">
+                            <tr style="border-bottom: 1px solid #333; color: #666;">
+                                <th style="padding: 6px 4px; font-weight: normal;">NAME</th>
+                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">LAST</th>
+                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">NET CHNG</th>
+                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">OWNED</th>
+                                <th style="padding: 6px 4px; text-align: center; font-weight: normal;">ACT</th>
+                            </tr>
         `;
         
         Object.values(STATE.stockMarket.companies).forEach(comp => {
             let hist = comp.netWorthHistory;
             let change = 0;
+            let changeVal = 0;
             if (hist.length >= 2) {
                 let oldPrice = hist[hist.length - 2];
-                change = ((comp.sharePrice - oldPrice) / oldPrice) * 100;
+                changeVal = comp.sharePrice - oldPrice;
+                change = (changeVal / oldPrice) * 100;
             }
-            let changeColor = change >= 0 ? 'var(--green)' : 'var(--red)';
+            let changeColor = change >= 0 ? '#34C759' : '#FF3B30';
+            let changeSign = change >= 0 ? '+' : '';
             let owned = STATE.stockMarket.portfolio[comp.id] || 0;
+            let isSelected = STATE.stockMarket.selectedStock === comp.id;
             
             html += `
-                <div class="card" style="display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden;">
-                    ${comp.isAcquired ? '<div style="position:absolute; top:12px; right:12px; background:var(--blue); color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; font-weight:600;">Дочерняя компания</div>' : ''}
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <h4 style="margin:0; font-size: 1.1rem; color: ${comp.isPlayer ? 'var(--blue)' : 'var(--text)'};">${comp.name}</h4>
-                            <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 4px;">Тикер: ${comp.id.toUpperCase()}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 1.2rem; font-weight: 700; font-family: var(--font-display);">$${comp.sharePrice.toFixed(2)}</div>
-                            <div style="font-size: 0.85rem; font-weight: 600; color: ${changeColor};">${change >= 0 ? '+' : ''}${change.toFixed(2)}%</div>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; background: var(--surface-2); padding: 8px 12px; border-radius: 8px;">
-                        <div>
-                            <div style="color: var(--text-dim);">Доступно на бирже</div>
-                            <div style="font-weight: 600;">${comp.sharesAvailable.toLocaleString()} шт</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="color: var(--text-dim);">В вашем портфеле</div>
-                            <div style="font-weight: 600; color: ${owned > 0 ? 'var(--blue)' : 'var(--text)'};">${owned.toLocaleString()} шт</div>
-                        </div>
-                    </div>
-                    
-                    ${!comp.isPlayer ? `
-                    <div style="display: flex; gap: 8px; margin-top: 4px;">
-                        <button onclick="UI_DASHBOARD.buyStock('${comp.id}')" style="flex: 1; background: var(--green); box-shadow: 0 4px 10px rgba(52, 199, 89, 0.2);">Купить</button>
-                        ${owned > 0 ? `<button onclick="UI_DASHBOARD.sellStock('${comp.id}')" style="flex: 1; background: var(--red); box-shadow: 0 4px 10px rgba(255, 59, 48, 0.2);">Продать</button>` : ''}
-                    </div>
-                    ` : '<div style="font-size:0.8rem; color:var(--text-dim); text-align:center;">Ваша корпорация</div>'}
-                </div>
+                <tr style="border-bottom: 1px solid #222; background: ${isSelected ? '#1a1a1a' : 'transparent'}; cursor: pointer; transition: background 0.1s;" onclick="UI_DASHBOARD.selectStock('${comp.id}')" onmouseover="this.style.background='#1f1f1f'" onmouseout="this.style.background='${isSelected ? '#1a1a1a' : 'transparent'}'">
+                    <td style="padding: 8px 4px;">
+                        <div style="color: ${comp.isPlayer ? '#007AFF' : '#ddd'}; font-weight: bold;">${comp.name}</div>
+                        <div style="font-size: 0.65rem; color: #666;">${comp.id.toUpperCase()} ${comp.isAcquired ? '<span style="color:#007AFF;">[SUB]</span>' : ''}</div>
+                    </td>
+                    <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: #fff;">
+                        ${comp.sharePrice.toFixed(2)}
+                    </td>
+                    <td style="padding: 8px 4px; text-align: right; color: ${changeColor};">
+                        <div>${changeSign}${changeVal.toFixed(2)}</div>
+                        <div style="font-size: 0.7rem;">${changeSign}${change.toFixed(2)}%</div>
+                    </td>
+                    <td style="padding: 8px 4px; text-align: right; color: ${owned > 0 ? '#fff' : '#555'};">
+                        ${owned.toLocaleString()}
+                    </td>
+                    <td style="padding: 8px 4px; text-align: center;" onclick="event.stopPropagation()">
+                        ${!comp.isPlayer ? `
+                            <button onclick="UI_DASHBOARD.buyStock('${comp.id}')" style="background: #34C759; color: #000; border: none; padding: 2px 6px; font-size: 0.7rem; font-weight: bold; border-radius: 3px; cursor: pointer; margin-right: 2px;">B</button>
+                            ${owned > 0 ? `<button onclick="UI_DASHBOARD.sellStock('${comp.id}')" style="background: #FF3B30; color: #fff; border: none; padding: 2px 6px; font-size: 0.7rem; font-weight: bold; border-radius: 3px; cursor: pointer;">S</button>` : ''}
+                        ` : '<span style="color:#444; font-size:0.7rem;">N/A</span>'}
+                    </td>
+                </tr>
             `;
         });
         
-        html += `</div>`;
+        html += `
+                        </table>
+                    </div>
+                    
+                    <!-- Right: Chart & Details -->
+                    <div style="display: flex; flex-direction: column;">
+        `;
+        
+        let selComp = STATE.stockMarket.companies[STATE.stockMarket.selectedStock];
+        if (selComp) {
+            let hist = selComp.netWorthHistory;
+            let current = selComp.sharePrice;
+            let oldPrice = hist.length >= 2 ? hist[hist.length - 2] : current;
+            let changeVal = current - oldPrice;
+            let changeColor = changeVal >= 0 ? '#34C759' : '#FF3B30';
+            
+            html += `
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+                            <div style="font-size: 0.9rem; font-weight: bold; color: #FF9500; text-transform: uppercase;">${selComp.name} (${selComp.id.toUpperCase()})</div>
+                            <div style="display: flex; gap: 12px; align-items: baseline;">
+                                <div style="font-size: 1.3rem; font-weight: bold; color: #fff;">${current.toFixed(2)}</div>
+                                <div style="font-size: 0.9rem; color: ${changeColor};">${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="flex: 1; background: #000; border: 1px solid #333; border-radius: 4px; padding: 10px; position: relative; min-height: 250px;">
+                            <canvas id="terminalChart"></canvas>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 0.8rem; background: #111; padding: 10px; border: 1px solid #222; border-radius: 4px;">
+                            <div>
+                                <div style="color: #666; margin-bottom: 2px;">FREE FLOAT</div>
+                                <div style="color: #fff;">${selComp.sharesAvailable.toLocaleString()}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="color: #666; margin-bottom: 2px;">BROKER FEE</div>
+                                <div style="color: #fff;">1.50%</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: #666; margin-bottom: 2px;">YOUR STAKE</div>
+                                <div style="color: #007AFF;">${STATE.stockMarket.portfolio[selComp.id] ? ((STATE.stockMarket.portfolio[selComp.id] / 100000) * 100).toFixed(2) : '0.00'}%</div>
+                            </div>
+                        </div>
+            `;
+        }
+        
+        html += `
+                    </div>
+                </div>
+            </div>
+        `;
+        
         container.innerHTML = html;
+        
+        if (selComp) {
+            setTimeout(() => {
+                this.drawTerminalChart(selComp.id);
+            }, 50);
+        }
     },
 
     submitLoan() {
