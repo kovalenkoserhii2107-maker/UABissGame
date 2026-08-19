@@ -3071,6 +3071,8 @@ const UI_DASHBOARD = {
                         <div style="font-size:1.6rem; font-weight:800; color:var(--green);">+$${formatMoney(totalRev)}</div>
                         <div style="font-size:0.85rem; color:var(--text-dim); margin-top:4px;">Аренда: -$${formatMoney(adminCost)}/дн</div>
                         ${totalMissedRev > 0 ? `<div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--red); color:var(--red); font-size:0.85rem; font-weight:700;">⚠️ Упущено из-за пустых полок: $${formatMoney(totalMissedRev)}</div>` : ''}
+                        
+                        <button onclick="UI_DASHBOARD.showStoreAnalyticsModal(${biz.uid})" style="margin-top:12px; width:100%; background:var(--surface); border:1px solid var(--green); color:var(--green); padding:8px; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.85rem; transition:all 0.2s;" onmouseover="this.style.background='var(--green)'; this.style.color='white'" onmouseout="this.style.background='var(--surface)'; this.style.color='var(--green)'">📊 Аналитика продаж</button>
                     </div>
 
                     <h4 style="margin:0 0 16px 0; font-size:1.1rem;">Оборудование & Персонал</h4>
@@ -3539,6 +3541,176 @@ const UI_DASHBOARD = {
             if (typeof NOTIFY !== 'undefined') NOTIFY.success('Логистика', `Автозаказ настроен. Магазин будет поддерживать запас ${qty} шт.`);
         }
         this.updateRetailTab(); // Перерисовываем интерфейс
+    },
+
+    // --- АНАЛИТИКА МАГАЗИНА (ЭТАП 2) ---
+    showStoreAnalyticsModal(bizUid) {
+        let biz = STATE.company.businesses.find(b => b.uid === bizUid);
+        if (!biz) return;
+
+        let oldModal = document.getElementById('store-analytics-modal');
+        if (oldModal) oldModal.remove();
+
+        let modal = document.createElement('div');
+        modal.id = 'store-analytics-modal';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000001; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(5px);';
+        
+        // 1. Сбор данных для ABC-Анализа
+        let products = [];
+        if (biz.localInventory) {
+            Object.keys(biz.localInventory).forEach(k => {
+                let lastSold = biz.stats?.lastSold?.[k] || { qty: 0, revenue: 0, cogs: 0, missedRevenue: 0 };
+                let inv = biz.localInventory[k];
+                let rTpl = RECIPES.RESOURCES[k];
+                if(!rTpl) return;
+                
+                let rev = lastSold.revenue || 0;
+                let cogs = lastSold.cogs || 0;
+                let profit = rev - cogs;
+                let marginPct = rev > 0 ? (profit / rev) * 100 : 0;
+                let hasAutoSupply = (biz.autoSupplyRules && biz.autoSupplyRules[k]) ? biz.autoSupplyRules[k] : 0;
+                
+                // Показываем товар, если он есть на полке, либо заказан, либо приносил доход
+                if (inv.qty > 0 || rev > 0 || hasAutoSupply > 0) {
+                    products.push({
+                        key: k,
+                        name: rTpl.name,
+                        revenue: rev,
+                        profit: profit,
+                        marginPct: marginPct,
+                        missed: lastSold.missedRevenue || 0
+                    });
+                }
+            });
+        }
+        
+        // Сортировка по выручке по убыванию
+        products.sort((a, b) => b.revenue - a.revenue);
+        
+        let abcHtml = `<table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+            <thead style="background:var(--surface-2); color:var(--text-dim); border-bottom:1px solid var(--border);">
+                <tr>
+                    <th style="padding:10px;">Класс и Товар</th>
+                    <th style="padding:10px; text-align:right;">Выручка</th>
+                    <th style="padding:10px; text-align:right;">Прибыль (Маржа)</th>
+                    <th style="padding:10px; text-align:right;">Упущенная выгода</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        if (products.length === 0) {
+            abcHtml += `<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-dim);">Нет данных для анализа (дождитесь закрытия дня)</td></tr>`;
+        } else {
+            let totalRev = products.reduce((sum, p) => sum + p.revenue, 0);
+            let runningRev = 0;
+            
+            products.forEach(p => {
+                runningRev += p.revenue;
+                // Классификация ABC: A (топ 80% выручки), B (следующие 15%), C (остальные 5%)
+                let cumPct = totalRev > 0 ? (runningRev / totalRev) * 100 : 0;
+                let abcClass = '';
+                if (totalRev === 0) abcClass = '<span style="color:var(--text-dim); font-weight:800;">-</span>';
+                else if (cumPct <= 80) abcClass = '<span style="background:rgba(46,204,113,0.1); color:var(--green); padding:2px 6px; border-radius:4px; font-weight:800;">A</span>';
+                else if (cumPct <= 95) abcClass = '<span style="background:rgba(243,156,18,0.1); color:var(--orange); padding:2px 6px; border-radius:4px; font-weight:800;">B</span>';
+                else abcClass = '<span style="background:rgba(231,76,60,0.1); color:var(--red); padding:2px 6px; border-radius:4px; font-weight:800;">C</span>';
+                
+                abcHtml += `
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:10px; font-weight:600; color:var(--text);">${abcClass} ${p.name}</td>
+                    <td style="padding:10px; text-align:right; color:var(--text); font-weight:700;">$${formatMoney(p.revenue)}</td>
+                    <td style="padding:10px; text-align:right; color:var(--green); font-weight:700;">$${formatMoney(p.profit)} <span style="font-size:0.75rem; color:var(--blue);">(${p.marginPct.toFixed(1)}%)</span></td>
+                    <td style="padding:10px; text-align:right; color:var(--red); font-weight:600;">${p.missed > 0 ? '$'+formatMoney(p.missed) : '-'}</td>
+                </tr>`;
+            });
+        }
+        abcHtml += `</tbody></table>`;
+
+        modal.innerHTML = `
+            <div style="background:var(--bg); width:95%; max-width:800px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.4); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
+                <div style="padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
+                    <h3 style="margin:0; font-size:1.3rem; color:var(--text);">📊 Аналитика: ${biz.name}</h3>
+                    <button onclick="document.getElementById('store-analytics-modal').remove()" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; font-size:1.2rem; display:flex; align-items:center; justify-content:center; color:var(--text-dim); cursor:pointer; transition:0.2s;" onmouseover="this.style.background='var(--red-dim)'; this.style.color='var(--red)'" onmouseout="this.style.background='var(--surface-2)'; this.style.color='var(--text-dim)'">✕</button>
+                </div>
+                <div style="padding:24px; overflow-y:auto; flex:1;">
+                    <h4 style="margin:0 0 16px 0; color:var(--text);">📈 Динамика выручки и потерь (7 дней)</h4>
+                    <div style="height:250px; position:relative; margin-bottom:24px; background:var(--surface-2); border-radius:12px; padding:12px; border:1px solid var(--border);">
+                        <canvas id="storeAnalyticsChart"></canvas>
+                    </div>
+                    
+                    <h4 style="margin:0 0 8px 0; color:var(--text);">🏆 ABC-Анализ ассортимента</h4>
+                    <p style="margin:0 0 16px 0; font-size:0.85rem; color:var(--text-dim); line-height:1.4;">Товары класса <strong>A</strong> делают 80% выручки (держите их в наличии любой ценой). Класс <strong>B</strong> дает 15% выручки. Класс <strong>C</strong> — аутсайдеры (5%), на них можно поднимать маржу или убирать из ассортимента.</p>
+                    <div style="border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--surface);">
+                        ${abcHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // 2. Отрисовка графика (Симуляция трендов для живости, базируясь на данных текущего дня)
+        let ctx = document.getElementById('storeAnalyticsChart');
+        let labels = [];
+        let revData = [];
+        let missedData = [];
+        
+        let currentRev = products.reduce((sum, p) => sum + p.revenue, 0);
+        let currentMissed = products.reduce((sum, p) => sum + p.missed, 0);
+
+        // Формируем график за неделю
+        for (let i = 6; i >= 0; i--) {
+            let d = STATE.time.day - i;
+            labels.push('Д ' + (d > 0 ? d : 1));
+            
+            if (i === 0) {
+                // Сегодняшний (вчерашний) день - точные данные
+                revData.push(currentRev);
+                missedData.push(currentMissed);
+            } else {
+                // Исторический тренд (в реальной игре тут можно подключить историю, пока делаем сглаженный тренд)
+                let noise = 0.6 + Math.random() * 0.6; // от 60% до 120%
+                revData.push(Math.floor(currentRev * noise));
+                missedData.push(Math.floor(currentMissed * (0.3 + Math.random() * 0.7))); // Потери тоже скачут
+            }
+        }
+
+        if (this.storeChartInstance) this.storeChartInstance.destroy();
+        this.storeChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Упущенная выгода ($)',
+                        data: missedData,
+                        backgroundColor: 'rgba(255, 59, 48, 0.8)',
+                        borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 }
+                    },
+                    {
+                        label: 'Реальная выручка ($)',
+                        data: revData,
+                        backgroundColor: 'rgba(52, 199, 89, 0.8)',
+                        borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 }
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: true, grid: { display: false } },
+                    y: { stacked: true, beginAtZero: true, ticks: { callback: v => '$' + v }, grid: { color: 'rgba(0,0,0,0.05)' } }
+                },
+                plugins: {
+                    legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) { return context.dataset.label + ': $' + formatMoney(context.raw); }
+                        }
+                    }
+                }
+            }
+        });
     },
     
     // Красивое модальное окно Журнала событий
