@@ -2951,6 +2951,7 @@ const UI_DASHBOARD = {
         let invHtml = '';
         let totalSold = 0;
         let totalRev = 0;
+        let totalMissedRev = 0; // НОВАЯ ПЕРЕМЕННАЯ
 
         if (biz.localInventory) {
             Object.keys(biz.localInventory).forEach(k => {
@@ -2973,12 +2974,14 @@ const UI_DASHBOARD = {
                     let margin = inv.avgCost > 0 ? (retailPrice / inv.avgCost) : (retailPrice / basePrice);
                     let markupFromAnchor = retailPrice / anchorRetailPrice;
                     let marginColor = markupFromAnchor > 1.2 ? 'var(--red)' : (markupFromAnchor > 1.0 ? 'var(--orange)' : 'var(--green)');
-
+                    
                     let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
+                    let missedRevYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? (biz.stats.lastSold[k].missedRevenue || 0) : 0;
                     let stockCogs = inv.qty * inv.avgCost; 
 
                     totalSold += soldYesterday;
                     totalRev += revYesterday;
+                    totalMissedRev += missedRevYesterday; // Плюсуем потери
 
                     let icon = UI_DASHBOARD._resIcons && UI_DASHBOARD._resIcons[k] ? UI_DASHBOARD._resIcons[k] : '📦';
 
@@ -3020,11 +3023,12 @@ const UI_DASHBOARD = {
                             </div>
                         </div>
                         
-                        <div style="width: 25%; text-align:right;">
-                            <div style="font-size:0.85rem; color:var(--text-dim);">Продано вчера</div>
-                            <div style="font-weight:800; color:var(--green); font-size:1.1rem;">${soldYesterday} шт</div>
-                            <div style="font-size:0.9rem; color:var(--text); font-weight:700;">+$${formatMoney(revYesterday)}</div>
-                        </div>
+                            <div style="width: 25%; text-align:right;">
+                                <div style="font-size:0.85rem; color:var(--text-dim);">Продано вчера</div>
+                                <div style="font-weight:800; color:var(--green); font-size:1.1rem;">${soldYesterday} шт</div>
+                                <div style="font-size:0.9rem; color:var(--text); font-weight:700;">+$${formatMoney(revYesterday)}</div>
+                                ${missedRevYesterday > 0 ? `<div style="font-size:0.75rem; color:var(--red); font-weight:700; margin-top:6px; padding-top:4px; border-top:1px dashed var(--red);">Упущено: $${formatMoney(missedRevYesterday)}</div>` : ''}
+                            </div>
                     </div>`;
                 }
             });
@@ -3062,10 +3066,11 @@ const UI_DASHBOARD = {
                 <!-- КОЛОНКА 2: МЕБЕЛЬ И ПЕРСОНАЛ -->
                 <div style="flex:1; min-width:350px;">
                     <!-- Выручка сводка -->
-                    <div style="background:linear-gradient(135deg, rgba(46,204,113,0.1), rgba(39,174,96,0.05)); border:1px solid rgba(46,204,113,0.3); border-radius:12px; padding:16px; margin-bottom:16px; text-align:center;">
+                    <div style="background:linear-gradient(135deg, rgba(46,204,113,0.1), rgba(39,174,96,0.05)); border:1px solid rgba(46,204,113,0.3); border-radius:12px; padding:16px; margin-bottom:16px; text-align:center; position:relative;">
                         <div style="font-size:0.85rem; color:var(--text-dim); text-transform:uppercase; font-weight:800;">ВЫРУЧКА ЗА ВЧЕРА</div>
                         <div style="font-size:1.6rem; font-weight:800; color:var(--green);">+$${formatMoney(totalRev)}</div>
                         <div style="font-size:0.85rem; color:var(--text-dim); margin-top:4px;">Аренда: -$${formatMoney(adminCost)}/дн</div>
+                        ${totalMissedRev > 0 ? `<div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--red); color:var(--red); font-size:0.85rem; font-weight:700;">⚠️ Упущено из-за пустых полок: $${formatMoney(totalMissedRev)}</div>` : ''}
                     </div>
 
                     <h4 style="margin:0 0 16px 0; font-size:1.1rem;">Оборудование & Персонал</h4>
