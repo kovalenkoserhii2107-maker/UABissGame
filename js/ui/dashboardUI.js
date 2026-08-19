@@ -2779,8 +2779,8 @@ const UI_DASHBOARD = {
         let history = comp.netWorthHistory || [];
         let labels = history.map((_, i) => `D-${history.length - i}`);
         
-        // Bloomberg style line: orange on black
-        let color = '#FF9500';
+        // App style line: blue
+        let color = '#007AFF';
 
         this.terminalChartInstance = new Chart(ctx, {
             type: 'line',
@@ -2790,11 +2790,12 @@ const UI_DASHBOARD = {
                     label: comp.name,
                     data: history,
                     borderColor: color,
+                    backgroundColor: 'rgba(0, 122, 255, 0.1)',
                     borderWidth: 2,
                     pointRadius: 0,
                     pointHoverRadius: 4,
-                    tension: 0.1,
-                    fill: false
+                    tension: 0.2,
+                    fill: true
                 }]
             },
             options: {
@@ -2805,10 +2806,10 @@ const UI_DASHBOARD = {
                     tooltip: {
                         mode: 'index',
                         intersect: false,
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        titleColor: '#fff',
-                        bodyColor: color,
-                        borderColor: '#333',
+                        backgroundColor: 'rgba(255,255,255,0.9)',
+                        titleColor: '#333',
+                        bodyColor: '#333',
+                        borderColor: '#ddd',
                         borderWidth: 1
                     }
                 },
@@ -2820,12 +2821,12 @@ const UI_DASHBOARD = {
                     y: {
                         position: 'right',
                         grid: {
-                            color: '#333',
+                            color: '#eee',
                             drawBorder: false
                         },
                         ticks: {
                             color: '#888',
-                            font: { family: 'monospace', size: 10 },
+                            font: { family: 'inherit', size: 10 },
                             callback: function(value) {
                                 return value.toFixed(2);
                             }
@@ -2845,19 +2846,19 @@ const UI_DASHBOARD = {
         let container = document.getElementById('ui-stock-container');
         if (!container || typeof STOCK_MARKET === 'undefined' || !STATE.stockMarket) return;
         
-        if (!STATE.stockMarket.selectedStock) {
-            STATE.stockMarket.selectedStock = 'player';
+        if (!STATE.stockMarket.selectedStock || !STATE.stockMarket.companies[STATE.stockMarket.selectedStock]) {
+            STATE.stockMarket.selectedStock = STATE.stockMarket.companies['player'] ? 'player' : Object.keys(STATE.stockMarket.companies)[0];
         }
 
         let macroChange = (STATE.stockMarket.macroTrend - 1.0) * 100;
         let macroColor = macroChange >= 0 ? '#34C759' : '#FF3B30';
 
         let html = `
-            <div style="background: #0d0d0d; color: #d4d4d4; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; border-radius: 8px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <div class="card" style="margin-bottom: 20px;">
                 <!-- Top bar -->
-                <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #333; padding-bottom: 12px; margin-bottom: 20px;">
-                    <div style="font-size: 1.4rem; color: #fff; font-weight: bold; letter-spacing: 1px;">
-                        MARKET TERMINAL <span style="font-size: 0.7rem; color: #666; font-weight: normal;">PRO</span>
+                <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--border); padding-bottom: 12px; margin-bottom: 20px;">
+                    <div style="font-size: 1.4rem; color: var(--text); font-weight: bold; letter-spacing: 1px;">
+                        Фондовая Биржа <span style="font-size: 0.7rem; color: var(--text-dim); font-weight: normal;">MARKET</span>
                     </div>
                     <div style="font-size: 0.9rem;">
                         GLOBAL MACRO: <span style="color: ${macroColor}; font-weight: bold;">${macroChange >= 0 ? '+' : ''}${macroChange.toFixed(2)}%</span>
@@ -2869,14 +2870,14 @@ const UI_DASHBOARD = {
                     
                     <!-- Left: Table -->
                     <div style="overflow-x: auto;">
-                        <div style="font-size: 0.75rem; font-weight: bold; margin-bottom: 8px; color: #888; text-transform: uppercase;">Market Instruments</div>
+                        <div style="font-size: 0.75rem; font-weight: bold; margin-bottom: 8px; color: var(--text-dim); text-transform: uppercase;">Рыночные активы</div>
                         <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.85rem;">
-                            <tr style="border-bottom: 1px solid #333; color: #666;">
-                                <th style="padding: 6px 4px; font-weight: normal;">NAME</th>
-                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">LAST</th>
-                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">NET CHNG</th>
-                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">OWNED</th>
-                                <th style="padding: 6px 4px; text-align: center; font-weight: normal;">ACT</th>
+                            <tr style="border-bottom: 1px solid var(--border); color: var(--text-dim);">
+                                <th style="padding: 6px 4px; font-weight: normal;">КОМПАНИЯ</th>
+                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">ЦЕНА</th>
+                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">ИЗМЕНЕНИЕ</th>
+                                <th style="padding: 6px 4px; text-align: right; font-weight: normal;">В ПОРТФЕЛЕ</th>
+                                <th style="padding: 6px 4px; text-align: center; font-weight: normal;">ДЕЙСТВИЕ</th>
                             </tr>
         `;
         
@@ -2889,32 +2890,32 @@ const UI_DASHBOARD = {
                 changeVal = comp.sharePrice - oldPrice;
                 change = (changeVal / oldPrice) * 100;
             }
-            let changeColor = change >= 0 ? '#34C759' : '#FF3B30';
+            let changeColor = change >= 0 ? 'var(--green)' : 'var(--red)';
             let changeSign = change >= 0 ? '+' : '';
             let owned = STATE.stockMarket.portfolio[comp.id] || 0;
             let isSelected = STATE.stockMarket.selectedStock === comp.id;
             
             html += `
-                <tr style="border-bottom: 1px solid #222; background: ${isSelected ? '#1a1a1a' : 'transparent'}; cursor: pointer; transition: background 0.1s;" onclick="UI_DASHBOARD.selectStock('${comp.id}')" onmouseover="this.style.background='#1f1f1f'" onmouseout="this.style.background='${isSelected ? '#1a1a1a' : 'transparent'}'">
+                <tr style="border-bottom: 1px solid var(--border); background: ${isSelected ? 'var(--surface-2)' : 'transparent'}; cursor: pointer; transition: background 0.1s;" onclick="UI_DASHBOARD.selectStock('${comp.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='${isSelected ? 'var(--surface-2)' : 'transparent'}'">
                     <td style="padding: 8px 4px;">
-                        <div style="color: ${comp.isPlayer ? '#007AFF' : '#ddd'}; font-weight: bold;">${comp.name}</div>
-                        <div style="font-size: 0.65rem; color: #666;">${comp.id.toUpperCase()} ${comp.isAcquired ? '<span style="color:#007AFF;">[SUB]</span>' : ''}</div>
+                        <div style="color: ${comp.isPlayer ? 'var(--blue)' : 'var(--text)'}; font-weight: bold;">${comp.name}</div>
+                        <div style="font-size: 0.65rem; color: var(--text-dim);">${comp.id.toUpperCase()} ${comp.isAcquired ? '<span style="color:var(--blue);">[SUB]</span>' : ''}</div>
                     </td>
-                    <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: #fff;">
-                        ${comp.sharePrice.toFixed(2)}
+                    <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: var(--text);">
+                        $${comp.sharePrice.toFixed(2)}
                     </td>
                     <td style="padding: 8px 4px; text-align: right; color: ${changeColor};">
-                        <div>${changeSign}${changeVal.toFixed(2)}</div>
+                        <div>${changeSign}$${changeVal.toFixed(2)}</div>
                         <div style="font-size: 0.7rem;">${changeSign}${change.toFixed(2)}%</div>
                     </td>
-                    <td style="padding: 8px 4px; text-align: right; color: ${owned > 0 ? '#fff' : '#555'};">
+                    <td style="padding: 8px 4px; text-align: right; color: ${owned > 0 ? 'var(--blue)' : 'var(--text-dim)'}; font-weight: ${owned > 0 ? 'bold' : 'normal'};">
                         ${owned.toLocaleString()}
                     </td>
                     <td style="padding: 8px 4px; text-align: center;" onclick="event.stopPropagation()">
                         ${!comp.isPlayer ? `
-                            <button onclick="UI_DASHBOARD.buyStock('${comp.id}')" style="background: #34C759; color: #000; border: none; padding: 2px 6px; font-size: 0.7rem; font-weight: bold; border-radius: 3px; cursor: pointer; margin-right: 2px;">B</button>
-                            ${owned > 0 ? `<button onclick="UI_DASHBOARD.sellStock('${comp.id}')" style="background: #FF3B30; color: #fff; border: none; padding: 2px 6px; font-size: 0.7rem; font-weight: bold; border-radius: 3px; cursor: pointer;">S</button>` : ''}
-                        ` : '<span style="color:#444; font-size:0.7rem;">N/A</span>'}
+                            <button onclick="UI_DASHBOARD.buyStock('${comp.id}')" style="background: var(--green); box-shadow: 0 4px 10px rgba(52, 199, 89, 0.2); color: white; border: none; padding: 4px 8px; font-size: 0.7rem; font-weight: bold; border-radius: 4px; cursor: pointer; margin-right: 4px;">Купить</button>
+                            ${owned > 0 ? `<button onclick="UI_DASHBOARD.sellStock('${comp.id}')" style="background: var(--red); box-shadow: 0 4px 10px rgba(255, 59, 48, 0.2); color: white; border: none; padding: 4px 8px; font-size: 0.7rem; font-weight: bold; border-radius: 4px; cursor: pointer;">Продать</button>` : ''}
+                        ` : '<span style="color:var(--text-dim); font-size:0.75rem;">N/A</span>'}
                     </td>
                 </tr>
             `;
@@ -2934,33 +2935,33 @@ const UI_DASHBOARD = {
             let current = selComp.sharePrice;
             let oldPrice = hist.length >= 2 ? hist[hist.length - 2] : current;
             let changeVal = current - oldPrice;
-            let changeColor = changeVal >= 0 ? '#34C759' : '#FF3B30';
+            let changeColor = changeVal >= 0 ? 'var(--green)' : 'var(--red)';
             
             html += `
                         <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
-                            <div style="font-size: 0.9rem; font-weight: bold; color: #FF9500; text-transform: uppercase;">${selComp.name} (${selComp.id.toUpperCase()})</div>
+                            <div style="font-size: 1rem; font-weight: bold; color: var(--text); text-transform: uppercase;">${selComp.name} (${selComp.id.toUpperCase()})</div>
                             <div style="display: flex; gap: 12px; align-items: baseline;">
-                                <div style="font-size: 1.3rem; font-weight: bold; color: #fff;">${current.toFixed(2)}</div>
-                                <div style="font-size: 0.9rem; color: ${changeColor};">${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}</div>
+                                <div style="font-size: 1.4rem; font-weight: bold; color: var(--text);">$${current.toFixed(2)}</div>
+                                <div style="font-size: 0.9rem; color: ${changeColor}; font-weight: bold;">${changeVal >= 0 ? '+' : ''}$${changeVal.toFixed(2)}</div>
                             </div>
                         </div>
                         
-                        <div style="flex: 1; background: #000; border: 1px solid #333; border-radius: 4px; padding: 10px; position: relative; min-height: 250px;">
+                        <div style="flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px; position: relative; min-height: 250px;">
                             <canvas id="terminalChart"></canvas>
                         </div>
                         
-                        <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 0.8rem; background: #111; padding: 10px; border: 1px solid #222; border-radius: 4px;">
+                        <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 0.85rem; background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <div>
-                                <div style="color: #666; margin-bottom: 2px;">FREE FLOAT</div>
-                                <div style="color: #fff;">${selComp.sharesAvailable.toLocaleString()}</div>
+                                <div style="color: var(--text-dim); margin-bottom: 2px;">Доступно на рынке</div>
+                                <div style="color: var(--text); font-weight: bold;">${selComp.sharesAvailable.toLocaleString()} шт</div>
                             </div>
                             <div style="text-align: center;">
-                                <div style="color: #666; margin-bottom: 2px;">BROKER FEE</div>
-                                <div style="color: #fff;">1.50%</div>
+                                <div style="color: var(--text-dim); margin-bottom: 2px;">Комиссия брокера</div>
+                                <div style="color: var(--text); font-weight: bold;">1.50%</div>
                             </div>
                             <div style="text-align: right;">
-                                <div style="color: #666; margin-bottom: 2px;">YOUR STAKE</div>
-                                <div style="color: #007AFF;">${STATE.stockMarket.portfolio[selComp.id] ? ((STATE.stockMarket.portfolio[selComp.id] / 100000) * 100).toFixed(2) : '0.00'}%</div>
+                                <div style="color: var(--text-dim); margin-bottom: 2px;">Ваша доля компании</div>
+                                <div style="color: var(--blue); font-weight: bold;">${STATE.stockMarket.portfolio[selComp.id] ? ((STATE.stockMarket.portfolio[selComp.id] / 100000) * 100).toFixed(2) : '0.00'}%</div>
                             </div>
                         </div>
             `;

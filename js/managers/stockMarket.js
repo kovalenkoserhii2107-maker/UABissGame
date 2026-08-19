@@ -14,17 +14,7 @@ const STOCK_MARKET = {
             };
         }
         
-        // Инициализация компании игрока
-        if (!STATE.stockMarket.companies['player']) {
-            STATE.stockMarket.companies['player'] = {
-                id: 'player',
-                name: 'Моя Корпорация',
-                netWorthHistory: [],
-                sharePrice: 10,
-                sharesAvailable: this.TOTAL_SHARES * this.FREE_FLOAT_PERCENT,
-                isPlayer: true
-            };
-        }
+        // Инициализация компании игрока происходит теперь только после достижения капитализации $500,000 (в processDaily)
 
         // Инициализация NPC компаний
         if (typeof B2B_AI !== 'undefined' && B2B_AI.competitors) {
@@ -56,6 +46,22 @@ const STOCK_MARKET = {
         STATE.stockMarket.macroTrend += trendShift;
         if (STATE.stockMarket.macroTrend > 1.5) STATE.stockMarket.macroTrend = 1.5;
         if (STATE.stockMarket.macroTrend < 0.5) STATE.stockMarket.macroTrend = 0.5;
+
+        // 1.5 Проверка на IPO (Выход компании игрока на биржу)
+        let playerNetWorth = typeof FINANCE !== 'undefined' ? FINANCE.calculateNetWorth() : 0;
+        if (!STATE.stockMarket.companies['player'] && playerNetWorth >= 500000) {
+            STATE.stockMarket.companies['player'] = {
+                id: 'player',
+                name: (STATE.company && STATE.company.name) ? STATE.company.name : 'Моя Корпорация',
+                netWorthHistory: [],
+                sharePrice: playerNetWorth / this.TOTAL_SHARES,
+                sharesAvailable: this.TOTAL_SHARES * this.FREE_FLOAT_PERCENT,
+                isPlayer: true
+            };
+            if (typeof NOTIFY !== 'undefined') {
+                NOTIFY.success('Выход на IPO 📈', 'Поздравляем! Капитализация достигла $500,000. Ваши акции теперь торгуются на бирже.');
+            }
+        }
 
         // 2. Обновление котировок для всех компаний
         Object.keys(STATE.stockMarket.companies).forEach(id => {
