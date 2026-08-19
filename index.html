@@ -229,10 +229,10 @@
     /* Горизонтальный свайп вкладок (ПК) */
     .tabs-wrap {
         position: sticky;
-        top: 160px; /* ✅ Высота шапки на ПК (Тикер + Панель), чтобы меню не пряталось под неё */
+        top: 130px; /* ✅ Оптимальная высота, чтобы не было зазора и не перекрывало */
         z-index: 99;
         display: flex;
-        justify-content: center; /* Центрируем вкладки на ПК */
+        justify-content: flex-start; /* Изменено с center, чтобы не обрезало левый край при переполнении */
         padding: 12px 16px 12px;
         background: rgba(245, 245, 247, 0.92);
         backdrop-filter: blur(20px);
@@ -335,16 +335,24 @@
         .header-inner > div:last-child {
             order: 2;
             display: flex !important;
-            gap: 4px !important;
+            flex-wrap: nowrap !important; /* ЗАПРЕЩАЕМ ПЕРЕНОС КНОПОК */
+            gap: 6px !important; /* чуть больше расстояние */
             justify-content: flex-end;
-            margin-right: 4px !important;
+            margin-right: 6px !important; /* сместить левее */
+            flex: 1;
+            overflow-x: auto;
+            scrollbar-width: none; /* прячем скроллбар если не влезет */
         }
+        .header-inner > div:last-child::-webkit-scrollbar { display: none; }
+        
         .header-inner > div:last-child button {
             padding: 4px 6px !important;
             font-size: 0.6rem !important;
             min-height: 26px !important;
             border-radius: 6px !important;
             gap: 3px !important;
+            white-space: nowrap !important; /* Текст внутри кнопок не переносится */
+            flex-shrink: 0 !important; /* Запрещаем кнопкам сжиматься до неузнаваемости */
         }
         .header-inner > div:last-child button span {
             font-size: 0.75rem !important;
