@@ -1980,8 +1980,8 @@ const UI_DASHBOARD = {
         if (document.getElementById('ui-col-fixed')) document.getElementById('ui-col-fixed').innerText = '$' + formatMoney(assets.fixedAssets * 0.70);
         if (document.getElementById('ui-col-inv')) document.getElementById('ui-col-inv').innerText = '$' + formatMoney(assets.inventoryValue * 0.50);
         
-        let totalDebt = assets.totalLiabilities;
-        let debtRatio = assets.netWorth > 0 ? (totalDebt / assets.netWorth) : (totalDebt > 0 ? 1 : 0);
+        let currentDebt = assets.totalLiabilities;
+        let debtRatio = assets.netWorth > 0 ? (currentDebt / assets.netWorth) : (currentDebt > 0 ? 1 : 0);
         
         if (document.getElementById('ui-debt-ratio')) {
             let drEl = document.getElementById('ui-debt-ratio');
