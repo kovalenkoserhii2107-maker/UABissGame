@@ -229,11 +229,12 @@
     /* Горизонтальный свайп вкладок (ПК) */
     .tabs-wrap {
         position: sticky;
-        top: 175px; /* Взял с запасом, чтобы шапка точно не перекрывала вкладки */
+        top: 147px; /* Идеальная стыковка с шапкой (без зазора) */
         z-index: 99;
         display: flex;
         justify-content: center; /* Центрируем вкладки на ПК, как просил пользователь */
-        padding: 12px 16px 12px;
+        align-items: center; /* Центрируем по вертикали */
+        padding: 12px 16px !important; /* Перебиваем кривой inline-стиль из HTML */
         background: rgba(245, 245, 247, 0.92);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
