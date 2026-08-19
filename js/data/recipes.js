@@ -3,54 +3,54 @@ const RECIPES = {
     // Ресурсы, которые могут лежать на складе
     RESOURCES: {
         // --- НОВЫЙ БЛОК: Агросектор и Пищевая промышленность (FMCG) ---
-        grain:       { name: 'Зерно (Пшеница)', isRaw: true, volume: 0.5, basePrice: 1, dailyMarketPool: 50000 },
-        vegetables:  { name: 'Свежие овощи и фрукты', isRaw: false, volume: 0.3, basePrice: 3, dailyMarketPool: 20000 },
-        meat_raw:    { name: 'Сырое мясо', isRaw: true, volume: 0.4, basePrice: 6, dailyMarketPool: 10000 },
-        milk_raw:    { name: 'Сырое молоко', isRaw: true, volume: 0.2, basePrice: 2, dailyMarketPool: 15000 },
-        bakery:      { name: 'Хлеб и Выпечка', isRaw: false, volume: 0.2, basePrice: 5, dailyMarketPool: 15000 },
-        canned_food: { name: 'Бакалея и Консервы', isRaw: false, volume: 0.2, basePrice: 10, dailyMarketPool: 8000 },
+        grain:       { name: 'Зерно (Пшеница)', isRaw: true, volume: 0.003, basePrice: 1, dailyMarketPool: 50000 },
+        vegetables:  { name: 'Свежие овощи и фрукты', isRaw: false, volume: 0.005, basePrice: 3, dailyMarketPool: 20000 },
+        meat_raw:    { name: 'Сырое мясо', isRaw: true, volume: 0.002, basePrice: 6, dailyMarketPool: 10000 },
+        milk_raw:    { name: 'Сырое молоко', isRaw: true, volume: 0.002, basePrice: 2, dailyMarketPool: 15000 },
+        bakery:      { name: 'Хлеб и Выпечка', isRaw: false, volume: 0.010, basePrice: 5, dailyMarketPool: 15000 },
+        canned_food: { name: 'Бакалея и Консервы', isRaw: false, volume: 0.005, basePrice: 10, dailyMarketPool: 8000 },
 
         // --- НОВЫЙ БЛОК: Легкая промышленность и Быт ---
-        cotton:      { name: 'Хлопок / Ткань', isRaw: true, volume: 0.5, basePrice: 4, dailyMarketPool: 10000 },
-        wood:        { name: 'Древесина / Доски', isRaw: true, volume: 2.0, basePrice: 5, dailyMarketPool: 8000 },
-        chemicals:   { name: 'Хим. реагенты', isRaw: true, volume: 0.2, basePrice: 8, dailyMarketPool: 5000 },
+        cotton:      { name: 'Хлопок / Ткань', isRaw: true, volume: 0.02, basePrice: 4, dailyMarketPool: 10000 },
+        wood:        { name: 'Древесина / Доски', isRaw: true, volume: 0.05, basePrice: 5, dailyMarketPool: 8000 },
+        chemicals:   { name: 'Хим. реагенты', isRaw: true, volume: 0.005, basePrice: 8, dailyMarketPool: 5000 },
         
-        detergent:   { name: 'Бытовая химия', isRaw: false, volume: 0.3, basePrice: 15, dailyMarketPool: 5000 },
-        clothing:    { name: 'Одежда (Масс-маркет)', isRaw: false, volume: 0.5, basePrice: 35, dailyMarketPool: 3000 },
-        toys:        { name: 'Детские игрушки', isRaw: false, volume: 0.8, basePrice: 25, dailyMarketPool: 4000 },
-        furniture:   { name: 'Мебель (Эконом)', isRaw: false, volume: 4.0, basePrice: 120, dailyMarketPool: 500 },
+        detergent:   { name: 'Бытовая химия', isRaw: false, volume: 0.01, basePrice: 15, dailyMarketPool: 5000 },
+        clothing:    { name: 'Одежда (Масс-маркет)', isRaw: false, volume: 0.01, basePrice: 35, dailyMarketPool: 3000 },
+        toys:        { name: 'Детские игрушки', isRaw: false, volume: 0.02, basePrice: 25, dailyMarketPool: 4000 },
+        furniture:   { name: 'Мебель (Эконом)', isRaw: false, volume: 0.5, basePrice: 120, dailyMarketPool: 500 },
 
         // --- TIER 1: Сырьевая база (Милитари / Тех) ---
-        plastic:  { name: 'ABS Пластик', isRaw: true, volume: 0.2, basePrice: 2, dailyMarketPool: 10000 },
-        glass:    { name: 'Стекло (Оптика)', isRaw: true, volume: 0.3, basePrice: 3, dailyMarketPool: 8000 },
-        silicon:  { name: 'Кремний (Тех.)', isRaw: true, volume: 0.1, basePrice: 5, dailyMarketPool: 5000 },
-        copper:   { name: 'Медь (Прокат)', isRaw: true, volume: 0.2, basePrice: 6, dailyMarketPool: 4000 },
-        aluminum: { name: 'Алюминий', isRaw: true, volume: 0.4, basePrice: 8, dailyMarketPool: 4000 },
-        lithium:  { name: 'Литий', isRaw: true, volume: 0.1, basePrice: 12, dailyMarketPool: 2000 },
+        plastic:  { name: 'ABS Пластик', isRaw: true, volume: 0.005, basePrice: 2, dailyMarketPool: 10000 },
+        glass:    { name: 'Стекло (Оптика)', isRaw: true, volume: 0.005, basePrice: 3, dailyMarketPool: 8000 },
+        silicon:  { name: 'Кремний (Тех.)', isRaw: true, volume: 0.001, basePrice: 5, dailyMarketPool: 5000 },
+        copper:   { name: 'Медь (Прокат)', isRaw: true, volume: 0.001, basePrice: 6, dailyMarketPool: 4000 },
+        aluminum: { name: 'Алюминий', isRaw: true, volume: 0.001, basePrice: 8, dailyMarketPool: 4000 },
+        lithium:  { name: 'Литий', isRaw: true, volume: 0.001, basePrice: 12, dailyMarketPool: 2000 },
 
         // --- TIER 2: Базовые компоненты ---
-        parts3d:  { name: '3D Детали', isRaw: false, volume: 1.0, basePrice: 12, dailyMarketPool: 1000 },
-        optics:   { name: 'Оптика', isRaw: false, volume: 0.5, basePrice: 18, dailyMarketPool: 800 },
-        chips:    { name: 'Микросхемы', isRaw: false, volume: 0.1, basePrice: 25, dailyMarketPool: 600 },
-        motors:   { name: 'Сервоприводы', isRaw: false, volume: 0.5, basePrice: 35, dailyMarketPool: 400 },
-        batteries:{ name: 'Аккумуляторы', isRaw: false, volume: 0.4, basePrice: 40, dailyMarketPool: 300 },
+        parts3d:  { name: '3D Детали', isRaw: false, volume: 0.005, basePrice: 12, dailyMarketPool: 1000 },
+        optics:   { name: 'Оптика', isRaw: false, volume: 0.002, basePrice: 18, dailyMarketPool: 800 },
+        chips:    { name: 'Микросхемы', isRaw: false, volume: 0.001, basePrice: 25, dailyMarketPool: 600 },
+        motors:   { name: 'Сервоприводы', isRaw: false, volume: 0.002, basePrice: 35, dailyMarketPool: 400 },
+        batteries:{ name: 'Аккумуляторы', isRaw: false, volume: 0.001, basePrice: 40, dailyMarketPool: 300 },
 
         // --- TIER 3: Сложные узлы и IT ---
-        camera_mod:{ name: 'Модуль камеры', isRaw: false, volume: 0.2, basePrice: 60, dailyMarketPool: 150 },
-        drops:     { name: 'Системы сброса', isRaw: false, volume: 1.5, basePrice: 80, dailyMarketPool: 100 },
+        camera_mod:{ name: 'Модуль камеры', isRaw: false, volume: 0.001, basePrice: 60, dailyMarketPool: 150 },
+        drops:     { name: 'Системы сброса', isRaw: false, volume: 0.005, basePrice: 80, dailyMarketPool: 100 },
         software:  { name: 'ПО (Лицензия)', isRaw: false, volume: 0, basePrice: 200, dailyMarketPool: 999999 },
         ai_core:   { name: 'ШІ-Ядро', isRaw: false, volume: 0, basePrice: 600, dailyMarketPool: 999999 },
 
         // --- TIER 4: Готовая продукция ---
-        smart_pc:  { name: 'Смарт-электроника (ПК)', isRaw: false, volume: 0.5, basePrice: 280, isEquipment: true, dailyMarketPool: 100 },
-        mil_radio: { name: 'Военная рация (РЭБ)', isRaw: false, volume: 1.0, basePrice: 350, dailyMarketPool: 50 },
-        drones:    { name: 'FPV-Дроны', isRaw: false, volume: 3.0, basePrice: 450, dailyMarketPool: 30 },
-        drones_ai: { name: 'Дроны с автозахватом', isRaw: false, volume: 3.5, basePrice: 1500, dailyMarketPool: 5 },
+        smart_pc:  { name: 'Смарт-электроника (ПК)', isRaw: false, volume: 0.02, basePrice: 280, isEquipment: true, dailyMarketPool: 100 },
+        mil_radio: { name: 'Военная рация (РЭБ)', isRaw: false, volume: 0.005, basePrice: 350, dailyMarketPool: 50 },
+        drones:    { name: 'FPV-Дроны', isRaw: false, volume: 0.03, basePrice: 450, dailyMarketPool: 30 },
+        drones_ai: { name: 'Дроны с автозахватом', isRaw: false, volume: 0.035, basePrice: 1500, dailyMarketPool: 5 },
 
         // --- TIER 5: Капитальное оборудование ---
-        retail_display: { name: 'Торговая витрина', isRaw: false, volume: 3.0, basePrice: 800, isEquipment: true, dailyMarketPool: 10 },
-        server_rack:    { name: 'Серверная стойка', isRaw: false, volume: 2.0, basePrice: 1500, isEquipment: true, dailyMarketPool: 5 },
-        machine_tool:   { name: 'Промышленный станок', isRaw: false, volume: 5.0, basePrice: 2500, isEquipment: true, dailyMarketPool: 5 }
+        retail_display: { name: 'Торговая витрина', isRaw: false, volume: 1.5, basePrice: 800, isEquipment: true, dailyMarketPool: 10 },
+        server_rack:    { name: 'Серверная стойка', isRaw: false, volume: 1.0, basePrice: 1500, isEquipment: true, dailyMarketPool: 5 },
+        machine_tool:   { name: 'Промышленный станок', isRaw: false, volume: 2.5, basePrice: 2500, isEquipment: true, dailyMarketPool: 5 }
     },
 
     // Матрица бизнесов
