@@ -138,40 +138,45 @@ const RETAIL = {
                     if (pricePenalty < 0) pricePenalty = 0; // Слишком дорого
                     if (pricePenalty > 1.5) pricePenalty = 1.5; // Демпинг (распродажа) повышает конверсию до х1.5
 
-                    // Финальный расчет
+                    // Финальный расчет конверсии
                     let baseConversion = 0.15; // 15% зашедших покупают товар (если цена ок)
-                    let qualityBonus = inv.quality || 1.0; // Высокое качество (звезды) дает буст
-                    
+                    let qualityBonus = inv.quality || 1.0; 
                     let finalConversion = baseConversion * pricePenalty * qualityBonus * displayEfficiency;
                     
-                    let itemsSold = Math.floor(actualTraffic * finalConversion);
+                    // Сколько ЛЮДЕЙ хотят купить этот товар (Потенциальный спрос)
+                    let potentialSales = Math.floor(actualTraffic * finalConversion);
+                    potentialSales = Math.floor(potentialSales * (0.8 + Math.random() * 0.4)); // Рыночный шум
+
+                    // Фактические продажи (не больше, чем есть на полке)
+                    let actualSales = Math.min(potentialSales, inv.qty);
                     
-                    // Легкий RNG (рыночный шум от 80% до 120%)
-                    itemsSold = Math.floor(itemsSold * (0.8 + Math.random() * 0.4)); 
+                    // Упущенные продажи (сколько человек ушли к конкурентам)
+                    let missedSales = potentialSales - actualSales;
+                    let missedRevenue = missedSales * retailPrice;
 
-                    if (itemsSold > inv.qty) itemsSold = inv.qty; // Не можем продать больше, чем есть
-
-                    if (itemsSold > 0) {
-                        let revenue = itemsSold * retailPrice;
-                        let cogs = itemsSold * inv.avgCost; // Себестоимость проданного
+                    if (actualSales > 0 || missedSales > 0) {
+                        let revenue = actualSales * retailPrice;
+                        let cogs = actualSales * inv.avgCost; // Себестоимость проданного
                         
-                        inv.qty -= itemsSold;
+                        inv.qty -= actualSales;
                         if (inv.qty === 0) inv.avgCost = 0;
 
-                        // BUG-5 FIX: Зачисляем выручку на баланс компании
+                        // Зачисляем выручку на баланс компании
                         STATE.finances.balance += revenue;
                         totalB2CRevenue += revenue;
 
-                        // Запись в статистику магазина
+                        // Запись в статистику магазина (С УЧЕТОМ УПУЩЕННОЙ ВЫГОДЫ)
                         biz.stats.lastSold[itemKey] = {
-                            qty: itemsSold,
+                            qty: actualSales,
                             revenue: revenue,
-                            cogs: cogs
+                            cogs: cogs,
+                            missedQty: missedSales,
+                            missedRevenue: missedRevenue
                         };
                         
                         // Запись в глобальную бухгалтерию
                         if (typeof LEDGER !== 'undefined') {
-                            LEDGER.record('rev_b2c', revenue);
+                            if (revenue > 0) LEDGER.record('rev_b2c', revenue);
                             if (cogs > 0) LEDGER.record('exp_materials', cogs);
                         }
                     }
