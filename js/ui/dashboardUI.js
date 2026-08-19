@@ -2155,7 +2155,16 @@ const UI_DASHBOARD = {
             }
         }
 
-        let currentAssets = cash + inventoryValue + depositsValue + logisticsValue + receivablesValue;
+        let portfolioValue = 0;
+        if (typeof STOCK_MARKET !== 'undefined' && STATE.stockMarket && STATE.stockMarket.portfolio) {
+            Object.keys(STATE.stockMarket.portfolio).forEach(id => {
+                let shares = STATE.stockMarket.portfolio[id];
+                let comp = STATE.stockMarket.companies[id];
+                if (comp && shares > 0) portfolioValue += shares * comp.sharePrice;
+            });
+        }
+
+        let currentAssets = cash + inventoryValue + depositsValue + logisticsValue + receivablesValue + portfolioValue;
 
         let realEstateValue = 0;
         let equipmentValue = 0;
@@ -2412,6 +2421,7 @@ const UI_DASHBOARD = {
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Товары в пути (Оплаченная логистика):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(logisticsValue)}</td></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Дебиторская задолженность (Выручка в пути):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(receivablesValue)}</td></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Банковские депозиты (Краткосрочные):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(depositsValue)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Финансовые активы (Портфель акций):</td><td style="text-align:right; font-family:var(--font-mono); color:var(--blue);">$${formatMoney(portfolioValue)}</td></tr>
                         <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Оборотные активы:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(currentAssets)}</td></tr>
                         
                         <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">II. ВНЕОБОРОТНЫЕ АКТИВЫ (NON-CURRENT ASSETS)</th></tr>

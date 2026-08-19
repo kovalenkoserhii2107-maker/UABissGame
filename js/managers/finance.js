@@ -88,8 +88,19 @@ const FINANCE = {
             STATE.finances.deposits.forEach(d => depositValue += (d.amount + (d.accrued || 0)));
         }
 
-        let netWorth = cash + inventoryValue + logisticsValue + fixedAssets + depositValue - totalLiabilities;
-        return { cash, fixedAssets, inventoryValue, logisticsValue, depositValue, totalLiabilities, netWorth };
+        let portfolioValue = 0;
+        if (typeof STOCK_MARKET !== 'undefined' && STATE.stockMarket && STATE.stockMarket.portfolio) {
+            Object.keys(STATE.stockMarket.portfolio).forEach(id => {
+                let shares = STATE.stockMarket.portfolio[id];
+                let comp = STATE.stockMarket.companies[id];
+                if (comp && shares > 0) {
+                    portfolioValue += shares * comp.sharePrice;
+                }
+            });
+        }
+
+        let netWorth = cash + inventoryValue + logisticsValue + fixedAssets + depositValue + portfolioValue - totalLiabilities;
+        return { cash, fixedAssets, inventoryValue, logisticsValue, depositValue, portfolioValue, totalLiabilities, netWorth };
     },
 
     calculateNetWorth() {
