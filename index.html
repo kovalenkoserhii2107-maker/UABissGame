@@ -362,56 +362,53 @@
             border-radius: 10px;
         }
 
-        /* ── ВКЛАДКИ: горизонтальный скролл снизу ─────────── */
+        /* ── ВКЛАДКИ: центрирование и перенос (Wrap) ─────────── */
         .tabs-wrap {
-            position: fixed;
-            top: auto;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
-            background: rgba(250, 250, 252, 0.96);
-            border-top: 1px solid rgba(0,0,0,0.1);
-            justify-content: flex-start;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-            z-index: 999;
+            position: relative !important; /* Убираем сломанный fixed */
+            top: auto !important;
+            bottom: auto !important;
+            padding: 10px 12px 16px !important;
+            background: transparent !important;
+            border-top: none !important;
+            overflow-x: visible !important;
+            justify-content: center !important;
         }
-        .tabs-wrap::-webkit-scrollbar { display: none; }
 
         .tabs {
-            background: transparent;
-            padding: 0;
-            gap: 2px;
-            margin: 0;
-            min-width: max-content;
+            flex-wrap: wrap !important; /* Разрешаем перенос на новые строки */
+            justify-content: center !important;
+            min-width: 0 !important; /* Убираем растягивание за пределы экрана */
+            background: transparent !important;
+            padding: 0 !important;
+            gap: 6px !important;
+            box-shadow: none !important;
+            margin: 0 !important;
         }
 
         .tab {
-            flex-direction: column !important;
+            flex-direction: row !important; /* Иконка рядом с текстом */
             align-items: center !important;
-            justify-content: center !important;
-            gap: 2px !important;
-            padding: 5px 8px !important;
-            font-size: 0.58rem !important;
-            min-height: auto !important;
-            min-width: 52px;
-            border-radius: 10px !important;
-            background: transparent;
-            white-space: nowrap;
+            gap: 6px !important;
+            padding: 6px 12px !important;
+            font-size: 0.85rem !important;
+            min-width: auto !important;
+            border-radius: 8px !important;
+            background: var(--surface) !important;
+            border: 1px solid var(--border) !important;
+            white-space: nowrap !important;
         }
-        .tab.active {
-            background: rgba(0, 122, 255, 0.1) !important;
-            color: var(--blue) !important;
-        }
-        /* Иконки в вкладках */
-        .tab > span[style*="font-size:1.3rem"] { font-size: 1.2rem !important; }
-        .tab > span[style*="font-size: 1.3rem"] { font-size: 1.2rem !important; }
 
-        /* Контентная область — нижний отступ под таббар */
+        .tab.active {
+            background: var(--blue-dim) !important;
+            color: var(--blue) !important;
+            border-color: rgba(0, 122, 255, 0.3) !important;
+        }
+        
+        .tab > span[style*="font-size"] { font-size: 1rem !important; }
+
+        /* Контентная область — возвращаем стандартный отступ */
         .content {
-            padding: 12px 10px calc(72px + env(safe-area-inset-bottom, 0px));
+            padding: 12px 10px 32px !important;
         }
 
         .card {
