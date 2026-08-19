@@ -3544,48 +3544,86 @@ const UI_DASHBOARD = {
     },
 
     // --- АНАЛИТИКА МАГАЗИНА (ЭТАП 2) ---
-    showStoreAnalyticsModal(bizUid) {
+    showStoreAnalyticsModal(bizUid, periodDays = 7) {
         let biz = STATE.company.businesses.find(b => b.uid === bizUid);
         if (!biz) return;
 
-        let oldModal = document.getElementById('store-analytics-modal');
-        if (oldModal) oldModal.remove();
-
-        let modal = document.createElement('div');
-        modal.id = 'store-analytics-modal';
-        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000001; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(5px);';
-        
-        // 1. Сбор данных для ABC-Анализа
-        let products = [];
-        if (biz.localInventory) {
-            Object.keys(biz.localInventory).forEach(k => {
-                let lastSold = biz.stats?.lastSold?.[k] || { qty: 0, revenue: 0, cogs: 0, missedRevenue: 0 };
-                let inv = biz.localInventory[k];
-                let rTpl = RECIPES.RESOURCES[k];
-                if(!rTpl) return;
-                
-                let rev = lastSold.revenue || 0;
-                let cogs = lastSold.cogs || 0;
-                let profit = rev - cogs;
-                let marginPct = rev > 0 ? (profit / rev) * 100 : 0;
-                let hasAutoSupply = (biz.autoSupplyRules && biz.autoSupplyRules[k]) ? biz.autoSupplyRules[k] : 0;
-                
-                // Показываем товар, если он есть на полке, либо заказан, либо приносил доход
-                if (inv.qty > 0 || rev > 0 || hasAutoSupply > 0) {
-                    products.push({
-                        key: k,
-                        name: rTpl.name,
-                        revenue: rev,
-                        profit: profit,
-                        marginPct: marginPct,
-                        missed: lastSold.missedRevenue || 0
-                    });
-                }
-            });
+        let modal = document.getElementById('store-analytics-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'store-analytics-modal';
+            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000001; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(5px);';
+            document.body.appendChild(modal);
         }
+
+        // 1. Фильтрация реальной истории
+        if (!biz.stats) biz.stats = {};
+        let fullHistory = biz.stats.history || [];
         
-        // Сортировка по выручке по убыванию
-        products.sort((a, b) => b.revenue - a.revenue);
+        // Если история пуста (первый день), берем текущие данные lastSold
+        if (fullHistory.length === 0) {
+             let dRev = 0, dCogs = 0, dMissed = 0;
+             if (biz.stats.lastSold) {
+                 Object.values(biz.stats.lastSold).forEach(s => { dRev+=s.revenue||0; dCogs+=s.cogs||0; dMissed+=s.missedRevenue||0; });
+             }
+             fullHistory = [{ day: STATE.time.day, revenue: dRev, cogs: dCogs, missed: dMissed, items: biz.stats.lastSold || {} }];
+        }
+
+        let history = fullHistory;
+        if (periodDays !== 'all') {
+            history = fullHistory.slice(-periodDays);
+        }
+        let actualDays = history.length || 1;
+
+        // 2. Агрегация данных по товарам
+        let aggRev = 0, aggCogs = 0, aggMissed = 0;
+        let itemAgg = {}; 
+        
+        history.forEach(dayStat => {
+            aggRev += dayStat.revenue || 0;
+            aggCogs += dayStat.cogs || 0;
+            aggMissed += dayStat.missed || 0;
+            
+            if (dayStat.items) {
+                Object.keys(dayStat.items).forEach(k => {
+                    if (!itemAgg[k]) itemAgg[k] = { rev: 0, profit: 0, missed: 0, name: RECIPES.RESOURCES[k]?.name || k };
+                    let r = dayStat.items[k].revenue || 0;
+                    let c = dayStat.items[k].cogs || 0;
+                    itemAgg[k].rev += r;
+                    itemAgg[k].profit += (r - c);
+                    itemAgg[k].missed += dayStat.items[k].missedRevenue || 0;
+                });
+            }
+        });
+
+        // 3. Подсчет Финансовых метрик (Рентабельность, ROA)
+        let tpl = RECIPES.BUSINESSES[biz.type];
+        let level = biz.level || 1;
+        let locMult = biz.locMult || 1.0;
+        let cityId = biz.city || 'odesa';
+        let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { rentMult: 1.0, salaryMult: 1.0 };
+        
+        let dailyRent = tpl.area * 2 * level * locMult;
+        let sales = biz.assigned?.salesman || 0;
+        let mgr = biz.assigned?.store_manager || 0;
+        let dailySalaries = (sales * HR.GRADES.salesman.salary + mgr * HR.GRADES.store_manager.salary) * cityData.salaryMult;
+        
+        let totalOpex = (dailyRent + dailySalaries) * actualDays;
+        let totalProfit = aggRev - aggCogs - totalOpex;
+        let marginPct = aggRev > 0 ? (totalProfit / aggRev) * 100 : 0;
+
+        // Расчет Активов
+        let realEstateValue = tpl.area * 50 * level * locMult;
+        let eqCost = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 800;
+        let equipmentValue = (biz.equipment?.count || 0) * eqCost * ((biz.equipment?.condition || 0) / 100);
+        let inventoryValue = 0;
+        if (biz.localInventory) Object.values(biz.localInventory).forEach(inv => inventoryValue += inv.qty * inv.avgCost);
+        let totalAssets = realEstateValue + equipmentValue + inventoryValue;
+        let roa = totalAssets > 0 ? (totalProfit / totalAssets) * 100 : 0;
+
+        // 4. Формирование таблицы ABC
+        let products = Object.values(itemAgg);
+        products.sort((a, b) => b.rev - a.rev);
         
         let abcHtml = `<table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
             <thead style="background:var(--surface-2); color:var(--text-dim); border-bottom:1px solid var(--border);">
@@ -3593,84 +3631,113 @@ const UI_DASHBOARD = {
                     <th style="padding:10px;">Класс и Товар</th>
                     <th style="padding:10px; text-align:right;">Выручка</th>
                     <th style="padding:10px; text-align:right;">Прибыль (Маржа)</th>
-                    <th style="padding:10px; text-align:right;">Упущенная выгода</th>
+                    <th style="padding:10px; text-align:right;">Упущено</th>
                 </tr>
             </thead>
-            <tbody>
-        `;
+            <tbody>`;
         
-        if (products.length === 0) {
-            abcHtml += `<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-dim);">Нет данных для анализа (дождитесь закрытия дня)</td></tr>`;
+        if (products.length === 0 || aggRev === 0) {
+            abcHtml += `<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-dim);">Дождитесь закрытия первого дня для анализа</td></tr>`;
         } else {
-            let totalRev = products.reduce((sum, p) => sum + p.revenue, 0);
             let runningRev = 0;
-            
             products.forEach(p => {
-                runningRev += p.revenue;
-                // Классификация ABC: A (топ 80% выручки), B (следующие 15%), C (остальные 5%)
-                let cumPct = totalRev > 0 ? (runningRev / totalRev) * 100 : 0;
+                if (p.rev === 0 && p.missed === 0) return; // Скрываем пустые товары без движения
+                runningRev += p.rev;
+                let cumPct = aggRev > 0 ? (runningRev / aggRev) * 100 : 0;
                 let abcClass = '';
-                if (totalRev === 0) abcClass = '<span style="color:var(--text-dim); font-weight:800;">-</span>';
+                if (p.rev === 0) abcClass = '<span style="background:rgba(231,76,60,0.1); color:var(--red); padding:2px 6px; border-radius:4px; font-weight:800;">-</span>';
                 else if (cumPct <= 80) abcClass = '<span style="background:rgba(46,204,113,0.1); color:var(--green); padding:2px 6px; border-radius:4px; font-weight:800;">A</span>';
                 else if (cumPct <= 95) abcClass = '<span style="background:rgba(243,156,18,0.1); color:var(--orange); padding:2px 6px; border-radius:4px; font-weight:800;">B</span>';
                 else abcClass = '<span style="background:rgba(231,76,60,0.1); color:var(--red); padding:2px 6px; border-radius:4px; font-weight:800;">C</span>';
                 
+                let pMargin = p.rev > 0 ? (p.profit / p.rev) * 100 : 0;
+                
                 abcHtml += `
                 <tr style="border-bottom:1px solid var(--border);">
                     <td style="padding:10px; font-weight:600; color:var(--text);">${abcClass} ${p.name}</td>
-                    <td style="padding:10px; text-align:right; color:var(--text); font-weight:700;">$${formatMoney(p.revenue)}</td>
-                    <td style="padding:10px; text-align:right; color:var(--green); font-weight:700;">$${formatMoney(p.profit)} <span style="font-size:0.75rem; color:var(--blue);">(${p.marginPct.toFixed(1)}%)</span></td>
+                    <td style="padding:10px; text-align:right; color:var(--text); font-weight:700;">$${formatMoney(p.rev)}</td>
+                    <td style="padding:10px; text-align:right; color:var(--green); font-weight:700;">$${formatMoney(p.profit)} <span style="font-size:0.75rem; color:var(--blue);">(${p.profit>0?'+':''}${pMargin.toFixed(1)}%)</span></td>
                     <td style="padding:10px; text-align:right; color:var(--red); font-weight:600;">${p.missed > 0 ? '$'+formatMoney(p.missed) : '-'}</td>
                 </tr>`;
             });
         }
         abcHtml += `</tbody></table>`;
 
+        // 5. Рендер HTML Модалки
+        let btnStyle = (p) => `padding:6px 12px; border-radius:8px; border:1px solid var(--blue); cursor:pointer; font-weight:700; font-size:0.8rem; transition:0.2s; background:${periodDays===p ? 'var(--blue)' : 'transparent'}; color:${periodDays===p ? 'white' : 'var(--blue)'};`;
+
         modal.innerHTML = `
-            <div style="background:var(--bg); width:95%; max-width:800px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.4); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
+            <div style="background:var(--bg); width:95%; max-width:900px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.4); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
                 <div style="padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
                     <h3 style="margin:0; font-size:1.3rem; color:var(--text);">📊 Аналитика: ${biz.name}</h3>
-                    <button onclick="document.getElementById('store-analytics-modal').remove()" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; font-size:1.2rem; display:flex; align-items:center; justify-content:center; color:var(--text-dim); cursor:pointer; transition:0.2s;" onmouseover="this.style.background='var(--red-dim)'; this.style.color='var(--red)'" onmouseout="this.style.background='var(--surface-2)'; this.style.color='var(--text-dim)'">✕</button>
+                    <button onclick="document.getElementById('store-analytics-modal').remove()" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; font-size:1.2rem; display:flex; align-items:center; justify-content:center; color:var(--text-dim); cursor:pointer;">✕</button>
                 </div>
+                
+                <div style="padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface-2);">
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="UI_DASHBOARD.showStoreAnalyticsModal(${bizUid}, 7)" style="${btnStyle(7)}">7 дней</button>
+                        <button onclick="UI_DASHBOARD.showStoreAnalyticsModal(${bizUid}, 30)" style="${btnStyle(30)}">30 дней</button>
+                        <button onclick="UI_DASHBOARD.showStoreAnalyticsModal(${bizUid}, 365)" style="${btnStyle(365)}">Год</button>
+                        <button onclick="UI_DASHBOARD.showStoreAnalyticsModal(${bizUid}, 'all')" style="${btnStyle('all')}">За всё время</button>
+                    </div>
+                    <div style="color:var(--text-dim); font-size:0.85rem; font-weight:600;">Период: ${periodDays === 'all' ? 'Всё время' : periodDays + ' дн.'} (Дней в отчете: ${actualDays})</div>
+                </div>
+
                 <div style="padding:24px; overflow-y:auto; flex:1;">
-                    <h4 style="margin:0 0 16px 0; color:var(--text);">📈 Динамика выручки и потерь (7 дней)</h4>
+                    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:24px;">
+                        <div style="background:var(--surface-2); padding:16px; border-radius:10px; border-left:4px solid var(--green);">
+                            <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:4px;">Реальная Выручка</div>
+                            <div style="font-size:1.4rem; font-weight:800; color:var(--text);">$${formatMoney(aggRev)}</div>
+                            <div style="font-size:0.75rem; color:var(--red); margin-top:4px;">Потери трафика: $${formatMoney(aggMissed)}</div>
+                        </div>
+                        <div style="background:var(--surface-2); padding:16px; border-radius:10px; border-left:4px solid var(--orange);">
+                            <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:4px;">Расходы (COGS + OPEX)</div>
+                            <div style="font-size:1.4rem; font-weight:800; color:var(--text);">-$${formatMoney(aggCogs + totalOpex)}</div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:4px;">Себест-ть: $${formatMoney(aggCogs)} | OPEX: $${formatMoney(totalOpex)}</div>
+                        </div>
+                        <div style="background:var(--surface-2); padding:16px; border-radius:10px; border-left:4px solid ${totalProfit >= 0 ? 'var(--green)' : 'var(--red)'};">
+                            <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:4px;">Фин. Результат (Прибыль)</div>
+                            <div style="font-size:1.4rem; font-weight:800; color:${totalProfit >= 0 ? 'var(--green)' : 'var(--red)'};">$${formatMoney(totalProfit)}</div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:4px;">ROS (Маржа): ${marginPct.toFixed(1)}% | ROA: ${roa.toFixed(1)}%</div>
+                        </div>
+                    </div>
+
+                    <h4 style="margin:0 0 16px 0; color:var(--text);">📈 Динамика продаж</h4>
                     <div style="height:250px; position:relative; margin-bottom:24px; background:var(--surface-2); border-radius:12px; padding:12px; border:1px solid var(--border);">
                         <canvas id="storeAnalyticsChart"></canvas>
                     </div>
                     
                     <h4 style="margin:0 0 8px 0; color:var(--text);">🏆 ABC-Анализ ассортимента</h4>
-                    <p style="margin:0 0 16px 0; font-size:0.85rem; color:var(--text-dim); line-height:1.4;">Товары класса <strong>A</strong> делают 80% выручки (держите их в наличии любой ценой). Класс <strong>B</strong> дает 15% выручки. Класс <strong>C</strong> — аутсайдеры (5%), на них можно поднимать маржу или убирать из ассортимента.</p>
                     <div style="border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--surface);">
                         ${abcHtml}
                     </div>
                 </div>
             </div>
         `;
-        document.body.appendChild(modal);
 
-        // 2. Отрисовка графика (Симуляция трендов для живости, базируясь на данных текущего дня)
+        // 6. Реальная отрисовка Графика
         let ctx = document.getElementById('storeAnalyticsChart');
         let labels = [];
         let revData = [];
         let missedData = [];
         
-        let currentRev = products.reduce((sum, p) => sum + p.revenue, 0);
-        let currentMissed = products.reduce((sum, p) => sum + p.missed, 0);
-
-        // Формируем график за неделю
-        for (let i = 6; i >= 0; i--) {
-            let d = STATE.time.day - i;
-            labels.push('Д ' + (d > 0 ? d : 1));
-            
-            if (i === 0) {
-                // Сегодняшний (вчерашний) день - точные данные
-                revData.push(currentRev);
-                missedData.push(currentMissed);
-            } else {
-                // Исторический тренд (в реальной игре тут можно подключить историю, пока делаем сглаженный тренд)
-                let noise = 0.6 + Math.random() * 0.6; // от 60% до 120%
-                revData.push(Math.floor(currentRev * noise));
-                missedData.push(Math.floor(currentMissed * (0.3 + Math.random() * 0.7))); // Потери тоже скачут
+        if (history.length <= 30) {
+            // Если период небольшой, показываем каждый день
+            history.forEach(h => {
+                labels.push('Д ' + h.day);
+                revData.push(h.revenue);
+                missedData.push(h.missed);
+            });
+        } else {
+            // Если дней много, группируем по неделям/месяцам (сжимаем до ~15 колонок на графике)
+            let groupSize = Math.ceil(history.length / 15);
+            for (let i = 0; i < history.length; i += groupSize) {
+                let chunk = history.slice(i, i + groupSize);
+                let cRev = chunk.reduce((s, h) => s + h.revenue, 0);
+                let cMis = chunk.reduce((s, h) => s + h.missed, 0);
+                labels.push(chunk.length > 1 ? `Д ${chunk[0].day}-${chunk[chunk.length-1].day}` : `Д ${chunk[0].day}`);
+                revData.push(cRev);
+                missedData.push(cMis);
             }
         }
 
@@ -3681,15 +3748,15 @@ const UI_DASHBOARD = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Упущенная выгода ($)',
-                        data: missedData,
-                        backgroundColor: 'rgba(255, 59, 48, 0.8)',
-                        borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 }
-                    },
-                    {
                         label: 'Реальная выручка ($)',
                         data: revData,
                         backgroundColor: 'rgba(52, 199, 89, 0.8)',
+                        borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 }
+                    },
+                    {
+                        label: 'Упущенная выгода ($)',
+                        data: missedData,
+                        backgroundColor: 'rgba(255, 59, 48, 0.8)',
                         borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 }
                     }
                 ]
