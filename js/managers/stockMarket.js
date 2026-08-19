@@ -41,11 +41,11 @@ const STOCK_MARKET = {
     processDaily() {
         this.init();
         
-        // 1. Изменение макро-тренда (Случайные рыночные колебания)
-        let trendShift = (Math.random() - 0.5) * 0.02; // -1% to +1%
-        STATE.stockMarket.macroTrend += trendShift;
-        if (STATE.stockMarket.macroTrend > 1.5) STATE.stockMarket.macroTrend = 1.5;
-        if (STATE.stockMarket.macroTrend < 0.5) STATE.stockMarket.macroTrend = 0.5;
+        // 1. Изменение макро-тренда (Экономические циклы + шум)
+        // Цикл примерно 360 дней. Тренд колеблется от 0.7 до 1.3
+        let cycle = Math.sin((STATE.time.day / 360) * Math.PI * 2) * 0.25; 
+        let noise = (Math.random() - 0.5) * 0.1; // Шум от -5% до +5%
+        STATE.stockMarket.macroTrend = 1.0 + cycle + noise;
 
         // 1.5 Проверка на IPO (Выход компании игрока на биржу)
         let playerNetWorth = typeof FINANCE !== 'undefined' ? FINANCE.calculateNetWorth() : 0;
@@ -76,14 +76,22 @@ const STOCK_MARKET = {
             } else {
                 let npcInfo = B2B_AI.competitors.find(c => c.id === id);
                 if (npcInfo) {
-                    // Имитируем рост капитала ИИ на 0.1-0.5% в день
-                    compData.capital = (compData.capital || 50000) * (1.001 + Math.random() * 0.004);
+                    // Рост или падение капитала ИИ зависит от макро-тренда и случайности
+                    // В среднем компании стремятся оставаться на своем уровне (стагнация/конкуренция), но растут в бычьем рынке
+                    let npcTrend = STATE.stockMarket.macroTrend > 1.0 ? 0.001 : -0.001; // +/- 0.1% от тренда
+                    let npcNoise = (Math.random() - 0.5) * 0.006; // от -0.3% до +0.3% случайной волатильности каждый день
+                    compData.capital = (compData.capital || 50000) * (1.0 + npcTrend + npcNoise);
+                    
+                    // Не даем капиталу упасть ниже базового минимума (чтобы компании не исчезали в 0)
+                    let minCapital = npcInfo.tier * 250000;
+                    if (compData.capital < minCapital) compData.capital = minCapital;
+
                     netWorth = compData.capital;
                     brandPower = npcInfo.brandMod;
                 }
             }
 
-            // Шум акций конкретной компании (-2% to +2%)
+            // Шум акций конкретной компании (отклонение рыночной цены от фундаментальной на -2% to +2%)
             let localNoise = 1.0 + (Math.random() - 0.5) * 0.04;
             
             let fundamentalPrice = (netWorth * brandPower * STATE.stockMarket.macroTrend) / this.TOTAL_SHARES;
