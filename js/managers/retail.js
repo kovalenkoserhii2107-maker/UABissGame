@@ -185,7 +185,36 @@ const RETAIL = {
                     }
                 });
             }
-        });
+
+            // === НОВЫЙ БЛОК: ИСТОРИЯ ДЛЯ АНАЛИТИКИ ===
+            if (!biz.stats.history) biz.stats.history = [];
+            let dRev = 0, dCogs = 0, dMissed = 0;
+            if (biz.stats.lastSold) {
+                Object.values(biz.stats.lastSold).forEach(s => {
+                    dRev += s.revenue || 0;
+                    dCogs += s.cogs || 0;
+                    dMissed += s.missedRevenue || 0;
+                });
+            }
+            
+            // Удаляем запись за этот же день, если она вдруг уже есть (защита от двойного вызова)
+            if (biz.stats.history.length > 0 && biz.stats.history[biz.stats.history.length - 1].day === STATE.time.day) {
+                biz.stats.history.pop();
+            }
+            
+            biz.stats.history.push({
+                day: STATE.time.day,
+                revenue: dRev,
+                cogs: dCogs,
+                missed: dMissed,
+                items: JSON.parse(JSON.stringify(biz.stats.lastSold || {}))
+            });
+            
+            // Храним историю максимум 3 года, чтобы не перегружать память
+            if (biz.stats.history.length > 1000) biz.stats.history.shift(); 
+            // =========================================
+
+        }); // конец STATE.company.businesses.forEach
         
         return totalB2CRevenue;
     }
