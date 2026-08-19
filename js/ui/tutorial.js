@@ -135,10 +135,17 @@ const TUTORIAL = {
             trigger: { type: 'click' }
         },
         {
-            target: '.retail-staff-card',
+            target: '[onclick*="UI_DASHBOARD.showStoreModal"]',
+            tab: 'tab-retail',
+            title: 'Управление магазином ⚙️',
+            text: 'Нажмите на карточку вашего нового магазина, чтобы открыть панель управления.',
+            trigger: { type: 'click' }
+        },
+        {
+            target: '[onclick*="HR.assignToBusiness"]',
             tab: 'tab-retail',
             title: 'Назначение персонала 🧑‍💼',
-            text: 'Нажмите на зеленые кнопки «+» в блоке КАДРЫ, чтобы закрепить нанятых Директора и Продавца за вашим новым магазином.',
+            text: 'Прокрутите вниз до блока «Персонал» и нажмите на зеленые кнопки «+», чтобы закрепить нанятых Директора и Продавца за вашим магазином.',
             trigger: {
                 type: 'condition',
                 check: (state) => state.company && state.company.businesses && state.company.businesses.some(b => b.type === 'retail_store' && b.assigned && ((b.assigned.store_manager || 0) >= 1 || (b.assigned.salesman || 0) >= 1))
