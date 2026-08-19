@@ -2875,12 +2875,12 @@ const UI_DASHBOARD = {
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
         
         modal.innerHTML = `
-            <div style="background:var(--bg-main); width:95%; max-width:1200px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.3); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
+            <div style="background:var(--bg); width:95%; max-width:1200px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.3); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
                 <div style="padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
                     <h3 id="store-modal-title" style="margin:0; font-size:1.3rem; color:var(--text);">Магазин</h3>
                     <button onclick="UI_DASHBOARD.closeStoreModal()" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; font-size:1.2rem; display:flex; align-items:center; justify-content:center; color:var(--text-dim); cursor:pointer; transition:0.2s;" onmouseover="this.style.background='var(--red-dim)'; this.style.color='var(--red)'" onmouseout="this.style.background='var(--surface-2)'; this.style.color='var(--text-dim)'">✕</button>
                 </div>
-                <div id="store-modal-body" style="padding:24px; overflow-y:auto; flex:1; background:var(--bg-main);">
+                <div id="store-modal-body" style="padding:24px; overflow-y:auto; flex:1; background:var(--bg);">
                     <!-- Content rendered dynamically -->
                 </div>
             </div>
@@ -2897,6 +2897,12 @@ const UI_DASHBOARD = {
     },
 
     renderStoreModalContent(bizUid) {
+        // 1. ЗАПОМИНАЕМ ПОЗИЦИЮ СКРОЛЛА ПЕРЕД ОБНОВЛЕНИЕМ
+        let bodyEl = document.getElementById('store-modal-body');
+        let invListEl = document.getElementById('store-inventory-list');
+        let savedBodyScroll = bodyEl ? bodyEl.scrollTop : 0;
+        let savedInvScroll = invListEl ? invListEl.scrollTop : 0;
+
         let biz = STATE.company.businesses.find(b => b.uid === bizUid);
         if (!biz) return this.closeStoreModal();
         
@@ -3048,7 +3054,7 @@ const UI_DASHBOARD = {
                         Занято ${currentVol.toFixed(1)} м³ из ${maxVol.toFixed(1)} м³. Доставляйте товары с производственных складов.
                     </div>
                     
-                    <div style="max-height: 50vh; overflow-y: auto; padding-right:8px;">
+                    <div id="store-inventory-list" style="max-height: 50vh; overflow-y: auto; padding-right:8px;">
                         ${invHtml}
                     </div>
                 </div>
@@ -3139,9 +3145,13 @@ const UI_DASHBOARD = {
                     <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="width:100%; margin-top:16px; padding:12px; background:var(--orange); color:white; border:none; border-radius:10px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 10px rgba(243,156,18,0.3);">🚀 Расширить магазин ($${formatMoney(tpl.area * 50 * level)})</button>
                 </div>
             </div>`;
+
+            // 2. ВОССТАНАВЛИВАЕМ СКРОЛЛ ПОСЛЕ ОТРИСОВКИ
+            bodyEl.scrollTop = savedBodyScroll;
+            let newInvListEl = document.getElementById('store-inventory-list');
+            if (newInvListEl) newInvListEl.scrollTop = savedInvScroll;
         }
-    }
-,
+    },
 
     // --- 11. НОВАЯ ВКЛАДКА: МАРКЕТИНГ ---
     updateMarketingTab() {
