@@ -2505,7 +2505,7 @@ const UI_DASHBOARD = {
 
                         <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <small style="color: var(--text-dim);">Коэффициент автономии (Debt/Equity)</small>
-                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--text); font-family: var(--font-mono);">${debtEquityRatio}x</div>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: ${debtEquityRatio > 1.0 ? 'var(--red)' : (debtEquityRatio > 0.5 ? 'var(--orange)' : 'var(--text)')}; font-family: var(--font-mono);">${debtEquityRatio}x</div>
                             <small style="color: var(--text-dim);">Обязательства / Капитал (Норма: <1.0)</small>
                         </div>
 
