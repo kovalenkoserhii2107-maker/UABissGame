@@ -111,14 +111,15 @@ const RETAIL = {
             if (biz.localInventory) {
                 Object.keys(biz.localInventory).forEach(itemKey => {
                     let inv = biz.localInventory[itemKey];
-                    if (inv.qty <= 0) return;
+                    
+                    // Мы УДАЛИЛИ строку "if (inv.qty <= 0) return;", чтобы магазин считал спрос на пустые полки
 
                     // Ищем базовую ценность товара
                     let basePrice = (RECIPES.RESOURCES[itemKey] && RECIPES.RESOURCES[itemKey].basePrice) ? RECIPES.RESOURCES[itemKey].basePrice : 1;
                     // Ожидаемая (якорная) розничная цена в глазах покупателя:
                     let anchorRetailPrice = basePrice * 2.5; 
                     
-                    let b2bPrice = MARKET.getCurrentPrice(itemKey) || 1;
+                    let b2bPrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(itemKey) : 1;
                     // Если цена не задана, ставим якорную
                     let retailPrice = (biz.prices && biz.prices[itemKey]) ? biz.prices[itemKey] : anchorRetailPrice;
                     
@@ -156,7 +157,7 @@ const RETAIL = {
 
                     if (actualSales > 0 || missedSales > 0) {
                         let revenue = actualSales * retailPrice;
-                        let cogs = actualSales * inv.avgCost; // Себестоимость проданного
+                        let cogs = actualSales * (inv.avgCost || 0); // Себестоимость проданного
                         
                         inv.qty -= actualSales;
                         if (inv.qty === 0) inv.avgCost = 0;
@@ -179,11 +180,13 @@ const RETAIL = {
                             if (revenue > 0) LEDGER.record('rev_b2c', revenue);
                             if (cogs > 0) LEDGER.record('exp_materials', cogs);
                         }
+                    } else {
+                        biz.stats.lastSold[itemKey] = { qty: 0, revenue: 0, cogs: 0, missedQty: 0, missedRevenue: 0 };
                     }
                 });
             }
         });
         
-        return totalB2CRevenue; // Возвращаем для логов, если нужно
+        return totalB2CRevenue;
     }
 };
