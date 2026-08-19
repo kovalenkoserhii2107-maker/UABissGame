@@ -73,19 +73,6 @@ const TUTORIAL = {
             trigger: { type: 'manual' }
         },
         {
-            target: '[onclick*="\'tab-logistics\'"]',
-            title: 'Логистика (Logistics) 🚚',
-            text: 'Перейдите во вкладку «Логистика».',
-            trigger: { type: 'click' }
-        },
-        {
-            target: '#logistics-fleet',
-            tab: 'tab-logistics',
-            title: 'Автопарк 🚐',
-            text: 'Для перевозки товаров между городами вам понадобятся грузовики. Здесь вы сможете покупать транспорт и управлять автопарком.',
-            trigger: { type: 'manual' }
-        },
-        {
             target: '[onclick*="\'tab-stock\'"]',
             title: 'Фондовый рынок (Stock Market) 📈',
             text: 'Перейдите во вкладку «Фондовый рынок».',
