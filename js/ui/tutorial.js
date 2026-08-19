@@ -4,32 +4,112 @@
 // =========================================================
 const TUTORIAL = {
 
-    // --- СЦЕНАРИЙ ОБУЧЕНИЯ (12 шагов) ---
+    // --- СЦЕНАРИЙ ОБУЧЕНИЯ ---
     STEPS: [
+        // ФАЗА 1: Экскурсия по компании
         {
             target: null, // Центрированное модальное окно
             title: 'Добро пожаловать в UABiz! 🇺🇦',
-            text: 'Вы начинаете путь предпринимателя с капиталом $25,000. Впереди 5 глав развития — от розничной точки до национальной корпорации. Давайте пошагово запустим ваш первый прибыльный магазин!',
+            text: 'Вы начинаете путь предпринимателя с капиталом $25,000. Впереди 5 глав развития — от розничной точки до национальной корпорации. Прежде чем начать, давайте проведем небольшую экскурсию по вашей компании!',
             trigger: { type: 'manual' }
         },
         {
             target: '#ui-quest-widget',
             tab: 'tab-dashboard',
-            title: 'Квест-Центр и Главы Империи 🎯',
-            text: 'Здесь отображаются стратегические цели текущей главы. За выполнение каждой задачи вы получаете финансовые гранты, очки кредитного рейтинга и доступ к новым отраслям.',
+            title: 'Главная (Dashboard) и Квесты 🎯',
+            text: 'Здесь отображается ваша главная панель. Справа находится Квест-Центр: выполняйте стратегические задачи, чтобы получать гранты и доступ к новым отраслям.',
             trigger: { type: 'manual' }
         },
         {
+            target: '[onclick*="\'tab-finance\'"]',
+            title: 'Бухгалтерия (Finance) 📊',
+            text: 'Перейдите во вкладку «Финансы».',
+            trigger: { type: 'click' }
+        },
+        {
+            target: '#finance-pnl-container',
+            tab: 'tab-finance',
+            title: 'Отчет о Прибылях и Убытках (P&L) 💰',
+            text: 'Здесь формируется ежедневный финансовый отчет. Вы сможете видеть всю выручку, расходы на зарплаты, аренду, налоги и, самое главное, чистую прибыль (Net Income).',
+            trigger: { type: 'manual' }
+        },
+        {
+            target: '[onclick*="\'tab-hr\'"]',
+            title: 'Отдел кадров (HR) 👥',
+            text: 'Перейдите во вкладку «HR».',
+            trigger: { type: 'click' }
+        },
+        {
+            target: '#hr-hiring-container',
+            tab: 'tab-hr',
+            title: 'Найм специалистов 🧑‍💼',
+            text: 'Любой бизнес строят люди. Здесь вы будете нанимать директоров, продавцов, логистов и других специалистов, необходимых для работы ваших предприятий.',
+            trigger: { type: 'manual' }
+        },
+        {
+            target: '[onclick*="\'tab-market\'"]',
+            title: 'Оптовая биржа (B2B Market) ⚖️',
+            text: 'Перейдите во вкладку «Биржа».',
+            trigger: { type: 'click' }
+        },
+        {
+            target: '#ui-market-container',
+            tab: 'tab-market',
+            title: 'Закупка товаров 📦',
+            text: 'Чтобы магазинам было что продавать, вам нужно закупать товары оптом на этой бирже. Цены здесь динамические и зависят от спроса на рынке.',
+            trigger: { type: 'manual' }
+        },
+        {
+            target: '[onclick*="\'tab-warehouse\'"]',
+            title: 'Склады (Warehouse) 🚛',
+            text: 'Перейдите во вкладку «Склады».',
+            trigger: { type: 'click' }
+        },
+        {
+            target: '#ui-warehouse-container',
+            tab: 'tab-warehouse',
+            title: 'Управление запасами 🏭',
+            text: 'Купленные на бирже товары попадают сюда. Вы сможете расширять склады, следить за остатками и настраивать автоматическое снабжение ваших магазинов.',
+            trigger: { type: 'manual' }
+        },
+        {
+            target: '[onclick*="\'tab-logistics\'"]',
+            title: 'Логистика (Logistics) 🚚',
+            text: 'Перейдите во вкладку «Логистика».',
+            trigger: { type: 'click' }
+        },
+        {
+            target: '#logistics-fleet',
+            tab: 'tab-logistics',
+            title: 'Автопарк 🚐',
+            text: 'Для перевозки товаров между городами вам понадобятся грузовики. Здесь вы сможете покупать транспорт и управлять автопарком.',
+            trigger: { type: 'manual' }
+        },
+        {
+            target: '[onclick*="\'tab-stock\'"]',
+            title: 'Фондовый рынок (Stock Market) 📈',
+            text: 'Перейдите во вкладку «Фондовый рынок».',
+            trigger: { type: 'click' }
+        },
+        {
+            target: '#ui-stock-container',
+            tab: 'tab-stock',
+            title: 'Инвестиции и IPO 💸',
+            text: 'Здесь торгуются акции ваших конкурентов. А когда ваша капитализация достигнет $500,000, ваша компания тоже выйдет на биржу (IPO)!',
+            trigger: { type: 'manual' }
+        },
+        // ФАЗА 2: Практика
+        {
             target: '[onclick*="\'tab-retail\'"]',
-            title: 'Торговля и Розница 🏪',
-            text: 'Самый надежный способ начать — розничная торговля ходовыми товарами. Нажмите на вкладку «Розница».',
+            title: 'Практика: Открытие магазина 🏪',
+            text: 'Экскурсия окончена! Давайте откроем ваш первый бизнес. Перейдите во вкладку «Розница».',
             trigger: { type: 'click' }
         },
         {
             target: '[onclick*="buyBusiness(\'retail_store\')"]',
             tab: 'tab-retail',
-            title: 'Открытие фирменного магазина 🏬',
-            text: 'Нажмите «+ Открыть Фирменный магазин» и выберите стартовый город (например, Одессу, Харьков или Днепр). В городах с высоким спросом выручка выше!',
+            title: 'Новая точка продаж 🏬',
+            text: 'Нажмите «+ Открыть Фирменный магазин» и выберите стартовый город.',
             trigger: {
                 type: 'condition',
                 check: (state) => state.company && state.company.businesses && state.company.businesses.some(b => b.type === 'retail_store')
@@ -37,15 +117,15 @@ const TUTORIAL = {
         },
         {
             target: '[onclick*="\'tab-hr\'"]',
-            title: 'Отдел кадров (HR) 👥',
-            text: 'Магазину требуются специалисты: Директор магазина (управляет точкой) и Продавец-консультант (обслуживает покупателей). Перейдите во вкладку «HR».',
+            title: 'Набираем штат 👥',
+            text: 'Магазину нужен персонал. Возвращайтесь во вкладку «HR».',
             trigger: { type: 'click' }
         },
         {
             target: '[onclick*="HR.hire(\'store_manager\')"]',
             tab: 'tab-hr',
             title: 'Найм Директора магазина 👔',
-            text: 'Сначала наймите 1 Директора магазина (Store Manager), который будет руководить торговой точкой.',
+            text: 'Наймите 1 Директора магазина (Store Manager).',
             trigger: {
                 type: 'condition',
                 check: (state) => (state.hr && state.hr.staff && (state.hr.staff.store_manager || 0) > 0) || (state.company && state.company.businesses && state.company.businesses.some(b => b.assigned && (b.assigned.store_manager || 0) > 0))
@@ -55,17 +135,23 @@ const TUTORIAL = {
             target: '[onclick*="HR.hire(\'salesman\')"]',
             tab: 'tab-hr',
             title: 'Найм Продавца-консультанта 🛒',
-            text: 'Отлично! Теперь нажмите на подсвеченную кнопку и наймите 1 Продавца-консультанта (Salesman).',
+            text: 'Теперь наймите 1 Продавца-консультанта (Salesman).',
             trigger: {
                 type: 'condition',
                 check: (state) => (state.hr && state.hr.staff && (state.hr.staff.salesman || 0) > 0) || (state.company && state.company.businesses && state.company.businesses.some(b => b.assigned && (b.assigned.salesman || 0) > 0))
             }
         },
         {
+            target: '[onclick*="\'tab-retail\'"]',
+            title: 'Возвращаемся в магазин 🏪',
+            text: 'Перейдите обратно во вкладку «Розница».',
+            trigger: { type: 'click' }
+        },
+        {
             target: '.retail-staff-card',
             tab: 'tab-retail',
-            title: 'Распределение персонала 🧑‍💼',
-            text: 'Нажмите на зеленые кнопки «+» в блоке КАДРЫ, чтобы закрепить нанятого Директора и Продавца за магазином.',
+            title: 'Назначение персонала 🧑‍💼',
+            text: 'Нажмите на зеленые кнопки «+» в блоке КАДРЫ, чтобы закрепить нанятых Директора и Продавца за вашим новым магазином.',
             trigger: {
                 type: 'condition',
                 check: (state) => state.company && state.company.businesses && state.company.businesses.some(b => b.type === 'retail_store' && b.assigned && ((b.assigned.store_manager || 0) >= 1 || (b.assigned.salesman || 0) >= 1))
@@ -73,35 +159,23 @@ const TUTORIAL = {
         },
         {
             target: '[onclick*="\'tab-market\'"]',
-            title: 'Оптовая товарная биржа ⚖️',
-            text: 'Команда готова! Теперь нужно наполнить полки товарами. Перейдите во вкладку «Биржа».',
+            title: 'Пора закупать товар ⚖️',
+            text: 'Персонал на месте, но полки пусты! Перейдите во вкладку «Биржа».',
             trigger: { type: 'click' }
         },
         {
             target: '#market-target-city',
             tab: 'tab-market',
-            title: 'Закупка ходовых товаров 📦',
-            text: 'Выберите город вашего магазина, укажите количество (например, 50-100 шт. Хлеба или Овощей) и нажмите «Купить». Груз отправится в доставку!',
+            title: 'Закупка Хлеба или Овощей 🍞',
+            text: 'Выберите город вашего магазина, купите 50-100 шт. Хлеба или Овощей и нажмите «Купить».',
             trigger: {
                 type: 'condition',
                 check: (state) => (state.logistics && state.logistics.deliveries && state.logistics.deliveries.length > 0) || (state.company && state.company.warehouses && Object.values(state.company.warehouses).some(w => Object.values(w.inventory || {}).some(i => i.qty > 0)))
             }
         },
         {
-            target: '[onclick*="\'tab-warehouse\'"]',
-            title: 'Склады и автопополнение 🚛',
-            text: 'Во вкладке «Склады» вы можете отслеживать остатки в каждом городе, настраивать правила автоснабжения магазинов и расширять складские площади.',
-            trigger: { type: 'click' }
-        },
-        {
-            target: '.btn-primary-lg',
-            title: 'Завершение операционного дня 🌅',
-            text: 'Нажмите «Закрыть операционный день», чтобы товары прибыли на склад, магазин открыл двери и принес первую выручку!',
-            trigger: { type: 'click' }
-        },
-        {
             target: null, // Центрированное поздравление
-            title: '🎉 Первый день позади! Поздравляем!',
+            title: '🎉 Первый бизнес запущен!',
             text: 'Вы успешно открыли бизнес! Следите за отчетами P&L, выполняйте квесты, стройте собственные заводы и захватывайте рынок Украины! Вы всегда можете перезапустить этот курс кнопкой «🎓 Обучение» в шапке.',
             trigger: { type: 'manual' }
         }
