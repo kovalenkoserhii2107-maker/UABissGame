@@ -3037,7 +3037,7 @@ const UI_DASHBOARD = {
         let titleEl = document.getElementById('store-modal-title');
         if (titleEl) titleEl.innerText = biz.name;
 
-        let bodyEl = document.getElementById('store-modal-body');
+        bodyEl = document.getElementById('store-modal-body');
         if (bodyEl) {
             bodyEl.innerHTML = `
             <div style="display:flex; flex-wrap:wrap; gap:32px;">
