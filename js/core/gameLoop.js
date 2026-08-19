@@ -67,7 +67,8 @@ const GAME = {
 
         if (STATE.finances.balance < 0) {
             if (typeof NOTIFY !== 'undefined') {
-                NOTIFY.error('Кассовый разрыв! ⚠️', `Счета компании ушли в минус ($${formatMoney(Math.abs(STATE.finances.balance))}). Сократите издержки или возьмите кредит.`);
+                let overdraftPenalty = Math.abs(STATE.finances.balance) * 0.002;
+                NOTIFY.error('Бизнес-Овердрафт ⚠️', `Счета ушли в минус ($${formatMoney(Math.abs(STATE.finances.balance))}). Ежедневный штраф банка: $${formatMoney(overdraftPenalty)} (0.2%). Сократите издержки или возьмите кредит!`);
             }
         }
     }

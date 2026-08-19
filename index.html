@@ -1244,15 +1244,28 @@
                 <!-- ВКЛАДКА: БАНК -->
         <div id="tab-bank" class="tab-content">
             
+            <!-- Предупреждение об овердрафте (Скрыто по умолчанию) -->
+            <div id="ui-bank-overdraft-warning" style="display:none; background: linear-gradient(135deg, rgba(255, 59, 48, 0.1), rgba(255, 59, 48, 0.15)); border: 1px solid var(--red); border-radius: 12px; padding: 16px; margin-bottom: 20px; align-items: center; gap: 12px;">
+                <div style="font-size: 2rem;">⚠️</div>
+                <div>
+                    <h4 style="margin: 0 0 4px 0; color: var(--red); font-size: 1.1rem;">Бизнес-Овердрафт Активен!</h4>
+                    <p style="margin: 0; color: var(--red); font-size: 0.9rem; font-weight: 500;">У вас отрицательный баланс. Ежедневный штраф составляет <span id="ui-bank-overdraft-penalty" style="font-weight: 800;">$0.00</span> (0.2%). Срочно пополните счет или возьмите кредит!</p>
+                </div>
+            </div>
+
             <!-- Сводный дашборд банка -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 20px;">
                 <div class="card" style="margin-bottom: 0; background: linear-gradient(135deg, rgba(52, 199, 89, 0.05), rgba(52, 199, 89, 0.1)); border-color: rgba(52, 199, 89, 0.2);">
                     <div style="display:flex; justify-content: space-between; align-items:flex-start;">
-                        <h4 style="margin:0 0 10px 0; color: var(--text-dim);">Доступный лимит (Кредит)</h4>
+                        <h4 style="margin:0 0 10px 0; color: var(--text-dim);">Доступный лимит (Залог)</h4>
                         <div style="font-size:1.8rem; filter:grayscale(0.2); opacity:0.8;">🏦</div>
                     </div>
                     <h2 style="margin:0; color: var(--green);">$<span id="ui-credit-limit">0.00</span></h2>
-                    <div style="font-size: 0.85rem; margin-top:10px; color:var(--text-dim); font-weight:500;">Базовая ставка: <span id="ui-rate" style="color:var(--text); font-weight:800;">15</span>% годовых</div>
+                    <div style="font-size: 0.85rem; margin-top:10px; color:var(--text-dim); font-weight:500;">Текущая ставка: <span id="ui-rate" style="color:var(--text); font-weight:800;">12</span>% годовых</div>
+                    <div style="font-size: 0.75rem; margin-top:8px; color:var(--text-faint); display: flex; flex-direction: column; gap: 2px;">
+                        <div style="display:flex; justify-content:space-between;"><span>Недвижимость (70%):</span> <span id="ui-col-fixed" style="font-weight:600;">$0</span></div>
+                        <div style="display:flex; justify-content:space-between;"><span>Товары/Запасы (50%):</span> <span id="ui-col-inv" style="font-weight:600;">$0</span></div>
+                    </div>
                 </div>
                 
                 <div class="card" style="margin-bottom: 0; background: linear-gradient(135deg, rgba(255, 59, 48, 0.05), rgba(255, 59, 48, 0.1)); border-color: rgba(255, 59, 48, 0.2);">
@@ -1261,7 +1274,8 @@
                         <div style="font-size:1.8rem; filter:grayscale(0.2); opacity:0.8;">📉</div>
                     </div>
                     <h2 style="margin:0; color: var(--red);">$<span id="ui-debt">0.00</span></h2>
-                    <div style="font-size: 0.85rem; margin-top:10px; color:var(--text-dim); font-weight:500;">Все ваши активные кредиты</div>
+                    <div style="font-size: 0.85rem; margin-top:10px; color:var(--text-dim); font-weight:500;">Долговая нагрузка (D/E): <span id="ui-debt-ratio" style="color:var(--text); font-weight:800;">0.0</span></div>
+                    <div style="font-size: 0.75rem; margin-top:8px; color:var(--text-faint);">Если D/E > 1.0, рейтинг резко падает.</div>
                 </div>
 
                 <div class="card" style="margin-bottom: 0; background: linear-gradient(135deg, rgba(0, 122, 255, 0.05), rgba(0, 122, 255, 0.1)); border-color: rgba(0, 122, 255, 0.2);">

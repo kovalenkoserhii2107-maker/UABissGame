@@ -2,16 +2,16 @@
 const FINANCE = {
     
     getCurrentRate() {
-        let rate = 0.15 - (STATE.finances.creditScore / 10000); 
-        if (STATE.finances.balance >= 50000) rate -= 0.02; 
-        return Math.max(0.03, rate); 
+        // Базовая ставка 12% + премия за риск
+        // Рейтинг 800+ = 13% (премия 1%)
+        // Рейтинг 300 и ниже = 35% (премия 23%)
+        let score = Math.max(300, Math.min(800, STATE.finances.creditScore));
+        let premium = 0.23 - ((score - 300) / 500) * 0.22;
+        let rate = 0.12 + premium;
+        return rate;
     },
 
-    getAvailableLimit() {
-        return (Math.max(0, STATE.finances.balance) * 0.5) + (STATE.finances.creditScore * 50);
-    },
-
-    calculateNetWorth() {
+    getAssetsBreakdown() {
         let cash = Math.max(0, STATE.finances.balance);
         let realEstateValue = 0;
         let equipmentValue = 0;
@@ -83,8 +83,21 @@ const FINANCE = {
         if (STATE.finances.loans) STATE.finances.loans.forEach(l => totalLiabilities += l.remainingPrincipal);
         if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
 
-        return cash + inventoryValue + logisticsValue + fixedAssets - totalLiabilities;
+        let netWorth = cash + inventoryValue + logisticsValue + fixedAssets - totalLiabilities;
+        return { cash, fixedAssets, inventoryValue, logisticsValue, totalLiabilities, netWorth };
     },
+
+    calculateNetWorth() {
+        return this.getAssetsBreakdown().netWorth;
+    },
+
+    getAvailableLimit() {
+        // Банк 2.0: Залоговый лимит (70% недвижка/оборудование + 50% товары)
+        let assets = this.getAssetsBreakdown();
+        return (assets.fixedAssets * 0.70) + (assets.inventoryValue * 0.50);
+    },
+
+    // (Остальная логика уже перенесена в getAssetsBreakdown)
 
     takeLoan(amount, termDays) {
         let currentDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
@@ -231,7 +244,19 @@ const FINANCE = {
             }
         }
         STATE.finances.balance -= totalDailyPayment;
-        if (STATE.finances.balance < 0) STATE.finances.creditScore = Math.max(0, STATE.finances.creditScore - 10);
+        // Банк 2.0: Бизнес-Овердрафт (штраф 0.2% в день от суммы долга)
+        if (STATE.finances.balance < 0) {
+            let overdraftPenalty = Math.abs(STATE.finances.balance) * 0.002;
+            STATE.finances.balance -= overdraftPenalty;
+            if (typeof LEDGER !== 'undefined') LEDGER.record('fin_expense', overdraftPenalty);
+            // Жесткое падение рейтинга при овердрафте
+            STATE.finances.creditScore = Math.max(0, STATE.finances.creditScore - 15);
+        } else {
+            // Если баланс положительный и есть кредиты, рейтинг понемногу растет
+            if (STATE.finances.loans.length > 0) {
+                STATE.finances.creditScore = Math.min(1000, STATE.finances.creditScore + 1);
+            }
+        }
 
         if (!STATE.finances.deposits) STATE.finances.deposits = [];
         for (let i = STATE.finances.deposits.length - 1; i >= 0; i--) {
@@ -253,9 +278,11 @@ const FINANCE = {
             }
         }
         
-        // НОВОЕ: Динамический пересчет кредитного рейтинга
-        let nw = this.calculateNetWorth();
-        let totalDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
+        // НОВОЕ: Динамический пересчет кредитного рейтинга (Банк 2.0)
+        let assets = this.getAssetsBreakdown();
+        let nw = assets.netWorth;
+        let totalDebt = assets.totalLiabilities;
+        // Debt/Equity = Долговая нагрузка
         let debtRatio = nw > 0 ? (totalDebt / nw) : (totalDebt > 0 ? 1 : 0);
         
         let targetScore = 400; // Базовый скоринг
@@ -267,17 +294,20 @@ const FINANCE = {
         if (debtRatio < 0.1) targetScore += 150;
         else if (debtRatio < 0.3) targetScore += 50;
         else if (debtRatio > 0.7) targetScore -= 100;
-        else if (debtRatio > 1.0) targetScore -= 250;
+        else if (debtRatio > 1.0) {
+            targetScore -= 300; // Жесткий штраф за высокую долговую нагрузку
+        }
         
-        if (STATE.finances.balance < 0) targetScore -= 200;
+        if (STATE.finances.balance < 0) targetScore -= 300;
         
         targetScore = Math.max(0, Math.min(1000, targetScore));
         
-        // Плавное движение текущего рейтинга к целевому (на 2-5 пунктов в день)
+        // Плавное движение текущего рейтинга к целевому
+        // Ускоренное падение (по 10 пунктов), медленный рост (по 2 пункта)
         if (STATE.finances.creditScore < targetScore) {
-            STATE.finances.creditScore = Math.min(targetScore, STATE.finances.creditScore + 3);
+            STATE.finances.creditScore = Math.min(targetScore, STATE.finances.creditScore + 2);
         } else if (STATE.finances.creditScore > targetScore) {
-            STATE.finances.creditScore = Math.max(targetScore, STATE.finances.creditScore - 3);
+            STATE.finances.creditScore = Math.max(targetScore, STATE.finances.creditScore - 10);
         }
     }
 };
