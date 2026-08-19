@@ -2760,7 +2760,7 @@ const UI_DASHBOARD = {
 
     updateStockTab() {
         let container = document.getElementById('ui-stock-container');
-        if (!container || typeof STOCK_MARKET === 'undefined') return;
+        if (!container || typeof STOCK_MARKET === 'undefined' || !STATE.stockMarket) return;
         
         let html = `
             <div class="card" style="margin-bottom: 20px;">

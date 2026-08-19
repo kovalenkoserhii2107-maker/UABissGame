@@ -10,6 +10,7 @@ const GAME = {
             QUESTS.init();
             QUESTS.checkProgress();
         }
+        if (typeof STOCK_MARKET !== 'undefined') STOCK_MARKET.init();
         UI_DASHBOARD.update();
         if (typeof TUTORIAL !== 'undefined') {
             TUTORIAL.init();
