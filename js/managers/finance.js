@@ -83,8 +83,13 @@ const FINANCE = {
         if (STATE.finances.loans) STATE.finances.loans.forEach(l => totalLiabilities += l.remainingPrincipal);
         if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
 
-        let netWorth = cash + inventoryValue + logisticsValue + fixedAssets - totalLiabilities;
-        return { cash, fixedAssets, inventoryValue, logisticsValue, totalLiabilities, netWorth };
+        let depositValue = 0;
+        if (STATE.finances.deposits) {
+            STATE.finances.deposits.forEach(d => depositValue += (d.amount + (d.accrued || 0)));
+        }
+
+        let netWorth = cash + inventoryValue + logisticsValue + fixedAssets + depositValue - totalLiabilities;
+        return { cash, fixedAssets, inventoryValue, logisticsValue, depositValue, totalLiabilities, netWorth };
     },
 
     calculateNetWorth() {
@@ -92,9 +97,9 @@ const FINANCE = {
     },
 
     getAvailableLimit() {
-        // Банк 2.0: Залоговый лимит (70% недвижка/оборудование + 50% товары)
+        // Банк 2.0: Залоговый лимит (70% недвижка/оборудование + 50% товары + 90% депозиты + 50% кэш)
         let assets = this.getAssetsBreakdown();
-        return (assets.fixedAssets * 0.70) + (assets.inventoryValue * 0.50);
+        return (assets.fixedAssets * 0.70) + (assets.inventoryValue * 0.50) + (assets.depositValue * 0.90) + (assets.cash * 0.50);
     },
 
     // (Остальная логика уже перенесена в getAssetsBreakdown)

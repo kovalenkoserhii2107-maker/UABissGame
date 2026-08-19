@@ -1977,6 +1977,8 @@ const UI_DASHBOARD = {
         if (document.getElementById('ui-credit-limit')) document.getElementById('ui-credit-limit').innerText = formatMoney(FINANCE.getAvailableLimit());
         
         let assets = FINANCE.getAssetsBreakdown();
+        if (document.getElementById('ui-col-cash')) document.getElementById('ui-col-cash').innerText = '$' + formatMoney(Math.max(0, assets.cash) * 0.50);
+        if (document.getElementById('ui-col-dep')) document.getElementById('ui-col-dep').innerText = '$' + formatMoney(assets.depositValue * 0.90);
         if (document.getElementById('ui-col-fixed')) document.getElementById('ui-col-fixed').innerText = '$' + formatMoney(assets.fixedAssets * 0.70);
         if (document.getElementById('ui-col-inv')) document.getElementById('ui-col-inv').innerText = '$' + formatMoney(assets.inventoryValue * 0.50);
         
