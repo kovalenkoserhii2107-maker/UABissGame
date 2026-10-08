@@ -22,20 +22,22 @@ const B2B_AI = {
 
     generateOffers() {
         if (!STATE.b2bOffers) STATE.b2bOffers = [];
-        
-        STATE.b2bOffers = STATE.b2bOffers.filter(o => o.accepted || o.expiresDay > STATE.time.day);
+        if (STATE.market.lastOffersDay !== undefined && STATE.time.day - STATE.market.lastOffersDay < 7) return false;
+        STATE.market.lastOffersDay = STATE.time.day;
 
-        let numOffers = 3 + Math.floor(Math.random() * 3); 
+        STATE.b2bOffers = STATE.b2bOffers.filter(o => !o.accepted && o.expiresDay >= STATE.time.day);
+
+        let numOffers = 3 + Math.floor(Math.random() * 3);
 
         for (let i = 0; i < numOffers; i++) {
             let comp = this.competitors[Math.floor(Math.random() * this.competitors.length)];
             let itemId = this.allowedItems[Math.floor(Math.random() * this.allowedItems.length)];
             let basePrice = MARKET.prices[itemId] || 10;
-            
+
             let quality = (1.5 + Math.random() * 1.5).toFixed(1);
-            let pricePremium = 1.1 + (Math.random() * 0.2); 
-            let price = Math.round(basePrice * pricePremium);
-            
+            let pricePremium = 1.1 + (Math.random() * 0.2);
+            let price = Math.ceil(basePrice * parseFloat(quality) * pricePremium);
+
             let qty = (50 * comp.tier) + Math.floor(Math.random() * 100 * comp.tier);
 
             STATE.b2bOffers.push({
@@ -52,19 +54,20 @@ const B2B_AI = {
                 expiresDay: STATE.time.day + 6
             });
         }
-        
+
         if (typeof NOTIFY !== 'undefined') {
             NOTIFY.info('B2B Предложения', 'Поступили новые контракты от конкурентов!');
         }
-        
+
         if (typeof UI_DASHBOARD !== 'undefined' && typeof UI_DASHBOARD.updateB2BTab === 'function') {
             UI_DASHBOARD.updateB2BTab();
         }
+        return true;
     },
 
     acceptOffer(offerId) {
         let offer = STATE.b2bOffers.find(o => o.id === offerId);
-        if (!offer || offer.accepted) {
+        if (!offer || offer.accepted || offer.expiresDay < STATE.time.day) {
             if (typeof NOTIFY !== 'undefined') NOTIFY.error('Ошибка', 'Контракт не найден или уже закрыт.');
             return;
         }
@@ -74,26 +77,24 @@ const B2B_AI = {
             return;
         }
 
-        let citiesWithWh = Object.keys(STATE.company.warehouses);
-        if (citiesWithWh.length === 0) {
-            if (typeof NOTIFY !== 'undefined') NOTIFY.error('Нет складов', 'Для покупки товаров от конкурентов необходим хотя бы один логистический хаб (склад).');
-            return;
-        }
-
-        let targetCity = citiesWithWh.includes('odesa') ? 'odesa' : citiesWithWh[0];
-
-        STATE.finances.balance -= offer.totalPrice;
+        const cityId = document.getElementById('b2b-target-city')?.value;
+        const citiesWithWh = Object.keys(STATE.company.warehouses).filter(id => STATE.company.warehouses[id].level > 0 && WAREHOUSE.freeSpace(id) >= offer.qty * OPERATIONS.volume(offer.itemId));
+        const targetCity = citiesWithWh.includes(cityId) ? cityId : citiesWithWh[0];
+        if (!targetCity) { NOTIFY.error('Нет места', 'Откройте или расширьте склад для этой партии.'); return false; }
+        const logCost = GEO.getLogisticsCost('kyiv', targetCity, offer.qty * OPERATIONS.volume(offer.itemId), 'market');
+        if (!OPERATIONS.quantity(offer.qty) || !Number.isFinite(offer.totalPrice) || offer.totalPrice <= 0 || STATE.finances.balance < offer.totalPrice + logCost) return false;
+        LEDGER.cash(-offer.totalPrice - logCost, RECIPES.RESOURCES[offer.itemId].isEquipment ? 'investing' : 'operating', 'Покупка у NPC');
         // Товар становится активом на складе. В расходы (P&L) он пойдет только при фактической продаже.
 
         if (!STATE.logistics) STATE.logistics = { deliveries: [], receivables: [] };
-        
+
         STATE.logistics.deliveries.push({
-            id: 'del_' + Date.now(),
+            id: 'del_' + OPERATIONS.id(),
             item: offer.itemId,
             qty: offer.qty,
             cost: offer.totalPrice,
-            logCost: 0,
-            totalCost: offer.totalPrice,
+            logCost,
+            totalCost: offer.totalPrice + logCost,
             targetCity: targetCity,
             daysLeft: 1,
             isMarketOrder: false,
@@ -103,68 +104,32 @@ const B2B_AI = {
 
         offer.accepted = true;
         if (typeof NOTIFY !== 'undefined') NOTIFY.success('Контракт подписан!', `Груз направляется на склад в ${GEO.getCity(targetCity).name}.`);
-        
+
         if (typeof UI_DASHBOARD !== 'undefined') {
-            UI_DASHBOARD.updateTopPanel();
-            if (typeof UI_DASHBOARD.updateB2BTab === 'function') UI_DASHBOARD.updateB2BTab();
+            UI_DASHBOARD.update();
         }
     },
 
     autoGenerate() {
-        if(!STATE.b2bOffers) STATE.b2bOffers = [];
-        
-        // Удаляем старые, чтобы обновить полностью
-        STATE.b2bOffers = STATE.b2bOffers.filter(o => o.accepted || o.expiresDay > STATE.time.day);
-        
-        // Генерируем новые контракты (4-6 штук)
-        const possibleItems = typeof RECIPES !== 'undefined' ? Object.keys(RECIPES.RESOURCES) : ['grain', 'wood', 'oil'];
-        const count = 4 + Math.floor(Math.random() * 3);
-        
-        for(let i = 0; i < count; i++) {
-            let itemId = possibleItems[Math.floor(Math.random() * possibleItems.length)];
-            let res = typeof RECIPES !== 'undefined' ? RECIPES.RESOURCES[itemId] : { basePrice: 10 };
-            
-            let corp = this.competitors[Math.floor(Math.random() * this.competitors.length)];
-            let priceVar = 0.8 + Math.random() * 0.4; // Разброс цены 80-120%
-            let price = Math.max(1, Math.round(res.basePrice * priceVar));
-            let qty = 10 + Math.floor(Math.random() * 90);
-            
-            STATE.b2bOffers.push({
-                id: 'b2b_sync_' + Date.now() + '_' + i,
-                company: corp.name,
-                itemId: itemId,
-                qty: qty,
-                price: price,
-                totalPrice: qty * price,
-                quality: parseFloat((1.0 + Math.random() * 4.0).toFixed(1)),
-                brandName: corp.name,
-                brandPower: corp.brandMod,
-                accepted: false,
-                expiresDay: STATE.time.day + (3 + Math.floor(Math.random() * 5))
-            });
-        }
-        
-        // Закрываем модалку
-        let modal = document.getElementById('b2b-sync-modal');
-        if(modal) modal.style.display = 'none';
-        
-        if(typeof NOTIFY !== 'undefined') NOTIFY.success('ИИ-Стратегия применена', 'Сгенерированы уникальные контракты от мега-корпораций.');
-        if(typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.updateB2BTab();
+        if (!this.generateOffers()) NOTIFY.info('Предложения уже получены', 'Новые предложения доступны раз в 7 дней.');
+        const modal = document.getElementById('b2b-sync-modal');
+        if (modal) modal.style.display = 'none';
+        UI_DASHBOARD.update();
     },
 
     simulateMarketActions() {
         if (typeof MARKET === 'undefined' || typeof RECIPES === 'undefined' || !STATE.market || !STATE.market.pools) return;
-        
+
         let marketLog = [];
 
         this.competitors.forEach(comp => {
             // 1. Поведение: Выкуп сырья с рынка (если цена упала ниже базовой)
             let rawItems = Object.keys(RECIPES.RESOURCES).filter(k => RECIPES.RESOURCES[k].isRaw);
             let targetRaw = rawItems[Math.floor(Math.random() * rawItems.length)];
-            
+
             let basePriceRaw = RECIPES.RESOURCES[targetRaw].basePrice;
             let currentPriceRaw = MARKET.getCurrentPrice(targetRaw);
-            
+
             if (currentPriceRaw < basePriceRaw * 0.95 && STATE.market.pools[targetRaw] > 100) {
                 // ИИ выкупает 10-30% пула, создавая дефицит
                 let buyAmount = Math.floor(STATE.market.pools[targetRaw] * (0.1 + Math.random() * 0.2));
@@ -177,10 +142,10 @@ const B2B_AI = {
             // 2. Поведение: Демпинг готовой продукции (если цена высока)
             let finishedItems = Object.keys(RECIPES.RESOURCES).filter(k => !RECIPES.RESOURCES[k].isRaw && !RECIPES.RESOURCES[k].isEquipment);
             let targetFinished = finishedItems[Math.floor(Math.random() * finishedItems.length)];
-            
+
             let basePriceFin = RECIPES.RESOURCES[targetFinished].basePrice;
             let currentPriceFin = MARKET.getCurrentPrice(targetFinished);
-            
+
             if (currentPriceFin > basePriceFin * 1.05) {
                 // ИИ выбрасывает товар на рынок, обваливая цену
                 let dailyPool = RECIPES.RESOURCES[targetFinished].dailyMarketPool || 100;

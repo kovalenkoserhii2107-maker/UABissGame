@@ -144,9 +144,9 @@ const QUESTS = {
             title: 'Маркетинговый штаб',
             desc: 'Откройте Маркетинговое Агентство и наймите маркетологов для продвижения бренда.',
             reward: { money: 10000, score: 30, text: '+$10,000, +30 Скоринг' },
-            check: (s) => s.company.businesses.some(b => RECIPES.BUSINESSES[b.type] && RECIPES.BUSINESSES[b.type].isMarketing),
+            check: (s) => s.company.businesses.some(b => RECIPES.BUSINESSES[b.type] && RECIPES.BUSINESSES[b.type].isMarketing && (b.assigned?.marketer ?? 0) > 0),
             progress: (s) => {
-                let ok = s.company.businesses.some(b => RECIPES.BUSINESSES[b.type] && RECIPES.BUSINESSES[b.type].isMarketing);
+                let ok = s.company.businesses.some(b => RECIPES.BUSINESSES[b.type] && RECIPES.BUSINESSES[b.type].isMarketing && (b.assigned?.marketer ?? 0) > 0);
                 return { current: ok ? 1 : 0, target: 1, label: ok ? 'Агентство открыто' : 'Откройте агентство' };
             }
         },
@@ -261,10 +261,10 @@ const QUESTS = {
             title: 'Новая технология',
             desc: 'Разработайте в лаборатории технологию производства электроники, оптики или FPV-дронов.',
             reward: { money: 45000, score: 60, text: '+$45,000, +60 Скоринг' },
-            check: (s) => (s.rnd && s.rnd.unlocked && s.rnd.unlocked.length >= 3),
+            check: (s) => (s.rnd && s.rnd.unlocked && s.rnd.unlocked.some(k => ['microchips', 'optics_fab', 'camera_fab', 'pc_assembly', 'drones', 'drones_ai_fab', 'radio_assembly'].includes(k))),
             progress: (s) => {
-                let u = (s.rnd && s.rnd.unlocked) ? s.rnd.unlocked.length : 2;
-                return { current: Math.min(u, 3), target: 3, label: `${Math.min(u, 3)} / 3 технологии` };
+                let ok = s.rnd.unlocked.some(k => ['microchips', 'optics_fab', 'camera_fab', 'pc_assembly', 'drones', 'drones_ai_fab', 'radio_assembly'].includes(k));
+                return { current: ok ? 1 : 0, target: 1, label: ok ? 'Технология разработана' : 'Разработайте электронику, оптику или дроны' };
             }
         },
         {
@@ -273,9 +273,9 @@ const QUESTS = {
             title: 'Оборонный заказ',
             desc: 'Постройте Завод FPV-дронов или Сборку систем связи.',
             reward: { money: 60000, score: 80, text: '+$60,000, +80 Скоринг, Переход в 5 Главу!' },
-            check: (s) => s.company.businesses.some(b => ['drones', 'drones_ai_fab', 'pc_assembly', 'radio_assembly'].includes(b.type)),
+            check: (s) => s.company.businesses.some(b => ['drones', 'drones_ai_fab', 'radio_assembly'].includes(b.type)),
             progress: (s) => {
-                let ok = s.company.businesses.some(b => ['drones', 'drones_ai_fab', 'pc_assembly', 'radio_assembly'].includes(b.type));
+                let ok = s.company.businesses.some(b => ['drones', 'drones_ai_fab', 'radio_assembly'].includes(b.type));
                 return { current: ok ? 1 : 0, target: 1, label: ok ? 'Завод построен' : 'Постройте High-Tech цех' };
             }
         },
@@ -393,7 +393,7 @@ const QUESTS = {
 
         // Начисление наград
         if (q.reward.money) {
-            STATE.finances.balance += q.reward.money;
+            LEDGER.cash(q.reward.money, 'operating', 'Награда');
             if (typeof LEDGER !== 'undefined') LEDGER.record('rev_other', q.reward.money);
         }
         if (q.reward.score) {

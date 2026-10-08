@@ -1,38 +1,34 @@
 // Главный модуль интерфейса (Отрефакторенная версия)
 const UI_DASHBOARD = {
     // Состояния фильтров биржи
-    marketFilter: 'all', 
+    marketFilter: 'all',
     marketOptions: { hideEmpty: false, onlyMyStock: false },
     isMarketOptOpen: false,
 
     setMarketFilter(f) { this.marketFilter = f; this.update(); },
     toggleMarketOptMenu() { this.isMarketOptOpen = !this.isMarketOptOpen; this.update(); },
     toggleMarketOpt(opt) { this.marketOptions[opt] = !this.marketOptions[opt]; this.update(); },
-    
+
     // Мастер-метод: обновляет всё (вызывается при закрытии дня)
     update() {
-        try {
-            this.clearError();
-            
-            this.updateTopPanel();
-            this.updateDashboardTab();
-            this.updateContractsTab();
-            this.updateRnDTab();
-            this.updateWarehouseUI();
-            this.updateProductionTab();
-            this.updateRetailTab();
-            this.updateMarketingTab();
-            this.updateMarketTab();
-            this.updateHRTab();
-            this.updateBankTab();
-            this.updateFinanceTab();
-            if (typeof this.updateStockTab === 'function') this.updateStockTab();
-            if (typeof this.updateB2BTab === 'function') this.updateB2BTab();
-            if (typeof WIKI !== 'undefined') WIKI.render();
-            
-        } catch (err) {
-            this.showError(err);
+        const form = new Map();
+        document.querySelectorAll('input[id], select[id]').forEach(el => {
+            if (el.dataset.dirty || ['market-target-city', 'b2b-target-city'].includes(el.id)) form.set(el.id, { value: el.value, dirty: el.dataset.dirty });
+        });
+        const focus = document.activeElement?.id;
+        this.clearError();
+        if (!GAME.processing) QUESTS.checkProgress();
+        for (const method of ['updateTopPanel', 'updateDashboardTab', 'updateContractsTab', 'updateRnDTab', 'updateWarehouseUI', 'updateProductionTab', 'updateRetailTab', 'updateMarketingTab', 'updateMarketTab', 'updateHRTab', 'updateBankTab', 'updateFinanceTab', 'updateStockTab', 'updateB2BTab']) {
+            try { this[method](); } catch (error) { this.showError(error); }
         }
+        try { WIKI.render(); } catch (error) { this.showError(error); }
+        for (const [id, saved] of form) {
+            const el = document.getElementById(id);
+            if (el && (el.tagName !== 'SELECT' || [...el.options].some(o => o.value === saved.value))) { el.value = saved.value; if (saved.dirty) el.dataset.dirty = saved.dirty; }
+        }
+        if (focus) document.getElementById(focus)?.focus({ preventScroll: true });
+        ACCESSIBILITY.refresh();
+        PERSISTENCE.save();
     },
 
     // --- 1. ТОП-ПАНЕЛЬ ---
@@ -58,107 +54,42 @@ const UI_DASHBOARD = {
         this.initCharts();
         this.renderQuestWidget();
 
-        // 1. РАСЧЕТ КАПИТАЛИЗАЦИИ И АКТИВОВ
-        let cash = Math.max(0, STATE.finances.balance);
-        let inventoryValue = 0;
-        
-        // --- ИЗМЕНЕНИЕ 1: Подсчет инвентаря по всем складам (городам) ---
-        if (STATE.company.warehouses) {
-            Object.keys(STATE.company.warehouses).forEach(cId => {
-                let wh = STATE.company.warehouses[cId];
-                if (wh.inventory) {
-                    Object.keys(wh.inventory).forEach(k => {
-                        inventoryValue += wh.inventory[k].qty * wh.inventory[k].avgCost;
-                    });
-                }
-            });
-        }
-        
-        STATE.company.businesses.forEach(b => {
-            if (b.localInventory) Object.keys(b.localInventory).forEach(k => inventoryValue += b.localInventory[k].qty * b.localInventory[k].avgCost);
-        });
-        
-        let logisticsValue = 0;
-        if (STATE.logistics) {
-            if (STATE.logistics.deliveries) STATE.logistics.deliveries.forEach(d => logisticsValue += d.cost);
-            if (STATE.logistics.receivables) STATE.logistics.receivables.forEach(r => logisticsValue += r.amount);
-        }
-
-        let realEstateValue = 0;
-        let equipmentValue = 0;
-        STATE.company.businesses.forEach(b => {
-            let tpl = RECIPES.BUSINESSES[b.type];
-            let locMult = b.locMult || 1.0; 
-            realEstateValue += tpl.area * 50 * locMult;
-            for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult); 
-            if (b.equipment && b.equipment.count > 0) {
-                let eqPrice = RECIPES.RESOURCES[tpl.equipmentType].basePrice;
-                equipmentValue += (b.equipment.count * eqPrice) * ((b.equipment.condition || 0) / 100);
-            }
-        });
-        
-        // --- ИЗМЕНЕНИЕ 2: Подсчет стоимости складов по всем городам ---
-        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouses) {
-            Object.keys(STATE.company.warehouses).forEach(cId => {
-                let wh = STATE.company.warehouses[cId];
-                if (wh.level > 0) {
-                    for (let i = 1; i < wh.level; i++) {
-                        realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
-                    }
-                }
-            });
-        }
-        
-        // ЗАЩИТА: Проверяем существование лаборатории
-        if (STATE.rnd && STATE.rnd.facility && STATE.rnd.facility.level) {
-            let rndLvl = STATE.rnd.facility.level || 0;
-            for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
-            if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
-                let pcPrice = RECIPES.RESOURCES['smart_pc'].basePrice || 800;
-                equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * ((STATE.rnd.facility.equipment.condition || 0) / 100);
-            }
-        }
-        let fixedAssets = realEstateValue + equipmentValue;
-
-        let totalLiabilities = 0;
-        if (STATE.finances.loans) STATE.finances.loans.forEach(l => totalLiabilities += l.remainingPrincipal);
-        if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
-
-        let netWorth = cash + inventoryValue + logisticsValue + fixedAssets - totalLiabilities;
-
+        const assets = FINANCE.getAssetsBreakdown();
+        const { cash, inventoryValue, fixedAssets, netWorth } = assets;
+        const logisticsValue = assets.logisticsValue + assets.receivablesValue;
         document.getElementById('dash-kpi-cash').innerText = formatMoney(STATE.finances.balance);
         document.getElementById('dash-kpi-networth').innerText = formatMoney(netWorth);
-        
-        let yesterday = (STATE.ledger && STATE.ledger.history && STATE.ledger.history.length > 0) ? STATE.ledger.history[STATE.ledger.history.length - 1] : null;
+
+        let yesterday = STATE.ledger.yesterday;
         let rev = 0; let burn = 0;
         if (yesterday) {
             rev = (yesterday.rev_b2b||0) + (yesterday.rev_b2g||0) + (yesterday.rev_b2c||0) + (yesterday.rev_other||0) + (yesterday.fin_income||0);
-            burn = (yesterday.exp_materials||0) + (yesterday.exp_salary||0) + (yesterday.exp_admin||0) + (yesterday.exp_hr||0) + (yesterday.exp_fines||0) + (yesterday.exp_repair||0) + (yesterday.exp_taxes_payroll||0) + (yesterday.exp_taxes_corp||0) + (yesterday.exp_marketing||0) + (yesterday.fin_expense||0) + (yesterday.fin_fees||0);
+            burn = (yesterday.exp_depreciation||0) + (yesterday.exp_logistics||0) + (yesterday.exp_materials||0) + (yesterday.exp_salary||0) + (yesterday.exp_admin||0) + (yesterday.exp_hr||0) + (yesterday.exp_fines||0) + (yesterday.exp_repair||0) + (yesterday.exp_taxes_payroll||0) + (yesterday.exp_taxes_corp||0) + (yesterday.exp_marketing||0) + (yesterday.fin_expense||0) + (yesterday.fin_fees||0);
         }
-        
+
         if (document.getElementById('dash-kpi-revenue')) document.getElementById('dash-kpi-revenue').innerText = formatMoney(rev);
         if (document.getElementById('dash-kpi-burn')) document.getElementById('dash-kpi-burn').innerText = formatMoney(burn);
-        
+
         if (document.getElementById('dash-kpi-brand')) document.getElementById('dash-kpi-brand').innerText = (STATE.retail && STATE.retail.brand) ? STATE.retail.brand.toFixed(1) : '10.0';
         if (document.getElementById('dash-kpi-credit')) document.getElementById('dash-kpi-credit').innerText = typeof FINANCE !== 'undefined' ? formatMoney(FINANCE.getAvailableLimit()) : '0.00';
-        
+
         let staffCount = typeof HR !== 'undefined' ? HR.getTotalStaff() : 0;
         if (document.getElementById('dash-kpi-staff')) document.getElementById('dash-kpi-staff').innerText = staffCount;
-        
+
         let objCount = STATE.company.businesses.length;
-        if (STATE.company.warehouses) objCount += Object.keys(STATE.company.warehouses).length;
+        if (STATE.company.warehouses) objCount += Object.values(STATE.company.warehouses).filter(wh => wh.level > 0).length;
         if (document.getElementById('dash-kpi-objects')) document.getElementById('dash-kpi-objects').innerText = objCount;
 
         // 2. ОТРИСОВКА ГРАФИКОВ
         if (typeof Chart !== 'undefined') {
             let ctxAssets = document.getElementById('chart-assets').getContext('2d');
-            let assetsData = [cash, inventoryValue, fixedAssets, logisticsValue];
+            let assetsData = [cash, inventoryValue, fixedAssets, logisticsValue, assets.depositValue, assets.portfolioValue];
             if (!this.charts.assets) {
                 this.charts.assets = new Chart(ctxAssets, {
                     type: 'doughnut',
                     data: {
-                        labels: ['Cash', 'Склады', 'Инфраструктура', 'Логистика'],
-                        datasets: [{ data: assetsData, backgroundColor: ['#34C759', '#007AFF', '#FF9500', '#AF52DE'], borderWidth: 0, hoverOffset: 4 }]
+                        labels: ['Деньги', 'Запасы', 'Основные средства', 'Логистика', 'Депозиты', 'Акции'],
+                        datasets: [{ data: assetsData, backgroundColor: ['#34C759', '#007AFF', '#FF9500', '#AF52DE', '#5AC8FA', '#FF2D55'], borderWidth: 0, hoverOffset: 4 }]
                     },
                     options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } } } }
                 });
@@ -171,16 +102,16 @@ const UI_DASHBOARD = {
             let labels = [];
             let incomeData = [];
             let expenseData = [];
-            
-            let hist = (STATE.ledger && STATE.ledger.history) ? [...STATE.ledger.history].reverse() : [];
-            while (hist.length < 7) hist.unshift(null); 
+
+            let hist = STATE.ledger.cashFlow.history.slice(0, 7).reverse();
+            while (hist.length < 7) hist.unshift(null);
 
             hist.forEach((dayData, i) => {
-                let dayNum = STATE.time.day - (hist.length - i - 1) - 1; 
+                let dayNum = STATE.time.day - (hist.length - i - 1) - 1;
                 labels.push(`Д ${dayNum > 0 ? dayNum : '-'}`);
                 if (dayData) {
-                    let inc = (dayData.rev_b2b||0) + (dayData.rev_b2g||0) + (dayData.rev_b2c||0) + (dayData.rev_other||0) + (dayData.fin_income||0);
-                    let exp = (dayData.exp_materials||0) + (dayData.exp_salary||0) + (dayData.exp_admin||0) + (dayData.exp_hr||0) + (dayData.exp_fines||0) + (dayData.exp_repair||0) + (dayData.exp_taxes_payroll||0) + (dayData.exp_taxes_corp||0) + (dayData.exp_marketing||0) + (dayData.fin_expense||0) + (dayData.fin_fees||0);
+                    let inc = dayData.inflow ?? 0;
+                    let exp = dayData.outflow ?? 0;
                     incomeData.push(inc);
                     expenseData.push(exp);
                 } else {
@@ -216,7 +147,7 @@ const UI_DASHBOARD = {
         }
 
         // 2.5. СТРАТЕГИЧЕСКИЕ СВОДКИ (R&D, HR, Финансы)
-        
+
         // Сводка R&D
         let rndDiv = document.getElementById('dash-rnd-summary');
         if (rndDiv && STATE.rnd) {
@@ -232,7 +163,7 @@ const UI_DASHBOARD = {
                 let targetRP = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost;
                 let percent = targetRP > 0 ? Math.min(100, (STATE.rnd.points / targetRP) * 100) : 100;
                 let titleName = isUnlocked ? `Улучшение: ${tpl.name}` : `Изучение: ${tpl.name}`;
-                
+
                 rndDiv.innerHTML = `
                     <div style="font-weight:600; margin-bottom:5px; font-size:0.95em; color:var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${titleName}</div>
                     <div style="display:flex; justify-content:space-between; font-size:0.85em; color:var(--text-dim); margin-bottom:6px;">
@@ -251,14 +182,14 @@ const UI_DASHBOARD = {
         if (hrDiv && typeof HR !== 'undefined') {
             let total = HR.getTotalStaff();
             let training = STATE.hr.trainingQueue.length;
-            
+
             let counts = { factory: 0, rnd: 0, retail: 0, marketing: 0 };
             Object.keys(HR.GRADES).forEach(g => {
                 let amt = STATE.hr.staff[g] || 0;
                 let role = HR.GRADES[g].role;
                 if (counts[role] !== undefined) counts[role] += amt;
             });
-            
+
             hrDiv.innerHTML = `
                 <div style="font-size:1.4em; font-weight:700; color:var(--text); margin-bottom:10px;">${total} <span style="font-size:0.6em; color:var(--text-dim); font-weight:500;">сотрудников в штате</span></div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; font-size:0.85em; margin-bottom:12px;">
@@ -267,8 +198,8 @@ const UI_DASHBOARD = {
                     <div>📢 Маркетинг: <strong style="color:var(--text);">${counts.marketing}</strong></div>
                     <div>🔬 R&D: <strong style="color:var(--text);">${counts.rnd}</strong></div>
                 </div>
-                ${training > 0 
-                    ? `<div style="font-size:0.8em; padding:4px 8px; background:var(--orange-dim); color:var(--orange); border-radius:6px; display:inline-block; font-weight:500;">🎓 В Академии (обучение): ${training} чел.</div>` 
+                ${training > 0
+                    ? `<div style="font-size:0.8em; padding:4px 8px; background:var(--orange-dim); color:var(--orange); border-radius:6px; display:inline-block; font-weight:500;">🎓 В Академии (обучение): ${training} чел.</div>`
                     : `<div style="font-size:0.8em; color:var(--text-dim);">Никто не проходит обучение</div>`}
             `;
         }
@@ -277,22 +208,22 @@ const UI_DASHBOARD = {
         let finDiv = document.getElementById('dash-fin-summary');
         if (finDiv && STATE.ledger && STATE.ledger.yesterday) {
             let y = STATE.ledger.yesterday;
-            
+
             let yRevB2C = y.rev_b2c || 0;
             let yRevOther = y.rev_other || 0;
             let yRev = (y.rev_b2b||0) + (y.rev_b2g||0) + yRevB2C + yRevOther;
-            
+
             let yOpex = (y.exp_salary||0) + (y.exp_admin||0) + (y.exp_hr||0) + (y.exp_fines||0) + (y.exp_repair||0) + (y.exp_taxes_payroll||0) + (y.exp_marketing||0);
             let yMaterials = y.exp_materials || 0;
-            
+
             let yEbitda = yRev - yMaterials - yOpex;
             let yFin = (y.fin_income||0) - (y.fin_expense||0) - (y.fin_fees||0);
             let yEbt = yEbitda + yFin;
             let yNet = yEbt - (y.exp_taxes_corp||0);
-            
+
             let ebitdaColor = yEbitda > 0 ? 'var(--green)' : (yEbitda < 0 ? 'var(--red)' : 'var(--text-dim)');
             let netColor = yNet > 0 ? 'var(--green)' : (yNet < 0 ? 'var(--red)' : 'var(--text-dim)');
-            
+
             finDiv.innerHTML = `
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85em;">
                     <span style="color:var(--text-dim);">Выручка (Доходы)</span>
@@ -323,10 +254,10 @@ const UI_DASHBOARD = {
                 STATE.company.businesses.forEach(biz => {
                     let tpl = RECIPES.BUSINESSES[biz.type];
                     let level = biz.level || 1;
-                    let statusColor = '#34C759'; 
+                    let statusColor = '#34C759';
                     let statusText = 'В норме';
                     let icon = '🏭';
-                    
+
                     if (tpl.isRetail) {
                         icon = '🏪';
                         let hasStock = biz.localInventory && Object.values(biz.localInventory).some(inv => inv.qty > 0);
@@ -340,7 +271,7 @@ const UI_DASHBOARD = {
                         let prodPower = ((biz.assigned.junior||0) * HR.GRADES.junior.prodMult) + ((biz.assigned.middle||0) * HR.GRADES.middle.prodMult) + ((biz.assigned.senior||0) * HR.GRADES.senior.prodMult);
                         let uiEfficiency = maxStaff > 0 ? (prodPower / maxStaff) : 1;
                         if (assignedTotal === 0) uiEfficiency = 0;
-                        
+
                         let eqCount = biz.equipment.count || 0;
                         let cond = biz.equipment.condition !== undefined ? biz.equipment.condition : 100;
                         let conditionMult = cond < 70 ? Math.max(0.0, cond/70) : 1.0;
@@ -352,8 +283,8 @@ const UI_DASHBOARD = {
                             Object.keys(tpl.inputs).forEach(k => {
                                 // --- ИЗМЕНЕНИЕ 3: Ищем сырье в том городе, где находится завод ---
                                 let city = biz.city || 'odesa';
-                                let inQty = (STATE.company.warehouses && STATE.company.warehouses[city] && STATE.company.warehouses[city].inventory[k]) 
-                                    ? STATE.company.warehouses[city].inventory[k].qty 
+                                let inQty = (STATE.company.warehouses && STATE.company.warehouses[city] && STATE.company.warehouses[city].inventory[k])
+                                    ? STATE.company.warehouses[city].inventory[k].qty
                                     : 0;
                                 let req = tpl.inputs[k] * estDailyOutput;
                                 let days = Math.floor(inQty / req);
@@ -375,7 +306,7 @@ const UI_DASHBOARD = {
                     radarList.innerHTML += `
                         <li style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
                             <div>
-                                <strong>${icon} ${biz.name || tpl.name}</strong><br>
+                                <strong>${icon} ${escapeHTML(biz.name || tpl.name)}</strong><br>
                                 <small style="color:var(--text-dim);">${tpl.name}</small>
                             </div>
                             <div style="display:flex; align-items:center; gap:8px;">
@@ -415,7 +346,7 @@ const UI_DASHBOARD = {
     updateContractsTab() {
         if (typeof CONTRACTS === 'undefined') return;
         CONTRACTS.init();
-        
+
         let availList = document.getElementById('ui-contracts-available');
         if (availList) {
             availList.innerHTML = '';
@@ -429,11 +360,11 @@ const UI_DASHBOARD = {
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                             <div>
                                 <div style="font-weight:700; font-size:1.1rem; color:var(--text); margin-bottom:4px;">${itemName}</div>
-                                <div style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Объем: <span style="color:var(--text);">${c.qty} шт.</span></div>
+                                <div style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Объем: <span style="color:var(--text);">${c.qty} шт.</span> · Качество от ${(c.minQuality ?? 1).toFixed(1)}</div>
                             </div>
                             <div style="background:var(--red-dim); color:var(--red); padding:4px 8px; border-radius:8px; font-size:0.85rem; font-weight:700;">Срок: ${c.deadline} дн.</div>
                         </div>
-                        
+
                         <div style="display:flex; gap:16px; margin-bottom:16px; padding-top:12px; border-top:1px dashed var(--border);">
                             <div>
                                 <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Цена за шт.</div>
@@ -467,22 +398,22 @@ const UI_DASHBOARD = {
                     if (STATE.company.warehouses) {
                         Object.keys(STATE.company.warehouses).forEach(cId => {
                             let wh = STATE.company.warehouses[cId];
-                            if (wh.inventory && wh.inventory[c.item]) inv += wh.inventory[c.item].qty;
+                            if (wh.level > 0 && wh.inventory?.[c.item] && (wh.inventory[c.item].quality ?? 1) >= (c.minQuality ?? 1)) inv += wh.inventory[c.item].qty;
                         });
                     }
                     let canFulfill = inv >= c.qty;
                     let progress = Math.min(100, (inv / c.qty) * 100);
-                    
+
                     activeList.innerHTML += `
                     <div style="background: ${canFulfill ? 'rgba(52, 199, 89, 0.05)' : 'var(--surface-2)'}; border:1px solid ${canFulfill ? 'rgba(52, 199, 89, 0.3)' : 'var(--border)'}; border-radius:12px; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
                             <div>
                                 <div style="font-weight:700; font-size:1.1rem; color:var(--text); margin-bottom:4px;">${itemName}</div>
-                                <div style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Собрано: <span style="color:${canFulfill ? 'var(--green)' : 'var(--text)'};">${inv} / ${c.qty}</span> шт.</div>
+                                <div style="font-size:0.85rem; color:var(--text-dim); font-weight:600;">Собрано: <span style="color:${canFulfill ? 'var(--green)' : 'var(--text)'};">${inv} / ${c.qty}</span> шт. · Качество от ${(c.minQuality ?? 1).toFixed(1)}</div>
                             </div>
                             <div style="background:${c.deadline <= 3 ? 'var(--red-dim)' : 'var(--orange-dim)'}; color:${c.deadline <= 3 ? 'var(--red)' : 'var(--orange)'}; padding:4px 8px; border-radius:8px; font-size:0.85rem; font-weight:700;">Осталось: ${c.deadline} дн.</div>
                         </div>
-                        
+
                         <!-- Прогресс бар сборки -->
                         <div style="height:8px; background:rgba(0,0,0,0.05); border-radius:4px; margin-bottom:16px; overflow:hidden;">
                             <div style="height:100%; background:${canFulfill ? 'var(--green)' : 'var(--blue)'}; width:${progress}%;"></div>
@@ -508,15 +439,7 @@ const UI_DASHBOARD = {
 
     // --- 4. ЛАБОРАТОРИЯ R&D ---
     // Словарь иконок для технологий
-    _rndTechIcons: {
-        bakery_fab: '🥖', canned_food_fab: '🥫', clothes_fab: '👗',
-        chem_fab: '🧴', furniture_fab: '🪑', optics_fab: '🔭',
-        drone_fab: '🚁', battery_fab: '🔋', solar_fab: '☀️',
-        toy_fab: '🧸', electronics_fab: '📱', auto_fab: '🚗',
-        microchips: '💾', parts3d: '🖨️', smart_pc: '💻',
-        medtech_fab: '💊', agro_fab: '🌾', steel_fab: '⚙️',
-        lab_equip: '🔬', crypto_farm: '₿', textile_fab: '🧵',
-    },
+    _rndTechIcons: Object.fromEntries(Object.entries(RECIPES.BUSINESSES).map(([k, v]) => [k, v.icon ?? "🏭"])),
 
     updateRnDTab() {
         if (typeof RND === 'undefined') return;
@@ -581,7 +504,7 @@ const UI_DASHBOARD = {
                 <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
                     <div>
                         <div style="font-weight:600; color:var(--text);">Лаборант</div>
-                        <div style="font-size:0.78rem; color:var(--text-dim);">+1 RP/день • ЗП $${formatMoney(150)}/дн</div>
+                        <div style="font-size:0.78rem; color:var(--text-dim);">+${HR.GRADES.scientist.rp} RP/день • ЗП $${formatMoney(HR.GRADES.scientist.salary)}/дн</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <button onclick="RND.removeStaff('scientist')" style="background:var(--red-dim); color:var(--red); border:none; width:32px; height:32px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700;">−</button>
@@ -592,7 +515,7 @@ const UI_DASHBOARD = {
                 <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); padding:12px 16px; border-radius:var(--radius-sm); border:1px solid var(--border);">
                     <div>
                         <div style="font-weight:600; color:var(--text);">Ст. Учёный</div>
-                        <div style="font-size:0.78rem; color:var(--text-dim);">+3 RP/день • ЗП $${formatMoney(400)}/дн</div>
+                        <div style="font-size:0.78rem; color:var(--text-dim);">+${HR.GRADES.lead_scientist.rp} RP/день • ЗП $${formatMoney(HR.GRADES.lead_scientist.salary)}/дн</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <button onclick="RND.removeStaff('lead_scientist')" style="background:var(--red-dim); color:var(--red); border:none; width:32px; height:32px; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:700;">−</button>
@@ -895,14 +818,14 @@ const UI_DASHBOARD = {
     // --- 5. СКЛАДСКИЕ КАРТОЧКИ ---
     updateWarehouseUI() {
         if (typeof WAREHOUSE === 'undefined') return;
-        WAREHOUSE.init(); 
-        
+        WAREHOUSE.init();
+
         let warehouseList = document.getElementById('ui-warehouse-list');
         if (!warehouseList) return;
-        
+
         warehouseList.innerHTML = '';
         let hasWarehouses = false;
-        
+
         Object.keys(STATE.company.warehouses).forEach(cId => {
             let wh = STATE.company.warehouses[cId];
             if (wh.level > 0) {
@@ -912,7 +835,7 @@ const UI_DASHBOARD = {
                 let maxVol = WAREHOUSE.getMaxVolume(cId);
                 let percent = maxVol > 0 ? Math.min(100, (curVol / maxVol) * 100).toFixed(1) : 0;
                 let dailyRent = WAREHOUSE.getDailyRent(cId);
-                
+
                 let nextMaxVol = Math.floor(5000 * Math.pow(1.5, wh.level));
                 let upgradeCost = WAREHOUSE.getUpgradeCost(cId);
                 let addedVol = nextMaxVol - maxVol;
@@ -923,7 +846,7 @@ const UI_DASHBOARD = {
 
                 let invHtml = '';
                 if (!wh.inventory) wh.inventory = {};
-                
+
                 Object.keys(RECIPES.RESOURCES).forEach(key => {
                     let inv = wh.inventory[key];
                     if (inv && inv.qty > 0) {
@@ -931,17 +854,17 @@ const UI_DASHBOARD = {
                         let totalVal = inv.qty * inv.avgCost;
                         let volStr = res.volume > 0 ? res.volume + ' м³/шт' : 'Цифровой товар';
                         let icon = this._resIcons && this._resIcons[key] ? this._resIcons[key] : '📦';
-                        
+
                         let storeOptions = '';
                         STATE.company.businesses.forEach(b => {
                             let bTpl = RECIPES.BUSINESSES[b.type];
                             if (bTpl.isRetail && bTpl.accepts && bTpl.accepts.includes(key)) {
                                 let storeCityName = typeof GEO !== 'undefined' ? GEO.getCity(b.city || 'odesa').name : '';
                                 let extraCost = (b.city || 'odesa') !== cId ? ' (Платная дост.)' : '';
-                                storeOptions += `<option value="${b.uid}">${b.name} - ${storeCityName}${extraCost}</option>`;
+                                storeOptions += `<option value="${b.uid}">${escapeHTML(b.name)} - ${storeCityName}${extraCost}</option>`;
                             }
                         });
-                        
+
                         let transferHtml = '';
                         if (storeOptions !== '') {
                             transferHtml = `
@@ -984,7 +907,7 @@ const UI_DASHBOARD = {
                         </div>`;
                     }
                 });
-                
+
                 if (invHtml === '') {
                     invHtml = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-dim); background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Склад пуст. Закупите продукцию на B2B-рынке или отправьте сюда произведенные товары.</div>';
                 }
@@ -1004,7 +927,7 @@ const UI_DASHBOARD = {
                                 <div style="font-size:0.85rem; text-transform:uppercase; font-weight:800; color:var(--text-dim); margin-bottom:4px;">Заполненность</div>
                                 <div style="font-size:1.1rem; font-weight:800; color:var(--text);">${curVol.toFixed(1)} <span style="font-size:0.85rem; color:var(--text-dim); font-weight:500;">/ ${maxVol} м³</span></div>
                             </div>
-                            
+
                             <div style="position:relative; width:54px; height:54px;">
                                 <svg viewBox="0 0 36 36" style="width:100%; height:100%; transform: rotate(-90deg);">
                                     <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--surface-3)" stroke-width="4"/>
@@ -1016,10 +939,10 @@ const UI_DASHBOARD = {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div style="padding:24px;">
                         <div style="font-size:0.85rem; text-transform:uppercase; font-weight:800; color:var(--text-dim); margin-bottom:16px;">📦 Инвентарь на складе</div>
-                        
+
                         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px;">
                             ${invHtml}
                         </div>
@@ -1044,26 +967,10 @@ const UI_DASHBOARD = {
 
     // --- 6. ПРОИЗВОДСТВО ---
     // Словарь иконок для производств
-    _bizIcons: {
-        bakery_fab: '🥖', canned_food_fab: '🥫', clothes_fab: '👗',
-        chem_fab: '🧴', furniture_fab: '🪑', optics_fab: '🔭',
-        fab_3d: '🖨️', microchips: '💾', servo_fab: '⚙️',
-        battery_fab: '🔋', camera_fab: '📷', drop_fab: '🪂',
-        software_co: '💻', ai_lab: '🤖', pc_fab: '🖥️',
-        radio_fab: '📡', drones: '🚁', drones_ai_fab: '🛡️',
-        retail_eq_fab: '🏪', server_fab: '🗄️', marketing_agency: '📢',
-    },
+    _bizIcons: Object.fromEntries(Object.entries(RECIPES.BUSINESSES).map(([k,v]) => [k, v.icon ?? "🏭"])),
 
     // Тематические цвета по категориям
-    _bizColors: {
-        bakery_fab: '#e67e22', canned_food_fab: '#e74c3c', clothes_fab: '#e91e63',
-        chem_fab: '#9c27b0', furniture_fab: '#795548', optics_fab: '#2196f3',
-        fab_3d: '#00bcd4', microchips: '#3f51b5', servo_fab: '#607d8b',
-        battery_fab: '#ff9800', camera_fab: '#4caf50', drop_fab: '#009688',
-        software_co: '#673ab7', ai_lab: '#f44336', pc_fab: '#2196f3',
-        radio_fab: '#00838f', drones: '#1565c0', drones_ai_fab: '#b71c1c',
-        retail_eq_fab: '#388e3c', server_fab: '#455a64',
-    },
+    _bizColors: Object.fromEntries(Object.entries(RECIPES.BUSINESSES).map(([k,v]) => [k, v.color ?? "var(--blue)"])),
 
     toggleBuyPanel() {
         let panel = document.getElementById('ui-buy-panel');
@@ -1091,7 +998,7 @@ const UI_DASHBOARD = {
                 let lvl = b.level||1;
                 let maxOut = (b.equipment.count||0) * (t.outputPerMachine||10);
                 totalOutput += maxOut;
-                totalCost += (t.area*2*lvl) + assigned*200;
+                totalCost += t.area * 2 * lvl * b.locMult + ['junior','middle','senior'].reduce((n,g) => n + (b.assigned[g] ?? 0) * HR.GRADES[g].salary * GEO.getCity(b.city).salaryMult * (1 + TAXES.RATES.payroll), 0);
             });
             let dashMetrics = [
                 { icon:'🏭', label:'Заводов',    value: factories.length,           color:'var(--blue)' },
@@ -1112,14 +1019,12 @@ const UI_DASHBOARD = {
         let buyContainer = document.getElementById('ui-buy-businesses');
         if (buyContainer) {
             buyContainer.innerHTML = '';
-            const TIERS = {
-                food: { label: '🥗 Пищевая промышленность', color: '#e67e22', keys: ['bakery_fab','canned_food_fab'] },
-                light: { label: '👕 Лёгкая промышленность', color: '#e91e63', keys: ['clothes_fab','chem_fab','furniture_fab'] },
-                optics: { label: '🔬 Точная механика', color: '#2196f3', keys: ['fab_3d','optics_fab','camera_fab','drop_fab'] },
-                electronics: { label: '💡 Электроника и IT', color: '#3f51b5', keys: ['microchips','pc_fab','software_co','ai_lab'] },
-                defense: { label: '🛡️ Оборонная промышленность', color: '#b71c1c', keys: ['servo_fab','battery_fab','radio_fab','drones','drones_ai_fab'] },
-                equip: { label: '🏗️ Производство оборудования', color: '#607d8b', keys: ['retail_eq_fab','server_fab'] },
-            };
+            const TIERS = {"food": {"label": "🥗 Пищевая промышленность", "color": "#e67e22"}, "light": {"label": "👕 Лёгкая промышленность", "color": "#e91e63"}, "optics": {"label": "🔬 Точная механика", "color": "#2196f3"}, "electronics": {"label": "💡 Электроника и IT", "color": "#3f51b5"}, "defense": {"label": "🛡️ Оборонная промышленность", "color": "#b71c1c"}, "equip": {"label": "🏗️ Производство оборудования", "color": "#607d8b"}};
+            for (const [key, tpl] of Object.entries(RECIPES.BUSINESSES)) {
+                if (tpl.isRetail || tpl.isMarketing) continue;
+                const tier = TIERS[tpl.category];
+                (tier.keys ??= []).push(key);
+            }
 
             let html = '';
             Object.values(TIERS).forEach(tier => {
@@ -1293,7 +1198,7 @@ const UI_DASHBOARD = {
                 routingHtml = viableRoutes.map(r => {
                     let val = biz.routing[r.id] || 0;
                     return `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span style="font-size:0.9rem; color:var(--text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.name}</span>
+                        <span style="font-size:0.9rem; color:var(--text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(r.name)}</span>
                         <div style="display:flex; align-items:center; gap:4px; margin-left:8px;">
                             <input type="number" id="route-${biz.uid}-${r.id}" value="${val}" min="0" style="width:56px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:0.9rem; text-align:right;">
                             <span style="font-size:0.85rem; color:var(--text-dim);">шт</span>
@@ -1318,7 +1223,7 @@ const UI_DASHBOARD = {
                     <div style="display:flex; align-items:center; gap:12px;">
                         <div style="font-size:2.2rem;">${bizIcon}</div>
                         <div>
-                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">${biz.name || tpl.name}</div>
+                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">${escapeHTML(biz.name || tpl.name)}</div>
                             <div style="font-size:0.78rem; color:var(--text-dim);">
                                 Ур.${level} • 📍 ${cityData.name} • 🔬 Тех. v${q_tech.toFixed(2)} • 💸 $${formatMoney(adminCost+salaryCost)}/дн
                             </div>
@@ -1439,7 +1344,7 @@ const UI_DASHBOARD = {
                         <!-- Общая эффективность (Диаграмма) -->
                         <div style="background:var(--surface); border-radius:12px; padding:16px; border:1px solid var(--border); box-shadow:0 4px 15px rgba(0,0,0,0.02);">
                             <div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:800; margin-bottom:12px; display:flex; align-items:center; gap:6px;">📊 Эффективность (КПД)</div>
-                            
+
                             <div style="position:relative; width:140px; height:140px; margin:0 auto 16px auto;">
                                 <svg viewBox="0 0 36 36" style="width:100%; height:100%; transform: rotate(-90deg);">
                                     <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="var(--surface-3)" stroke-width="3.5" stroke-linecap="round"/>
@@ -1450,7 +1355,7 @@ const UI_DASHBOARD = {
                                     <span style="font-size:0.9rem; color:var(--text-dim); margin-top:2px;">мощности</span>
                                 </div>
                             </div>
-                            
+
                             <div style="text-align:center; font-size:0.85rem; color:var(--text-dim); margin-bottom:16px; background:${effColor}10; padding:6px; border-radius:6px; font-weight:600; color:${effColor}; border:1px dashed ${effColor}40;">
                                 ${effPercent >= 80 ? '🔥 Идеальная работа' : effPercent >= 40 ? '⚙️ Требуется настройка' : assignedTotal === 0 ? '😴 Назначьте персонал' : '⚠️ Простой производства'}
                             </div>
@@ -1501,12 +1406,14 @@ const UI_DASHBOARD = {
         <div style="background:linear-gradient(135deg, rgba(52,152,219,0.1), rgba(155,89,182,0.1)); border:1px solid rgba(52,152,219,0.2); border-radius:16px; padding:20px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center;">
             <div>
                 <h3 style="margin:0 0 8px 0; color:var(--text); display:flex; align-items:center; gap:8px;"><span style="font-size:1.5rem;">🤖</span> AI-Конкуренты (B2B Рынок)</h3>
-                <p style="margin:0; color:var(--text-dim); font-size:0.9rem;">В игре действуют 10 конкурирующих корпораций. Вы можете синхронизировать их поведение с LLM (ИИ-Ассистентом).</p>
+                <p style="margin:0; color:var(--text-dim); font-size:0.9rem;">Предложения конкурентов рассчитываются в игре и обновляются раз в 7 дней.</p>
             </div>
-            <button onclick="document.getElementById('b2b-sync-modal').style.display='flex'" style="background:linear-gradient(135deg, var(--blue), #9b59b6); color:white; border:none; padding:12px 24px; border-radius:12px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 12px rgba(52,152,219,0.3); transition:0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Синхронизация с ИИ</button>
+            <button onclick="document.getElementById('b2b-sync-modal').style.display='flex'" style="background:linear-gradient(135deg, var(--blue), #9b59b6); color:white; border:none; padding:12px 24px; border-radius:12px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 12px rgba(52,152,219,0.3); transition:0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Обновление предложений</button>
         </div>
         `;
 
+        html += `<label for="b2b-target-city">Склад для поставки</label>
+            <select id="b2b-target-city">${Object.entries(GEO.CITIES).filter(([id]) => STATE.company.warehouses[id]?.level > 0).map(([id, city]) => `<option value="${id}">${city.name}</option>`).join('')}</select>`;
         html += `<h3 style="margin:0 0 16px 0; color:var(--text);">📋 Активные предложения (Контракты)</h3>`;
 
         if (activeOffers.length === 0) {
@@ -1520,7 +1427,7 @@ const UI_DASHBOARD = {
                 let icon = this._resIcons && this._resIcons[offer.itemId] ? this._resIcons[offer.itemId] : '📦';
                 let name = itemDef.name || offer.itemId;
                 let daysLeft = offer.expiresDay - STATE.time.day;
-                
+
                 let stars = '';
                 let q = Math.round(offer.quality);
                 for(let i=0; i<q; i++) stars += '⭐';
@@ -1530,7 +1437,7 @@ const UI_DASHBOARD = {
                     <div style="display:flex; align-items:center; gap:20px;">
                         <div style="font-size:32px; background:var(--surface-2); padding:12px; border-radius:12px;">${icon}</div>
                         <div>
-                            <h3 style="margin:0 0 6px 0; font-size:1.1rem;">Контракт от «${offer.company}»</h3>
+                            <h3 style="margin:0 0 6px 0; font-size:1.1rem;">Контракт от «${escapeHTML(offer.company)}»</h3>
                             <div style="color:var(--text); font-weight:700; margin-bottom: 6px;">
                                 Поставка: <span style="color:var(--blue);">${offer.qty} шт.</span> ${name}
                             </div>
@@ -1555,13 +1462,13 @@ const UI_DASHBOARD = {
         <h3 style="margin:0 0 16px 0; color:var(--text);">🏢 Корпорации (NPC Игроки)</h3>
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:16px;">
         `;
-        
+
         if (typeof B2B_AI !== 'undefined' && B2B_AI.competitors) {
             B2B_AI.competitors.forEach(comp => {
                 html += `
                 <div style="background:var(--surface); padding:16px; border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-card);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                        <h4 style="margin:0; font-size:1.1rem; color:var(--text);">${comp.name}</h4>
+                        <h4 style="margin:0; font-size:1.1rem; color:var(--text);">${escapeHTML(comp.name)}</h4>
                         <span style="background:var(--surface-3); padding:4px 8px; border-radius:6px; font-size:0.9rem; font-weight:700;">Тир ${comp.tier}</span>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.9rem;">
@@ -1571,7 +1478,7 @@ const UI_DASHBOARD = {
                 </div>`;
             });
         }
-        
+
         html += `</div>`;
         container.innerHTML = html;
     },
@@ -1601,7 +1508,7 @@ const UI_DASHBOARD = {
                     if (STATE.logistics && STATE.logistics.deliveries) {
                         STATE.logistics.deliveries.forEach(d => {
                             if (d.targetCity === cId && RECIPES.RESOURCES[d.item]) {
-                                pendingVol += d.qty * (RECIPES.RESOURCES[d.item].volume || 1.0);
+                                pendingVol += d.qty * OPERATIONS.volume(d.item);
                             }
                         });
                     }
@@ -1633,7 +1540,7 @@ const UI_DASHBOARD = {
                 <div style="margin-bottom: 24px; background: rgba(243,156,18,0.05); border: 1px solid rgba(243,156,18,0.2); border-radius: 12px; padding: 20px;">
                     <h4 style="margin: 0 0 16px 0; color: var(--orange); display:flex; align-items:center; gap:8px;"><span style="font-size:1.4rem;">📦</span> В пути (Закупки с рынка)</h4>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">`;
-                
+
                 marketOrders.forEach(d => {
                     let resName = RECIPES.RESOURCES[d.item] ? RECIPES.RESOURCES[d.item].name : d.item;
                     let icon = this._resIcons && this._resIcons[d.item] ? this._resIcons[d.item] : '📦';
@@ -1689,7 +1596,7 @@ const UI_DASHBOARD = {
             let basePrice = MARKET.getCurrentPrice(key);
             let availQty = MARKET.getAvailablePool(key);
             let icon = this._resIcons && this._resIcons[key] ? this._resIcons[key] : '📦';
-            
+
             // Инвентарь для продажи
             let inventoryHtml = '';
             Object.keys(STATE.company.warehouses).forEach(cId => {
@@ -1720,7 +1627,7 @@ const UI_DASHBOARD = {
                             <div style="font-size:2.4rem;">${icon}</div>
                             <div>
                                 <h3 style="margin:0; font-size:1.1rem; color:var(--text);">${res.name}</h3>
-                                <div style="color:var(--text-dim); font-size:0.85rem;">Объем: ${res.volume || 1} м³</div>
+                                <div style="color:var(--text-dim); font-size:0.85rem;">Объем: ${res.volume === 0 ? 'цифровой товар' : res.volume + ' м³'}</div>
                             </div>
                         </div>
                         <div style="text-align:right;">
@@ -1733,7 +1640,7 @@ const UI_DASHBOARD = {
                         <span style="font-weight:700; color:var(--blue); font-size:0.95rem;">${availQty} шт</span>
                     </div>
                 </div>
-                
+
                 <div style="padding:0 16px;">${inventoryHtml}</div>
 
                 <div style="padding:16px; border-top:1px solid var(--border); background:var(--surface-2); margin-top:auto;">
@@ -1759,7 +1666,7 @@ const UI_DASHBOARD = {
         if(!res) return;
         let icon = this._resIcons && this._resIcons[itemKey] ? this._resIcons[itemKey] : '📦';
         let basePrice = MARKET.getCurrentPrice(itemKey);
-        
+
         let producers = [];
         let consumers = [];
         if(RECIPES.BUSINESSES) {
@@ -1768,7 +1675,7 @@ const UI_DASHBOARD = {
                 if(biz.inputs && biz.inputs[itemKey]) consumers.push(biz.name);
             });
         }
-        
+
         let descHtml = `<div style="font-size:0.9rem; color:var(--text-dim); line-height:1.5; margin-bottom:20px;">
             <p><strong>${res.name}</strong> — ${res.isRaw ? 'Базовое сырье' : res.isEquipment ? 'Оборудование' : 'Готовая продукция'}.
             Широко используется на глобальном рынке B2B. Цены зависят от спроса и глобальной инфляции.</p>
@@ -1790,7 +1697,7 @@ const UI_DASHBOARD = {
             </div>
             <div style="padding:24px;">
                 ${descHtml}
-                
+
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                     <h3 style="margin:0;">📈 Динамика цены</h3>
                     <div id="chart-buttons" style="display:flex; gap:8px;">
@@ -1804,7 +1711,7 @@ const UI_DASHBOARD = {
                 </div>
             </div>
         `;
-        
+
         document.getElementById('market-item-modal').style.display = 'flex';
         this.updateMarketChart(itemKey, 7);
     },
@@ -1820,28 +1727,13 @@ const UI_DASHBOARD = {
     updateMarketChart(itemKey, days) {
         let ctx = document.getElementById('marketChart');
         if(!ctx) return;
-        
-        let basePrice = MARKET.getCurrentPrice(itemKey);
-        let labels = [];
-        let data = [];
-        let curPrice = basePrice * (1 - (Math.random()*0.2 - 0.1));
-        
-        for(let i=days; i>=0; i--) {
-            if(days <= 30) {
-                let d = STATE.time.day - i;
-                labels.push(`День ${d > 0 ? d : 1}`);
-            } else if(i%30===0) {
-                labels.push(`Мес ${Math.floor(i/30)} назад`);
-            }
-            
-            curPrice = curPrice + (curPrice * (Math.random()*0.06 - 0.03));
-            if(i===0) curPrice = basePrice;
-            
-            if(days <= 30 || i%30===0) data.push(curPrice);
-        }
+
+        const history = STATE.market.priceHistory[itemKey].filter(h => h.day > STATE.time.day - days);
+        const labels = history.map(h => `День ${h.day}`);
+        const data = history.map(h => h.price);
 
         if(this.marketChartInstance) this.marketChartInstance.destroy();
-        
+
         this.marketChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1869,7 +1761,7 @@ const UI_DASHBOARD = {
                 }
             }
         });
-        
+
         let btnContainer = document.getElementById('chart-buttons');
         if (btnContainer) {
             let btns = btnContainer.querySelectorAll('button');
@@ -1885,27 +1777,27 @@ const UI_DASHBOARD = {
     setMaxBuy(itemKey) {
         let citySelect = document.getElementById('market-target-city');
         if (!citySelect) return;
-        
+
         let cityId = citySelect.value;
         let price = MARKET.getCurrentPrice(itemKey);
         let availMarket = MARKET.getAvailablePool(itemKey);
-        
-        let itemVol = RECIPES.RESOURCES[itemKey].volume || 1.0;
+
+        let itemVol = OPERATIONS.volume(itemKey);
         let logCostPerItem = typeof GEO !== 'undefined' ? GEO.getLogisticsCost('kyiv', cityId, itemVol, 'market') : 0;
 
         let maxByMoney = Math.floor(STATE.finances.balance / (price + logCostPerItem));
-        
+
         let pendingVol = 0;
         if (STATE.logistics && STATE.logistics.deliveries) {
             STATE.logistics.deliveries.forEach(d => {
                 if (d.targetCity === cityId && RECIPES.RESOURCES[d.item]) {
-                    pendingVol += d.qty * (RECIPES.RESOURCES[d.item].volume || 1.0);
+                    pendingVol += d.qty * OPERATIONS.volume(d.item);
                 }
             });
         }
 
         let freeSpace = WAREHOUSE.getMaxVolume(cityId) - WAREHOUSE.getCurrentVolume(cityId) - pendingVol;
-        let maxBySpace = Math.floor(freeSpace / itemVol);
+        let maxBySpace = itemVol === 0 ? Number.MAX_SAFE_INTEGER : Math.floor(freeSpace / itemVol);
 
         let maxPossible = Math.min(availMarket, maxByMoney, maxBySpace);
         if (maxPossible < 0) maxPossible = 0;
@@ -1916,11 +1808,11 @@ const UI_DASHBOARD = {
     submitBuy(itemKey) {
         let input = document.getElementById(`buy-qty-${itemKey}`);
         let citySelect = document.getElementById('market-target-city');
-        
+
         if (input && citySelect) {
             let qty = parseInt(input.value);
             let cityId = citySelect.value;
-            
+
             if (isNaN(qty) || qty <= 0) {
                 NOTIFY.error('Ошибка', 'Введите корректное количество для покупки.');
                 return;
@@ -1935,7 +1827,7 @@ const UI_DASHBOARD = {
     // --- 8. БАНК И КРЕДИТЫ ---
     updateBankTab() {
         if (typeof FINANCE === 'undefined') return;
-        
+
         this.initCharts();
         let totalDebt = STATE.finances.loans ? STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0) : 0;
         let availableLimit = FINANCE.getAvailableLimit() - totalDebt;
@@ -1973,25 +1865,25 @@ const UI_DASHBOARD = {
                 this.charts.bankCredit.update();
             }
         }
-        
+
         if (document.getElementById('ui-rate')) document.getElementById('ui-rate').innerText = (FINANCE.getCurrentRate() * 100).toFixed(1);
         if (document.getElementById('ui-credit-limit')) document.getElementById('ui-credit-limit').innerText = formatMoney(FINANCE.getAvailableLimit());
-        
+
         let assets = FINANCE.getAssetsBreakdown();
         if (document.getElementById('ui-col-cash')) document.getElementById('ui-col-cash').innerText = '$' + formatMoney(Math.max(0, assets.cash) * 0.50);
         if (document.getElementById('ui-col-dep')) document.getElementById('ui-col-dep').innerText = '$' + formatMoney(assets.depositValue * 0.90);
         if (document.getElementById('ui-col-fixed')) document.getElementById('ui-col-fixed').innerText = '$' + formatMoney(assets.fixedAssets * 0.70);
         if (document.getElementById('ui-col-inv')) document.getElementById('ui-col-inv').innerText = '$' + formatMoney(assets.inventoryValue * 0.50);
-        
+
         let currentDebt = assets.totalLiabilities;
         let debtRatio = assets.netWorth > 0 ? (currentDebt / assets.netWorth) : (currentDebt > 0 ? 1 : 0);
-        
+
         if (document.getElementById('ui-debt-ratio')) {
             let drEl = document.getElementById('ui-debt-ratio');
             drEl.innerText = debtRatio.toFixed(2);
             drEl.style.color = debtRatio > 1.0 ? 'var(--red)' : (debtRatio > 0.5 ? 'var(--orange)' : 'var(--text)');
         }
-        
+
         let overdraftWarn = document.getElementById('ui-bank-overdraft-warning');
         if (overdraftWarn) {
             if (STATE.finances.balance < 0) {
@@ -2004,12 +1896,12 @@ const UI_DASHBOARD = {
                 overdraftWarn.style.display = 'none';
             }
         }
-        
+
         let loansList = document.getElementById('ui-active-loans');
         if (loansList) {
             let totalDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
             if(document.getElementById('ui-debt')) document.getElementById('ui-debt').innerText = formatMoney(totalDebt);
-            
+
             loansList.innerHTML = '';
             if (STATE.finances.loans.length === 0) {
                 loansList.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">Нет активных кредитов</div>';
@@ -2018,14 +1910,14 @@ const UI_DASHBOARD = {
                     let currentDailyInterest = (l.remainingPrincipal * l.rate) / 365;
                     let currentDailyPayment = l.dailyPrincipal + currentDailyInterest;
                     let totalInterestLeft = FINANCE.calculateTotalInterest(l.remainingPrincipal, l.rate, l.remainingDays);
-                    
+
                     loansList.innerHTML += `
                     <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <div style="font-weight:700; font-size:1.05rem; color:var(--text);">Заём $${formatMoney(l.amount)}</div>
                             <div style="background:var(--orange-dim); color:var(--orange); padding:4px 8px; border-radius:8px; font-size:0.85rem; font-weight:700;">Осталось: ${l.remainingDays} дн.</div>
                         </div>
-                        
+
                         <div style="display:flex; gap:16px; margin-bottom:12px;">
                             <div>
                                 <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Остаток Долга</div>
@@ -2058,7 +1950,7 @@ const UI_DASHBOARD = {
         let depList = document.getElementById('ui-active-deposits');
         if (depList) {
             if (!STATE.finances.deposits) STATE.finances.deposits = [];
-            
+
             let totalDeposits = STATE.finances.deposits.reduce((sum, d) => sum + d.amount, 0);
             if (document.getElementById('ui-total-deposits')) document.getElementById('ui-total-deposits').innerText = formatMoney(totalDeposits);
 
@@ -2070,14 +1962,14 @@ const UI_DASHBOARD = {
                     let payoutText = d.payoutType === 'daily' ? 'Ежедневно' : 'В конце';
                     let accText = d.payoutType === 'daily' ? 'выплачивается' : `$${formatMoney(d.accrued)}`;
                     let progress = Math.min(100, (1 - (d.daysLeft / d.termDays)) * 100);
-                    
+
                     depList.innerHTML += `
                     <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <div style="font-weight:700; font-size:1.05rem; color:var(--text);">Вклад $${formatMoney(d.amount)}</div>
                             <div style="background:var(--blue-dim); color:var(--blue); padding:4px 8px; border-radius:8px; font-size:0.85rem; font-weight:700;">Осталось: ${d.daysLeft} дн.</div>
                         </div>
-                        
+
                         <div style="display:flex; gap:16px; margin-bottom:12px;">
                             <div>
                                 <div style="font-size:0.9rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Накоплено</div>
@@ -2097,7 +1989,7 @@ const UI_DASHBOARD = {
                         <div style="height:6px; background:rgba(0,0,0,0.05); border-radius:3px; margin-bottom:16px; overflow:hidden;">
                             <div style="height:100%; background:var(--blue); width:${progress}%;"></div>
                         </div>
-                        
+
                         <button onclick="UI_DASHBOARD.showBankModal('deposit', ${d.id})" style="width:100%; background:var(--green-dim); color:var(--green); border:1px solid var(--green); font-size:0.85rem; padding:8px; border-radius:8px; font-weight:600; cursor:pointer;">График доходности</button>
                     </div>`;
                 });
@@ -2115,109 +2007,15 @@ const UI_DASHBOARD = {
         let container = document.getElementById('ui-finance-dashboard');
         if (!container || typeof LEDGER === 'undefined') return;
         LEDGER.init();
-        
+
         if (!STATE.financeTab) STATE.financeTab = 'all';
 
-        // 1. Расчет активов (Balance Sheet - Assets)
-        let cash = Math.max(0, STATE.finances.balance);
-        let depositsValue = 0;
-        if (STATE.finances.deposits) {
-            STATE.finances.deposits.forEach(d => { depositsValue += d.amount + (d.accrued || 0); });
-        }
-
-        let inventoryValue = 0;
-        if (STATE.company.warehouses) {
-            Object.keys(STATE.company.warehouses).forEach(cId => {
-                let wh = STATE.company.warehouses[cId];
-                if (wh.inventory) {
-                    Object.keys(wh.inventory).forEach(k => {
-                        inventoryValue += wh.inventory[k].qty * wh.inventory[k].avgCost;
-                    });
-                }
-            });
-        }
-        STATE.company.businesses.forEach(b => {
-            if (b.localInventory) {
-                Object.keys(b.localInventory).forEach(k => {
-                    inventoryValue += b.localInventory[k].qty * b.localInventory[k].avgCost;
-                });
-            }
-        });
-
-        let logisticsValue = 0;
-        let receivablesValue = 0;
-        if (STATE.logistics) {
-            if (STATE.logistics.deliveries) {
-                STATE.logistics.deliveries.forEach(d => { logisticsValue += d.cost; });
-            }
-            if (STATE.logistics.receivables) {
-                STATE.logistics.receivables.forEach(r => { receivablesValue += r.amount; });
-            }
-        }
-
-        let portfolioValue = 0;
-        if (typeof STOCK_MARKET !== 'undefined' && STATE.stockMarket && STATE.stockMarket.portfolio) {
-            Object.keys(STATE.stockMarket.portfolio).forEach(id => {
-                let shares = STATE.stockMarket.portfolio[id];
-                let comp = STATE.stockMarket.companies[id];
-                if (comp && shares > 0) portfolioValue += shares * comp.sharePrice;
-            });
-        }
-
-        let currentAssets = cash + inventoryValue + depositsValue + logisticsValue + receivablesValue + portfolioValue;
-
-        let realEstateValue = 0;
-        let equipmentValue = 0;
-
-        STATE.company.businesses.forEach(b => {
-            let tpl = RECIPES.BUSINESSES[b.type];
-            let locMult = b.locMult || 1.0;
-            let baseCost = tpl.area * 50 * locMult;
-            realEstateValue += baseCost;
-            for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult);
-
-            if (b.equipment && b.equipment.count > 0) {
-                let eqPrice = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 500;
-                let cond = b.equipment.condition || 0;
-                equipmentValue += (b.equipment.count * eqPrice) * (cond / 100);
-            }
-        });
-
-        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouses) {
-            Object.keys(STATE.company.warehouses).forEach(cId => {
-                let wh = STATE.company.warehouses[cId];
-                if (wh.level > 0) {
-                    for (let i = 1; i < wh.level; i++) {
-                        realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
-                    }
-                }
-            });
-        }
-
-        let rndIpValue = 0;
-        if (STATE.rnd && STATE.rnd.facility) {
-            let rndLvl = STATE.rnd.facility.level || 0;
-            for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
-            if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
-                let pcPrice = RECIPES.RESOURCES['smart_pc'] ? RECIPES.RESOURCES['smart_pc'].basePrice : 800;
-                let rndCond = STATE.rnd.facility.equipment.condition || 0;
-                equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * (rndCond / 100);
-            }
-            if (STATE.rnd.unlockedTechs) {
-                rndIpValue += STATE.rnd.unlockedTechs.length * 5000;
-            }
-        }
-
-        let nonCurrentAssets = realEstateValue + equipmentValue + rndIpValue;
-        let totalAssets = currentAssets + nonCurrentAssets;
-
-        // Пассивы и Капитал
-        let totalLiabilities = 0;
-        if (STATE.finances.loans) {
-            STATE.finances.loans.forEach(l => { totalLiabilities += l.remainingPrincipal; });
-        }
-        if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
-
+        const assets = FINANCE.getAssetsBreakdown();
+        const { cash, inventoryValue, logisticsValue, receivablesValue, portfolioValue, totalLiabilities, totalAssets, realEstateValue, equipmentValue } = assets;
+        const depositsValue = assets.depositValue;
+        const rndIpValue = 0;
+        const currentAssets = cash + inventoryValue + logisticsValue + receivablesValue + depositsValue + portfolioValue;
+        const nonCurrentAssets = assets.fixedAssets;
         let startCapital = STATE.finances.startCapital || 25000;
         let retainedEarnings = totalAssets - totalLiabilities - startCapital;
         let totalEquity = startCapital + retainedEarnings;
@@ -2247,14 +2045,14 @@ const UI_DASHBOARD = {
         let yExpRepair = y.exp_repair || 0; let tExpRepair = t.exp_repair || 0;
         let yExpFines = y.exp_fines || 0; let tExpFines = t.exp_fines || 0;
 
-        let yOpex = (y.exp_salary || 0) + (y.exp_admin || 0) + (y.exp_hr || 0) + yTaxPayroll + yExpMarketing + yExpRepair + yExpFines;
-        let tOpex = (t.exp_salary || 0) + (t.exp_admin || 0) + (t.exp_hr || 0) + tTaxPayroll + tExpMarketing + tExpRepair + tExpFines;
+        let yOpex = (y.exp_salary || 0) + (y.exp_admin || 0) + (y.exp_hr || 0) + yTaxPayroll + yExpMarketing + yExpRepair + yExpFines + yExpLogistics;
+        let tOpex = (t.exp_salary || 0) + (t.exp_admin || 0) + (t.exp_hr || 0) + tTaxPayroll + tExpMarketing + tExpRepair + tExpFines + tExpLogistics;
 
         let yEbitda = yGross - yOpex;
         let tEbitda = tGross - tOpex;
 
-        let yDepr = Math.round(yExpRepair * 0.5);
-        let tDepr = Math.round(tExpRepair * 0.5);
+        let yDepr = y.exp_depreciation || 0;
+        let tDepr = t.exp_depreciation || 0;
 
         let yEbit = yEbitda - yDepr;
         let tEbit = tEbitda - tDepr;
@@ -2276,7 +2074,7 @@ const UI_DASHBOARD = {
         let roa = totalAssets > 0 ? ((tNet / totalAssets) * 100).toFixed(1) : '0.0';
 
         let currentLiabDiv = totalLiabilities > 0 ? totalLiabilities : 1;
-        let currentRatio = (currentAssets / currentLiabDiv).toFixed(2);
+        let currentRatio = totalLiabilities > 0 ? (currentAssets / totalLiabilities).toFixed(2) : '∞';
         let debtEquityRatio = totalEquity > 0 ? (totalLiabilities / totalEquity).toFixed(2) : '0.00';
 
         // 4. Налоговый календарь
@@ -2286,7 +2084,7 @@ const UI_DASHBOARD = {
             let dtr = STATE.taxes.daysToReport || 30;
             let corpRate = (typeof GEO !== 'undefined' && GEO.COUNTRIES['ua']) ? GEO.COUNTRIES['ua'].taxes.corporate : 0.18;
             let estimatedTax = tb > 0 ? tb * corpRate : 0;
-            
+
             taxInfoHTML = `
                 <div style="background: rgba(0,122,255,0.05); border: 1px solid rgba(0,122,255,0.15); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                     <div>
@@ -2302,12 +2100,11 @@ const UI_DASHBOARD = {
         }
 
         // РАСЧЕТ CASH FLOW (Движение Денежных Средств)
-        let cfo = yRev - yCogs - yOpex - yTaxCorp; // Поток от операционной деятельности
-        let cfi = -(yExpRepair + (y.exp_materials || 0) * 0.1); // Поток от инвестиций
-        let cff = yFin; // Поток от фин. операций
-        let netCashFlow = cfo + cfi + cff;
+        const cfToday = STATE.ledger.cashFlow.today;
+        const cashReport = cfToday.operations ? cfToday : STATE.ledger.cashFlow.yesterday;
+        const cfo = cashReport.operating, cfi = cashReport.investing, cff = cashReport.financing;
+        const netCashFlow = cfo + cfi + cff;
 
-        // Навигация под-вкладок отчетности
         let tabPnlActive = (STATE.financeTab === 'all' || STATE.financeTab === 'pnl') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
         let tabBalActive = (STATE.financeTab === 'all' || STATE.financeTab === 'balance') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
         let tabCfActive = (STATE.financeTab === 'all' || STATE.financeTab === 'cashflow') ? 'background: var(--blue, #007AFF); color: #fff;' : 'background: var(--surface-2, #f5f5f7); color: var(--text, #1d1d1f);';
@@ -2361,27 +2158,27 @@ const UI_DASHBOARD = {
                     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
                         <div>
                             <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">📊 Отчет о прибылях и убытках (P&L)</h3>
-                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 1) • Метод начисления</small>
+                            <small style="color: var(--text-dim);">Игровая финансовая модель • Метод начисления</small>
                         </div>
                     </div>
-                    
+
                     <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
                         <tr style="border-bottom: 1px solid var(--border); color: var(--text-dim); text-align: right;">
                             <th style="text-align:left; padding: 6px 0;">Статья отчета</th>
                             <th style="padding: 6px;">Вчера</th>
                             <th style="padding: 6px;">Всего</th>
                         </tr>
-                        
+
                         <tr style="font-weight:bold; background: var(--surface-2);"><td style="text-align:left; padding:6px 4px;">1. ВЫРУЧКА (REVENUE)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRev)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRev)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2C Розничные продажи</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(yRevB2C)}</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(tRevB2C)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2B Оптовая биржа</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRevB2B)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRevB2B)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- B2G Госзакупки и Тендеры</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yRevB2G)}</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(tRevB2G)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Прочие доходы (Гранты)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yRevOther)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tRevOther)}</td></tr>
-                        
+
                         <tr style="border-top:1px dashed var(--border);"><td style="text-align:left; padding:4px 0; color:var(--red); font-weight:600;">2. Себестоимость (Сырье + Логистика)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yCogs)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tCogs)}</td></tr>
-                        
+
                         <tr style="font-weight:bold; background: rgba(52,199,89,0.06); border-top:1px solid var(--border);"><td style="text-align:left; padding:6px 4px; color:var(--green);">ВАЛОВАЯ ПРИБЫЛЬ (GROSS PROFIT)</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yGross)}</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(tGross)}</td></tr>
-                        
+
                         <tr style="font-weight:bold; background: var(--surface-2); border-top:1px solid var(--border);"><td style="text-align:left; padding:6px 4px;">3. ОПЕРАЦИОННЫЕ РАСХОДЫ (OPEX)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yOpex)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tOpex)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Фонд оплаты труда (ЗП)</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(y.exp_salary || 0)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(t.exp_salary || 0)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Социальный взнос ЕСВ (22%)</td><td style="text-align:right; color:var(--orange); font-family:var(--font-mono);">$${formatMoney(yTaxPayroll)}</td><td style="text-align:right; color:var(--orange); font-family:var(--font-mono);">$${formatMoney(tTaxPayroll)}</td></tr>
@@ -2389,16 +2186,16 @@ const UI_DASHBOARD = {
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Маркетинг и бренд</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpMarketing)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpMarketing)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- ТО и ремонт оборудования</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpRepair)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpRepair)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Штрафы и непредвиденные</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yExpFines)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tExpFines)}</td></tr>
-                        
+
                         <tr style="font-weight:bold; border-top:1px solid var(--border); background: var(--surface-3);"><td style="text-align:left; padding:6px 4px;">4. EBITDA</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbitda>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbitda)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbitda>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbitda)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">- Амортизация станков (D&A)</td><td style="text-align:right; font-family:var(--font-mono);">-$${formatMoney(yDepr)}</td><td style="text-align:right; font-family:var(--font-mono);">-$${formatMoney(tDepr)}</td></tr>
-                        
+
                         <tr style="font-weight:bold;"><td style="text-align:left; padding:4px 0;">5. ОПЕРАЦИОННАЯ ПРИБЫЛЬ (EBIT)</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbit>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbit)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbit>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbit)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--text-dim);">+/- Финансовые доходы/расходы</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(yFin)}</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(tFin)}</td></tr>
-                        
+
                         <tr style="font-weight:bold; border-top:1px solid var(--border);"><td style="text-align:left; padding:4px 0;">6. ПРИБЫЛЬ ДО НАЛОГОВ (EBT)</td><td style="text-align:right; font-family:var(--font-mono); color:${yEbt>=0?'var(--green)':'var(--red)'};">$${formatMoney(yEbt)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tEbt>=0?'var(--green)':'var(--red)'};">$${formatMoney(tEbt)}</td></tr>
                         <tr><td style="text-align:left; padding-left:12px; color:var(--red);">- Налог на прибыль (18%)</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yTaxCorp)}</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(tTaxCorp)}</td></tr>
-                        
+
                         <tr style="font-weight:bold; font-size:1.05rem; background: rgba(0,122,255,0.08); border-top: 2px solid var(--blue);"><td style="text-align:left; padding:8px 4px; color:var(--blue);">7. ЧИСТАЯ ПРИБЫЛЬ (NET INCOME)</td><td style="text-align:right; font-family:var(--font-mono); color:${yNet>=0?'var(--green)':'var(--red)'};">$${formatMoney(yNet)}</td><td style="text-align:right; font-family:var(--font-mono); color:${tNet>=0?'var(--green)':'var(--red)'};">$${formatMoney(tNet)}</td></tr>
                     </table>
                 </div>
@@ -2410,10 +2207,10 @@ const UI_DASHBOARD = {
                     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
                         <div>
                             <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">⚖️ Отчет о финансовом положении (Баланс)</h3>
-                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 1) • Активы = Пассивы + Капитал</small>
+                            <small style="color: var(--text-dim);">Игровая финансовая модель • Активы = Пассивы + Капитал</small>
                         </div>
                     </div>
-                    
+
                     <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
                         <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">I. ОБОРОТНЫЕ АКТИВЫ (CURRENT ASSETS)</th></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Денежные средства на расчетном счете:</td><td style="text-align:right; font-family:var(--font-mono); font-weight:600;">$${formatMoney(cash)}</td></tr>
@@ -2423,26 +2220,26 @@ const UI_DASHBOARD = {
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Банковские депозиты (Краткосрочные):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(depositsValue)}</td></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Финансовые активы (Портфель акций):</td><td style="text-align:right; font-family:var(--font-mono); color:var(--blue);">$${formatMoney(portfolioValue)}</td></tr>
                         <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Оборотные активы:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(currentAssets)}</td></tr>
-                        
+
                         <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">II. ВНЕОБОРОТНЫЕ АКТИВЫ (NON-CURRENT ASSETS)</th></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Основные средства: Недвижимость (Цеха, Магазины, Склады):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(realEstateValue)}</td></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Машины и оборудование (Остаточная стоимость):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(equipmentValue)}</td></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Нематериальные активы (Патенты и R&D разработки):</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(rndIpValue)}</td></tr>
                         <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Внеоборотные активы:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(nonCurrentAssets)}</td></tr>
-                        
+
                         <tr style="font-weight:bold; font-size:1.02rem; background: rgba(52,199,89,0.08); border-top:2px solid var(--green);"><td style="padding:6px 0; color:var(--green);">ИТОГО АКТИВОВ:</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(totalAssets)}</td></tr>
-                        
+
                         <tr><td colspan="2" style="padding:6px 0;">&nbsp;</td></tr>
-                        
+
                         <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--red);">III. ОБЯЗАТЕЛЬСТВА (LIABILITIES)</th></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Краткосрочные кредиты и займы банка:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">$${formatMoney(totalLiabilities)}</td></tr>
                         <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Обязательства:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">$${formatMoney(totalLiabilities)}</td></tr>
-                        
+
                         <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">IV. СОБСТВЕННЫЙ КАПИТАЛ (EQUITY)</th></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Уставный капитал:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(startCapital)}</td></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Нераспределенная прибыль (Retained Earnings):</td><td style="text-align:right; font-family:var(--font-mono); color:${retainedEarnings>=0?'var(--green)':'var(--red)'};">$${formatMoney(retainedEarnings)}</td></tr>
                         <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Капитал:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(totalEquity)}</td></tr>
-                        
+
                         <tr style="font-weight:bold; font-size:1.02rem; background: rgba(0,122,255,0.08); border-top:2px solid var(--blue);"><td style="padding:6px 0; color:var(--blue);">ИТОГО ПАССИВОВ И КАПИТАЛА:</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(totalLiabilities + totalEquity)}</td></tr>
                     </table>
                 </div>
@@ -2450,45 +2247,28 @@ const UI_DASHBOARD = {
 
                 <!-- 3. ДВИЖЕНИЕ ДЕНЕЖНЫХ СРЕДСТВ (CASH FLOW) -->
                 ${(STATE.financeTab === 'all' || STATE.financeTab === 'cashflow') ? `
-                <div class="card" style="padding: 20px; margin-bottom: 0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
-                        <div>
-                            <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">🌊 Отчет о движении денежных средств (Cash Flow)</h3>
-                            <small style="color: var(--text-dim);">Стандарт МСФО (IAS 7) • Прямой метод</small>
-                        </div>
-                    </div>
-                    
-                    <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
-                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">1. ОПЕРАЦИОННЫЙ ПОТОК (CFO)</th></tr>
-                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">+ Поступления от продаж (B2C, B2B, B2G):</td><td style="text-align:right; color:var(--green); font-family:var(--font-mono);">$${formatMoney(yRev)}</td></tr>
-                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Оплата сырья и поставщиков:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yCogs)}</td></tr>
-                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Выплата заработной платы и налогов на ФОТ:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney((y.exp_salary || 0) + yTaxPayroll)}</td></tr>
-                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Оплата аренды, логистики и маркетинга:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney((y.exp_admin || 0) + yExpLogistics + yExpMarketing)}</td></tr>
-                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый операционный поток (CFO):</td><td style="text-align:right; font-family:var(--font-mono); color:${cfo>=0?'var(--green)':'var(--red)'};">$${formatMoney(cfo)}</td></tr>
-                        
-                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">2. ИНВЕСТИЦИОННЫЙ ПОТОК (CFI)</th></tr>
-                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">- Приобретение оборудования и ремонт станков:</td><td style="text-align:right; color:var(--red); font-family:var(--font-mono);">-$${formatMoney(yExpRepair)}</td></tr>
-                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый инвестиционный поток (CFI):</td><td style="text-align:right; font-family:var(--font-mono); color:${cfi>=0?'var(--green)':'var(--red)'};">$${formatMoney(cfi)}</td></tr>
-                        
-                        <tr style="font-weight:bold; background: var(--surface-2);"><th colspan="2" style="padding:6px; text-align:left;">3. ФИНАНСОВЫЙ ПОТОК (CFF)</th></tr>
-                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">+/- Проценты и операции по вкладам/кредитам:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(cff)}</td></tr>
-                        <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Чистый финансовый поток (CFF):</td><td style="text-align:right; font-family:var(--font-mono); color:${cff>=0?'var(--green)':'var(--red)'};">$${formatMoney(cff)}</td></tr>
-                        
-                        <tr style="font-weight:bold; font-size:1.02rem; background: rgba(0,122,255,0.08); border-top:2px solid var(--blue);"><td style="padding:6px 0; color:var(--blue);">ЧИСТОЕ ИЗМЕНЕНИЕ ДЕНЕГ (NET CASH FLOW):</td><td style="text-align:right; color:${netCashFlow>=0?'var(--green)':'var(--red)'}; font-family:var(--font-mono);">$${formatMoney(netCashFlow)}</td></tr>
-                    </table>
-                </div>
-                ` : ''}
+                    <section class="card" id="finance-cashflow-container">
+                        <h3>🌊 Движение денежных средств (${cfToday.operations ? 'текущий день' : 'закрытый день'})</h3>
+                        <p>Фактические поступления и выплаты. Положительное значение — поступление.</p>
+                        <table><tbody>
+                            <tr><td>Деньги на начало периода</td><td>$${formatMoney(cashReport.opening)}</td></tr>
+                            <tr><td>Операционный поток (CFO)</td><td>$${formatMoney(cfo)}</td></tr>
+                            <tr><td>Инвестиционный поток (CFI)</td><td>$${formatMoney(cfi)}</td></tr>
+                            <tr><td>Финансовый поток (CFF)</td><td>$${formatMoney(cff)}</td></tr>
+                            <tr><td>Чистое изменение денег</td><td data-testid="cashflow-net">$${formatMoney(netCashFlow)}</td></tr>
+                            <tr><td>Деньги на конец периода</td><td>$${formatMoney(cashReport.closing)}</td></tr>
+                        </tbody></table>
+                    </section>` : ''}
 
-                <!-- 4. ФИНАНСОВЫЕ КОЭФФИЦИЕНТЫ И РЕНТАБЕЛЬНОСТЬ -->
                 ${(STATE.financeTab === 'all' || STATE.financeTab === 'ratios') ? `
                 <div class="card" style="padding: 20px; margin-bottom: 0;">
                     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
                         <div>
                             <h3 style="margin:0; font-size: 1.15rem; color: var(--text);">📈 Финансовый анализ и Коэффициенты</h3>
-                            <small style="color: var(--text-dim);">Международные бенчмарки корпоративной устойчивости</small>
+                            <small style="color: var(--text-dim);">Показатели игровой компании</small>
                         </div>
                     </div>
-                    
+
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <small style="color: var(--text-dim);">Рентабельность продаж (ROS)</small>
@@ -2537,11 +2317,11 @@ const UI_DASHBOARD = {
     updateHRTab() {
         if (typeof HR === 'undefined' || !document.getElementById('ui-staff-total')) return;
         HR.init();
-        
+
         let totalStaff = HR.getTotalStaff();
         document.getElementById('ui-staff-total').innerText = totalStaff;
         if(document.getElementById('ui-staff-salary')) document.getElementById('ui-staff-salary').innerText = '$' + formatMoney(HR.getDailySalaryFund()) + ' / дн.';
-        
+
         // --- ЧАРТ СТРУКТУРЫ ШТАТА ---
         this.initCharts();
         let roleCounts = { factory: 0, rnd: 0, retail: 0, marketing: 0 };
@@ -2554,7 +2334,7 @@ const UI_DASHBOARD = {
         if (typeof Chart !== 'undefined' && document.getElementById('chart-hr-staff')) {
             let ctx = document.getElementById('chart-hr-staff').getContext('2d');
             let dataArr = [roleCounts.factory, roleCounts.rnd, roleCounts.retail, roleCounts.marketing];
-            
+
             if (!this.charts.hrStaff) {
                 this.charts.hrStaff = new Chart(ctx, {
                     type: 'doughnut',
@@ -2596,7 +2376,7 @@ const UI_DASHBOARD = {
             if (roleCounts.retail > 0) parts.push(`<span style="background:rgba(46,204,113,0.1); color:#2ecc71; padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700;">Ритейл: ${roleCounts.retail}</span>`);
             if (roleCounts.marketing > 0) parts.push(`<span style="background:rgba(230,126,34,0.1); color:#e67e22; padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700;">Маркетинг: ${roleCounts.marketing}</span>`);
             if (STATE.hr.trainingQueue.length > 0) parts.push(`<span style="background:var(--orange-dim); color:var(--orange); padding:4px 10px; border-radius:12px; font-size:0.85rem; font-weight:700;">В Академии: ${STATE.hr.trainingQueue.length}</span>`);
-            
+
             breakdownDiv.innerHTML = parts.length > 0 ? parts.join('') : '<span style="color:var(--text-faint); font-size:0.9rem;">Штат пуст</span>';
         }
 
@@ -2607,14 +2387,14 @@ const UI_DASHBOARD = {
             'retail': document.getElementById('ui-hire-retail'),
             'marketing': document.getElementById('ui-hire-marketing')
         };
-        
+
         Object.keys(uiRoles).forEach(k => { if (uiRoles[k]) uiRoles[k].innerHTML = ''; });
-        
+
         Object.keys(HR.GRADES).forEach(grade => {
             let info = HR.GRADES[grade];
             let container = uiRoles[info.role];
             if (!container) return;
-            
+
             let btnHtml = `
             <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:12px 16px; border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow-card);">
                 <div>
@@ -2627,11 +2407,11 @@ const UI_DASHBOARD = {
             </div>`;
             container.innerHTML += btnHtml;
         });
-        
+
         // --- АКАДЕМИЯ ---
         let trainingDiv = document.getElementById('ui-hr-training-list');
         if (document.getElementById('ui-training-count')) document.getElementById('ui-training-count').innerText = `Обучается: ${STATE.hr.trainingQueue.length}`;
-        
+
         if (trainingDiv) {
             if (STATE.hr.trainingQueue.length === 0) {
                 trainingDiv.innerHTML = '<div style="color:var(--text-faint); font-size:0.9rem; text-align:center; padding:20px; background:var(--surface-2); border-radius:12px; border:1px dashed var(--border);">В данный момент никто не проходит обучение.</div>';
@@ -2667,11 +2447,11 @@ const UI_DASHBOARD = {
             Object.keys(HR.GRADES).forEach(grade => {
                 let free = HR.getUnassigned(grade);
                 let info = HR.GRADES[grade];
-                
+
                 // New logic based on hr.js
                 let trainCost = grade === 'junior' ? 250 : (grade === 'middle' ? 800 : (grade === 'scientist' ? 1500 : (grade === 'salesman' ? 600 : (grade === 'marketer' ? 1200 : null))));
                 let nextGradeName = grade === 'junior' ? 'Middle' : (grade === 'middle' ? 'Senior' : (grade === 'scientist' ? 'Lead' : (grade === 'salesman' ? 'Director' : (grade === 'marketer' ? 'PR' : ''))));
-                
+
                 let trainBtn = '';
                 if (trainCost) {
                     trainBtn = `<button onclick="HR.train('${grade}')" ${free===0?'disabled style="opacity:0.4; cursor:not-allowed;"':''} style="background:var(--blue); color:white; border:none; padding:8px 12px; border-radius:8px; font-size:0.85rem; font-weight:700; cursor:pointer; width:100%;">Обучить до ${nextGradeName} ($${trainCost})</button>`;
@@ -2698,7 +2478,7 @@ const UI_DASHBOARD = {
             reserveContainer.innerHTML = html;
         }
     },
-    
+
     // --- СЛУЖЕБНЫЕ МЕТОДЫ ОШИБОК И ФОРМ ---
     clearError() {
         let errDiv = document.getElementById('debug-error');
@@ -2715,7 +2495,7 @@ const UI_DASHBOARD = {
         }
         errDiv.innerHTML = `
             <h3 style="margin-top:0;">⚠️ КРИТИЧЕСКАЯ ОШИБКА ИНТЕРФЕЙСА</h3>
-            <p><strong>Суть ошибки:</strong> ${err.message}</p>
+            <p><strong>Суть ошибки:</strong> ${escapeHTML(err.message)}</p>
             <button onclick="document.getElementById('debug-error').style.display='none'" style="background:#333; padding: 5px 10px; color: white;">Закрыть это окно</button>
         `;
         console.error(err);
@@ -2728,7 +2508,7 @@ const UI_DASHBOARD = {
             let targetEl = document.getElementById(tabId);
             if (targetEl) targetEl.classList.add('active');
             if (event && event.currentTarget) event.currentTarget.classList.add('active');
-            
+
             if (tabId === 'tab-wiki') {
                 if (typeof WIKI !== 'undefined') WIKI.render();
                 else alert("WIKI is undefined!");
@@ -2750,7 +2530,7 @@ const UI_DASHBOARD = {
             STOCK_MARKET.buyShares(companyId, amount);
         }
     },
-    
+
     sellStock(companyId) {
         let amount = prompt("Введите количество акций для продажи:\n(Комиссия 1.5%)", "1000");
         if (amount) {
@@ -2767,7 +2547,7 @@ const UI_DASHBOARD = {
     drawTerminalChart(companyId) {
         let canvas = document.getElementById('terminalChart');
         if (!canvas) return;
-        
+
         let comp = STATE.stockMarket.companies[companyId];
         if (!comp) return;
 
@@ -2778,7 +2558,7 @@ const UI_DASHBOARD = {
 
         let history = comp.netWorthHistory || [];
         let labels = history.map((_, i) => `D-${history.length - i}`);
-        
+
         // App style line: blue
         let color = '#007AFF';
 
@@ -2845,7 +2625,7 @@ const UI_DASHBOARD = {
     updateStockTab() {
         let container = document.getElementById('ui-stock-container');
         if (!container || typeof STOCK_MARKET === 'undefined' || !STATE.stockMarket) return;
-        
+
         if (!STATE.stockMarket.selectedStock || !STATE.stockMarket.companies[STATE.stockMarket.selectedStock]) {
             STATE.stockMarket.selectedStock = STATE.stockMarket.companies['player'] ? 'player' : Object.keys(STATE.stockMarket.companies)[0];
         }
@@ -2864,10 +2644,10 @@ const UI_DASHBOARD = {
                         GLOBAL MACRO: <span style="color: ${macroColor}; font-weight: bold;">${macroChange >= 0 ? '+' : ''}${macroChange.toFixed(2)}%</span>
                     </div>
                 </div>
-                
+
                 <!-- Main Grid -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-                    
+
                     <!-- Left: Table -->
                     <div style="overflow-x: auto;">
                         <div style="font-size: 0.75rem; font-weight: bold; margin-bottom: 8px; color: var(--text-dim); text-transform: uppercase;">Рыночные активы</div>
@@ -2880,7 +2660,7 @@ const UI_DASHBOARD = {
                                 <th style="padding: 6px 4px; text-align: center; font-weight: normal;">ДЕЙСТВИЕ</th>
                             </tr>
         `;
-        
+
         Object.values(STATE.stockMarket.companies).forEach(comp => {
             let hist = comp.netWorthHistory;
             let change = 0;
@@ -2894,11 +2674,11 @@ const UI_DASHBOARD = {
             let changeSign = change >= 0 ? '+' : '';
             let owned = STATE.stockMarket.portfolio[comp.id] || 0;
             let isSelected = STATE.stockMarket.selectedStock === comp.id;
-            
+
             html += `
                 <tr style="border-bottom: 1px solid var(--border); background: ${isSelected ? 'var(--surface-2)' : 'transparent'}; cursor: pointer; transition: background 0.1s;" onclick="UI_DASHBOARD.selectStock('${comp.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='${isSelected ? 'var(--surface-2)' : 'transparent'}'">
                     <td style="padding: 8px 4px;">
-                        <div style="color: ${comp.isPlayer ? 'var(--blue)' : 'var(--text)'}; font-weight: bold;">${comp.name}</div>
+                        <div style="color: ${comp.isPlayer ? 'var(--blue)' : 'var(--text)'}; font-weight: bold;">${escapeHTML(comp.name)}</div>
                         <div style="font-size: 0.65rem; color: var(--text-dim);">${comp.id.toUpperCase()} ${comp.isAcquired ? '<span style="color:var(--blue);">[SUB]</span>' : ''}</div>
                     </td>
                     <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: var(--text);">
@@ -2920,15 +2700,15 @@ const UI_DASHBOARD = {
                 </tr>
             `;
         });
-        
+
         html += `
                         </table>
                     </div>
-                    
+
                     <!-- Right: Chart & Details -->
                     <div style="display: flex; flex-direction: column;">
         `;
-        
+
         let selComp = STATE.stockMarket.companies[STATE.stockMarket.selectedStock];
         if (selComp) {
             let hist = selComp.netWorthHistory;
@@ -2936,20 +2716,20 @@ const UI_DASHBOARD = {
             let oldPrice = hist.length >= 2 ? hist[hist.length - 2] : current;
             let changeVal = current - oldPrice;
             let changeColor = changeVal >= 0 ? 'var(--green)' : 'var(--red)';
-            
+
             html += `
                         <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
-                            <div style="font-size: 1rem; font-weight: bold; color: var(--text); text-transform: uppercase;">${selComp.name} (${selComp.id.toUpperCase()})</div>
+                            <div style="font-size: 1rem; font-weight: bold; color: var(--text); text-transform: uppercase;">${escapeHTML(selComp.name)} (${selComp.id.toUpperCase()})</div>
                             <div style="display: flex; gap: 12px; align-items: baseline;">
                                 <div style="font-size: 1.4rem; font-weight: bold; color: var(--text);">$${current.toFixed(2)}</div>
                                 <div style="font-size: 0.9rem; color: ${changeColor}; font-weight: bold;">${changeVal >= 0 ? '+' : ''}$${changeVal.toFixed(2)}</div>
                             </div>
                         </div>
-                        
+
                         <div style="flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px; position: relative; min-height: 250px;">
                             <canvas id="terminalChart"></canvas>
                         </div>
-                        
+
                         <div style="display: flex; justify-content: space-between; margin-top: 12px; font-size: 0.85rem; background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <div>
                                 <div style="color: var(--text-dim); margin-bottom: 2px;">Доступно на рынке</div>
@@ -2964,17 +2744,18 @@ const UI_DASHBOARD = {
                                 <div style="color: var(--blue); font-weight: bold;">${STATE.stockMarket.portfolio[selComp.id] ? ((STATE.stockMarket.portfolio[selComp.id] / 100000) * 100).toFixed(2) : '0.00'}%</div>
                             </div>
                         </div>
+                        ${!selComp.isPlayer && !selComp.isAcquired ? `<button onclick="STOCK_MARKET.acquire('${selComp.id}')" style="margin-top:12px">Купить контрольный пакет (51%, премия 20%)</button>` : ''}
             `;
         }
-        
+
         html += `
                     </div>
                 </div>
             </div>
         `;
-        
+
         container.innerHTML = html;
-        
+
         if (selComp) {
             setTimeout(() => {
                 this.drawTerminalChart(selComp.id);
@@ -2992,7 +2773,7 @@ const UI_DASHBOARD = {
             return;
         }
         FINANCE.takeLoan(amount, term);
-        amountInput.value = ''; 
+        amountInput.value = '';
     },
 
     submitDeposit() {
@@ -3007,7 +2788,7 @@ const UI_DASHBOARD = {
             return;
         }
         FINANCE.openDeposit(amount, term, payoutType);
-        amountInput.value = ''; 
+        amountInput.value = '';
     },
 
     setFactoryWarehouses(uid) {
@@ -3020,19 +2801,19 @@ const UI_DASHBOARD = {
             this.update();
         }
     },
-    
+
     // Сохранение процентов логистики
     saveRoutes(bizUid, destsStr) {
         let dests = destsStr ? destsStr.split(',') : [];
         let biz = STATE.company.businesses.find(b => b.uid === bizUid);
         if (!biz) return;
-        
+
         let newRoutes = {};
         dests.forEach(d => {
             let val = parseInt(document.getElementById(`route-${bizUid}-${d}`).value) || 0;
             if (val > 0) newRoutes[d] = val; // Сохраняем абсолютные значения в штуках
         });
-        
+
         biz.routing = newRoutes;
         NOTIFY.success('Успех', 'Квоты отгрузки (в шт.) успешно обновлены!');
         this.update();
@@ -3049,7 +2830,7 @@ const UI_DASHBOARD = {
             this.update();
         }
     },
-    
+
     // Окно выбора города
     showLocationModal(bizType) {
         this.showCityModal('business', bizType);
@@ -3059,9 +2840,9 @@ const UI_DASHBOARD = {
     updateRetailTab() {
         let retailBody = document.getElementById('ui-retail-businesses');
         if (!retailBody) return;
-        
+
         if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
-        
+
         let hasRetail = false;
         let activeStoresHtml = '<div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:16px;">';
 
@@ -3069,11 +2850,11 @@ const UI_DASHBOARD = {
             let tpl = RECIPES.BUSINESSES[biz.type];
             if (!tpl.isRetail) return;
             hasRetail = true;
-            
+
             let level = biz.level || 1;
             let cityId = biz.city || 'odesa';
             let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { name: cityId, rentMult: 1.0, salaryMult: 1.0 };
-            
+
             let totalSold = 0;
             let totalRev = 0;
 
@@ -3087,15 +2868,15 @@ const UI_DASHBOARD = {
             }
 
             activeStoresHtml += `
-            <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px 20px; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer; transition:all 0.2s; box-shadow:var(--shadow-card);" 
-                 onclick="UI_DASHBOARD.showStoreModal(${biz.uid})" 
-                 onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 15px rgba(0,0,0,0.1)'" 
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px 20px; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer; transition:all 0.2s; box-shadow:var(--shadow-card);"
+                 onclick="UI_DASHBOARD.showStoreModal(${biz.uid})"
+                 onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 15px rgba(0,0,0,0.1)'"
                  onmouseout="this.style.transform=''; this.style.boxShadow='var(--shadow-card)'">
-                
+
                 <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
                     <div style="font-size:2.2rem; background:linear-gradient(135deg, rgba(46,204,113,0.1), rgba(39,174,96,0.05)); width:56px; height:56px; display:flex; align-items:center; justify-content:center; border-radius:14px; border:1px solid rgba(46,204,113,0.2);">🏪</div>
                     <div>
-                        <h3 style="margin:0 0 4px 0; font-size:1.15rem; color:var(--text);">${biz.name}</h3>
+                        <h3 style="margin:0 0 4px 0; font-size:1.15rem; color:var(--text);">${escapeHTML(biz.name)}</h3>
                         <div style="font-size:0.85rem; color:var(--text-dim); display:flex; gap:6px; align-items:center;">
                             <span style="background:var(--surface-2); padding:2px 6px; border-radius:4px;">Ур. ${level}</span>
                             <span style="color:var(--green); font-weight:600;">${cityData.name}</span>
@@ -3114,7 +2895,7 @@ const UI_DASHBOARD = {
                 </div>
             </div>`;
         });
-        
+
         activeStoresHtml += '</div>';
 
         let headerHtml = `
@@ -3137,7 +2918,7 @@ const UI_DASHBOARD = {
         </div>`;
 
         retailBody.innerHTML = headerHtml + activeStoresHtml + newShopHtml;
-        
+
         // Синхронное обновление модального окна, если оно открыто
         let modal = document.getElementById('store-modal');
         if (modal && modal.style.display !== 'none' && this.currentStoreModalUid) {
@@ -3153,7 +2934,7 @@ const UI_DASHBOARD = {
         let modal = document.createElement('div');
         modal.id = 'store-modal';
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
-        
+
         modal.innerHTML = `
             <div style="background:var(--bg); width:95%; max-width:1200px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.3); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
                 <div style="padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
@@ -3165,11 +2946,11 @@ const UI_DASHBOARD = {
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(modal);
         this.renderStoreModalContent(bizUid);
     },
-    
+
     closeStoreModal() {
         let modal = document.getElementById('store-modal');
         if (modal) modal.remove();
@@ -3185,22 +2966,22 @@ const UI_DASHBOARD = {
 
         let biz = STATE.company.businesses.find(b => b.uid === bizUid);
         if (!biz) return this.closeStoreModal();
-        
+
         let tpl = RECIPES.BUSINESSES[biz.type];
         let level = biz.level || 1;
         let cityId = biz.city || 'odesa';
         let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { name: cityId, rentMult: 1.0, salaryMult: 1.0 };
-        
+
         let locMult = biz.locMult || 1.0;
         let adminCost = tpl.area * 2 * level * locMult;
-        
+
         if (!biz.assigned) biz.assigned = {};
         if (biz.assigned.salesman === undefined) biz.assigned.salesman = 0;
         if (biz.assigned.store_manager === undefined) biz.assigned.store_manager = 0;
-        
+
         let freeSales = typeof HR !== 'undefined' ? HR.getUnassigned('salesman') : 0;
         let freeMgr = typeof HR !== 'undefined' ? HR.getUnassigned('store_manager') : 0;
-        
+
         let mgr = biz.assigned.store_manager || 0;
         let sales = biz.assigned.salesman || 0;
         let assignedTotal = sales + mgr;
@@ -3210,16 +2991,16 @@ const UI_DASHBOARD = {
         let staffEff = (mgr > 0 && sales > 0) ? Math.min(1.0, assignedTotal / maxStaff) : 0;
         let staffEffPct = Math.round(staffEff * 100);
 
-        let maxVol = tpl.area * level * locMult * 2;
+        let maxVol = OPERATIONS.storeCapacity(biz);
         let eqCount = biz.equipment.count || 0;
         let maxSlots = level * (tpl.slotsPerLevel || 5);
         let eqName = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].name : tpl.equipmentType;
         let eqQuality = biz.equipment.quality || 1.0;
         let eqCondition = biz.equipment.condition !== undefined ? biz.equipment.condition : 100;
         let condColor = eqCondition >= 70 ? 'var(--green)' : (eqCondition >= 30 ? 'var(--orange)' : 'var(--red)');
-        let displayEff = (eqCount > 0) ? (0.6 + (Math.min(eqCount, 5) * 0.1) * (eqCondition / 100)) : 0.5;
+        let displayEff = RETAIL.displayEfficiency(biz);
         let displayEffPct = Math.round(displayEff * 100);
-        
+
         let eqCost = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 800;
         let eqDamage = Math.max(0, 100 - eqCondition);
         let repairCost = (eqCount * eqCost) * 0.10 * (eqDamage / 100);
@@ -3250,14 +3031,14 @@ const UI_DASHBOARD = {
 
                     if (!biz.prices) biz.prices = {};
                     let retailPrice = biz.prices[k] || anchorRetailPrice;
-                    
+
                     let margin = inv.avgCost > 0 ? (retailPrice / inv.avgCost) : (retailPrice / basePrice);
                     let markupFromAnchor = retailPrice / anchorRetailPrice;
                     let marginColor = markupFromAnchor > 1.2 ? 'var(--red)' : (markupFromAnchor > 1.0 ? 'var(--orange)' : 'var(--green)');
-                    
+
                     let revYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? biz.stats.lastSold[k].revenue : 0;
                     let missedRevYesterday = (biz.stats && biz.stats.lastSold && biz.stats.lastSold[k]) ? (biz.stats.lastSold[k].missedRevenue || 0) : 0;
-                    let stockCogs = inv.qty * inv.avgCost; 
+                    let stockCogs = inv.qty * inv.avgCost;
 
                     totalSold += soldYesterday;
                     totalRev += revYesterday;
@@ -3267,8 +3048,8 @@ const UI_DASHBOARD = {
 
                     let opacity = inv.qty === 0 ? '0.6' : '1.0';
                     let filter = inv.qty === 0 ? 'grayscale(80%)' : 'none';
-                    let soldOutBadge = inv.qty === 0 
-                        ? '<div style="background:var(--red); color:white; font-size:0.65rem; font-weight:800; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; letter-spacing:0.05em;">SOLD OUT</div>' 
+                    let soldOutBadge = inv.qty === 0
+                        ? '<div style="background:var(--red); color:white; font-size:0.65rem; font-weight:800; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; letter-spacing:0.05em;">SOLD OUT</div>'
                         : '';
 
                     invHtml += `
@@ -3283,7 +3064,7 @@ const UI_DASHBOARD = {
                                 <div style="font-size:0.85rem; color:var(--text-dim); margin-top:2px;">Себест-ть (1 шт): <strong style="color:var(--red);">$${formatMoney(inv.avgCost)}</strong> <span style="opacity:0.6;">(Всего: $${formatMoney(stockCogs)})</span></div>
                             </div>
                         </div>
-                        
+
                         <div style="width: 35%; display:flex; flex-direction:column; gap:8px;">
                             <div>
                                 <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:2px;">Цена полки <span title="Множитель прибыли относительно себестоимости 1 шт" style="color:${marginColor}; font-weight:700;">(ROI: x${margin.toFixed(1)})</span></div>
@@ -3293,7 +3074,7 @@ const UI_DASHBOARD = {
                                     <button onclick="UI_DASHBOARD.saveStorePrice(${biz.uid}, '${k}')" style="background:var(--blue); color:white; border:none; padding:4px 8px; font-size:0.9rem; border-radius:6px; cursor:pointer; font-weight:700;">OK</button>
                                 </div>
                             </div>
-                            
+
                             <div style="background:var(--surface-2); padding:6px; border-radius:6px; border:1px dashed var(--border);">
                                 <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:4px; font-weight:700;">🔄 АВТО-ЗАКАЗ (ШТ)</div>
                                 <div style="display:flex; align-items:center; gap:4px;">
@@ -3302,7 +3083,7 @@ const UI_DASHBOARD = {
                                 </div>
                             </div>
                         </div>
-                        
+
                             <div style="width: 25%; text-align:right;">
                                 <div style="font-size:0.85rem; color:var(--text-dim);">Продано вчера</div>
                                 <div style="font-weight:800; color:var(--green); font-size:1.1rem;">${soldYesterday} шт</div>
@@ -3314,7 +3095,7 @@ const UI_DASHBOARD = {
             });
         }
         if (invHtml === '') invHtml = '<div style="text-align:center; padding:20px; color:var(--text-dim); background:var(--surface-2); border-radius:8px; border:1px dashed var(--border);">Товара на полках нет</div>';
-        
+
         let volPercent = Math.min(100, (currentVol/maxVol)*100).toFixed(1);
         let chartBg = volPercent > 90 ? 'var(--red)' : (volPercent > 70 ? 'var(--orange)' : 'var(--green)');
 
@@ -3337,7 +3118,7 @@ const UI_DASHBOARD = {
                     <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:16px;">
                         Занято ${currentVol.toFixed(1)} м³ из ${maxVol.toFixed(1)} м³. Доставляйте товары с производственных складов.
                     </div>
-                    
+
                     <div id="store-inventory-list" style="max-height: 50vh; overflow-y: auto; padding-right:8px;">
                         ${invHtml}
                     </div>
@@ -3351,19 +3132,19 @@ const UI_DASHBOARD = {
                         <div style="font-size:1.6rem; font-weight:800; color:var(--green);">+$${formatMoney(totalRev)}</div>
                         <div style="font-size:0.85rem; color:var(--text-dim); margin-top:4px;">Аренда: -$${formatMoney(adminCost)}/дн</div>
                         ${totalMissedRev > 0 ? `<div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--red); color:var(--red); font-size:0.85rem; font-weight:700;">⚠️ Упущено из-за пустых полок: $${formatMoney(totalMissedRev)}</div>` : ''}
-                        
+
                         <button onclick="UI_DASHBOARD.showStoreAnalyticsModal(${biz.uid})" style="margin-top:12px; width:100%; background:var(--surface); border:1px solid var(--green); color:var(--green); padding:8px; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.85rem; transition:all 0.2s;" onmouseover="this.style.background='var(--green)'; this.style.color='white'" onmouseout="this.style.background='var(--surface)'; this.style.color='var(--green)'">📊 Аналитика продаж</button>
                     </div>
 
                     <h4 style="margin:0 0 16px 0; font-size:1.1rem;">Оборудование & Персонал</h4>
-                    
+
                     <!-- Мебель -->
                     <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px;">
                         <div style="font-size:0.85rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; margin-bottom:12px; display:flex; justify-content:space-between;">
                             <span>🛒 Торговое оборудование</span>
                             <span style="color:var(--blue);">КПД: ${displayEffPct}%</span>
                         </div>
-                        
+
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                             <div>
                                 <strong style="color:var(--text); font-size:1rem;">${eqName}</strong>
@@ -3371,7 +3152,7 @@ const UI_DASHBOARD = {
                             </div>
                             <div style="font-weight:800; color:var(--blue); font-size:1.2rem;">${eqCount} / ${maxSlots}</div>
                         </div>
-                        
+
                         <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
                             <span style="color:var(--text-dim);">Состояние оборудования</span>
                             <span style="font-weight:700; color:${condColor};">${eqCondition.toFixed(0)}%</span>
@@ -3379,7 +3160,7 @@ const UI_DASHBOARD = {
                         <div style="height:6px; background:var(--surface-3); border-radius:3px; margin-bottom:12px; overflow:hidden;">
                             <div style="height:100%; width:${eqCondition}%; background:${condColor}; transition:0.3s;"></div>
                         </div>
-                        
+
                         <div style="display:flex; gap:8px;">
                             <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${Math.max(1, maxSlots - eqCount)}" style="width:50px; padding:6px; border:1px solid var(--border); border-radius:8px; font-weight:700; text-align:center; background:var(--surface-2);">
                             <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" style="flex:1; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:8px; font-weight:700; cursor:pointer; font-size:0.85rem;">Докупить</button>
@@ -3396,7 +3177,7 @@ const UI_DASHBOARD = {
                                 <div style="font-weight:700; color:var(--text); font-size:1rem;">${assignedTotal} / ${maxStaff}</div>
                             </div>
                         </div>
-                        
+
                         <div style="font-size:0.9rem; color:var(--text-dim); margin-bottom:12px; display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid var(--border);">
                             <span>Фонд оплаты труда (ФОТ):</span>
                             <strong style="color:var(--red);">$${formatMoney(salaryCost)} / дн</strong>
@@ -3409,8 +3190,8 @@ const UI_DASHBOARD = {
                                 <div style="font-size:0.85rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeMgr}</span></div>
                             </div>
                             <div style="display:flex; align-items:center; gap:8px;">
-                                <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button> 
-                                <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${biz.assigned.store_manager}</span> 
+                                <button onclick="HR.removeFromBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button>
+                                <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${biz.assigned.store_manager}</span>
                                 <button onclick="HR.assignToBusiness(${biz.uid}, 'store_manager')" ${biz.assigned.store_manager >= 1 || freeMgr === 0 ? 'disabled' : ''} class="btn-hr-plus">+</button>
                             </div>
                         </div>
@@ -3422,14 +3203,14 @@ const UI_DASHBOARD = {
                                 <div style="font-size:0.85rem; color:var(--text-dim);">Резерв: <span style="color:var(--blue); font-weight:700;">${freeSales}</span></div>
                             </div>
                             <div style="display:flex; align-items:center; gap:8px;">
-                                <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button> 
-                                <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${biz.assigned.salesman}</span> 
+                                <button onclick="HR.removeFromBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman === 0 ? 'disabled' : ''} class="btn-hr-minus">-</button>
+                                <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${biz.assigned.salesman}</span>
                                 <button onclick="HR.assignToBusiness(${biz.uid}, 'salesman')" ${biz.assigned.salesman >= (maxStaff - 1) || freeSales === 0 ? 'disabled' : ''} class="btn-hr-plus">+</button>
                             </div>
                         </div>
                     </div>
 
-                    <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="width:100%; margin-top:16px; padding:12px; background:var(--orange); color:white; border:none; border-radius:10px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 10px rgba(243,156,18,0.3);">🚀 Расширить магазин ($${formatMoney(tpl.area * 50 * level)})</button>
+                    <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="width:100%; margin-top:16px; padding:12px; background:var(--orange); color:white; border:none; border-radius:10px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 10px rgba(243,156,18,0.3);">🚀 Расширить магазин ($${formatMoney(tpl.area * 50 * level * biz.locMult)})</button>
                 </div>
             </div>`;
 
@@ -3464,11 +3245,11 @@ const UI_DASHBOARD = {
                 totalBudget += campaignCosts[biz.campaign || 0];
                 maxEffect = Math.max(maxEffect, campaignEffect[biz.campaign || 0]);
             });
-            
+
             // Индекс маркетинговой силы: бренд * количество агентств * кампания
             let mktIndex = (currentBrand * agencies.length * maxEffect).toFixed(0);
             let brandColor = currentBrand >= 50 ? 'var(--green)' : (currentBrand >= 20 ? 'var(--orange)' : '#8e44ad');
-            
+
             let dashMetrics = [
                 { label: 'Сила Бренда', value: currentBrand.toFixed(1) + '%', icon: '🌟', color: brandColor, desc: 'Узнаваемость' },
                 { label: 'Агентств', value: agencies.length, icon: '🏢', color: 'var(--blue)', desc: 'Офисов маркетинга' },
@@ -3477,7 +3258,7 @@ const UI_DASHBOARD = {
                 { label: 'Макс. эффект', value: 'x' + maxEffect.toFixed(1), icon: '⚡', color: '#e67e22', desc: 'Усилитель кампании' },
                 { label: 'Маркетинг-индекс', value: mktIndex, icon: '📈', color: '#8e44ad', desc: 'Общий показатель' },
             ];
-            
+
             mktDash.innerHTML = dashMetrics.map(m => `
                 <div style="background:var(--surface); padding:16px; border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow-card);">
                     <div style="font-size:1.6rem; margin-bottom:6px;">${m.icon}</div>
@@ -3504,7 +3285,7 @@ const UI_DASHBOARD = {
             hasMarketing = true;
 
             let level = biz.level || 1;
-            let adminCost = tpl.area * 2 * level;
+            let adminCost = tpl.area * 2 * level * biz.locMult;
 
             if (!biz.assigned) biz.assigned = {};
             if (biz.assigned.marketer === undefined) biz.assigned.marketer = 0;
@@ -3538,7 +3319,7 @@ const UI_DASHBOARD = {
             STATE.company.businesses.forEach(store => {
                 if (RECIPES.BUSINESSES[store.type].isRetail) {
                     let sel = (targetType === 'store' && targetId == store.uid) ? 'selected' : '';
-                    targetOptions += `<option value="store_${store.uid}" ${sel}>📍 ${store.name}</option>`;
+                    targetOptions += `<option value="store_${store.uid}" ${sel}>📍 ${escapeHTML(store.name)}</option>`;
                 }
             });
             targetOptions += `</optgroup>`;
@@ -3556,7 +3337,7 @@ const UI_DASHBOARD = {
             let campaignButtons = CAMPAIGNS.map(c => {
                 let isActive = currentCampaign === c.id;
                 return `
-                <div onclick="UI_DASHBOARD.setCampaignById(${biz.uid}, ${c.id})" 
+                <div onclick="UI_DASHBOARD.setCampaignById(${biz.uid}, ${c.id})"
                      title="${c.desc}"
                      style="cursor:pointer; border:2px solid ${isActive ? c.color : 'var(--border)'}; background:${isActive ? 'rgba(0,0,0,0.04)' : 'var(--surface-2)'}; border-radius:10px; padding:10px 12px; text-align:center; transition:all 0.15s; ${isActive ? 'box-shadow: 0 0 0 3px ' + c.color.replace(')', ',0.2)').replace('var(--','rgba(') + ';' : ''}">
                     <div style="font-size:1.5rem; margin-bottom:4px;">${c.icon}</div>
@@ -3574,7 +3355,7 @@ const UI_DASHBOARD = {
                     <div style="display:flex; align-items:center; gap:12px;">
                         <div style="font-size:2rem;">📢</div>
                         <div>
-                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">${biz.name}</div>
+                            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">${escapeHTML(biz.name)}</div>
                             <div style="font-size:0.9rem; color:var(--text-dim);">Уровень ${level} • Аренда <strong style="color:var(--red);">$${formatMoney(adminCost)}</strong>/дн</div>
                         </div>
                     </div>
@@ -3583,7 +3364,7 @@ const UI_DASHBOARD = {
                             КПД: ${effPct}%
                         </div>
                         <button onclick="PRODUCTION.upgradeBusiness(${biz.uid})" style="background:rgba(243,156,18,0.1); color:var(--orange); border:1px solid rgba(243,156,18,0.3); padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem;">
-                            ⬆️ Расширить ($${formatMoney(tpl.area * 50 * level)})
+                            ⬆️ Расширить ($${formatMoney(tpl.area * 50 * level * biz.locMult)})
                         </button>
                     </div>
                 </div>
@@ -3605,7 +3386,7 @@ const UI_DASHBOARD = {
                         <!-- Таргет -->
                         <div>
                             <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:8px;">📍 Цель продвижения</div>
-                            <select id="marketing-target-${biz.uid}" onchange="UI_DASHBOARD.setMarketingTarget(${biz.uid})" 
+                            <select id="marketing-target-${biz.uid}" onchange="UI_DASHBOARD.setMarketingTarget(${biz.uid})"
                                     style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); cursor:pointer; font-size:0.9rem;">
                                 ${targetOptions}
                             </select>
@@ -3622,9 +3403,9 @@ const UI_DASHBOARD = {
                                 <div style="height:100%; width:${eqPct}%; background:linear-gradient(90deg,#8e44ad,#e74c3c); border-radius:6px; transition:width 0.4s;"></div>
                             </div>
                             <div style="display:flex; gap:8px;">
-                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${Math.max(1,freeSlots)}" 
+                                <input type="number" id="install-qty-${biz.uid}" value="1" min="1" max="${Math.max(1,freeSlots)}"
                                        style="width:60px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); text-align:center; font-weight:600;">
-                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))" 
+                                <button onclick="PRODUCTION.installEquipment(${biz.uid}, parseInt(document.getElementById('install-qty-${biz.uid}').value))"
                                         style="flex:1; background:rgba(142,68,173,0.1); color:#8e44ad; border:1px solid rgba(142,68,173,0.3); padding:8px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem;">
                                     ⬇️ Купить ПК
                                 </button>
@@ -3661,7 +3442,7 @@ const UI_DASHBOARD = {
                         <!-- Управление кадрами -->
                         <div style="background:var(--surface-2); padding:14px; border-radius:10px; border:1px solid var(--border);">
                             <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); font-weight:700; margin-bottom:12px;">👥 Кадровый состав (${assignedTotal}/${maxStaff})</div>
-                            
+
                             <div style="display:flex; justify-content:space-between; align-items:center; background:var(--surface); padding:10px 14px; border-radius:8px; border:1px solid var(--border); margin-bottom:8px;">
                                 <div>
                                     <div style="font-weight:600; font-size:0.9rem;">🎨 Маркетолог</div>
@@ -3711,72 +3492,23 @@ const UI_DASHBOARD = {
     setCampaignById(bizUid, campaignId) {
         let biz = STATE.company.businesses.find(b => b.uid === bizUid);
         if (!biz) return;
+        if (![0,1,2,3].includes(campaignId)) return;
         biz.campaign = campaignId;
-        this.updateMarketingTab();
+        this.update();
     },
 
 
     // Отправка товаров с Общего склада в локальный склад Магазина (ПЛАТНАЯ ЛОГИСТИКА)
     transferToStore(itemKey, cityId) {
-        let storeSelect = document.getElementById(`trans-store-${cityId}-${itemKey}`);
-        let qtyInput = document.getElementById(`trans-qty-${cityId}-${itemKey}`);
-        
-        if (!storeSelect || !qtyInput || !storeSelect.value) return;
-        
-        let storeUid = parseInt(storeSelect.value);
-        let qty = parseInt(qtyInput.value);
-        let store = STATE.company.businesses.find(b => b.uid === storeUid);
-        if (!store) return;
-        
-        let localWh = STATE.company.warehouses[cityId];
-        let globalInv = localWh.inventory[itemKey];
-        if (!globalInv || globalInv.qty < qty) return NOTIFY.error('Ошибка', 'На складе города нет столько товара.');
-        
-        let tpl = RECIPES.BUSINESSES[store.type];
-        let maxVol = tpl.area * (store.level || 1) * (store.locMult || 1.0) * 2;
-        let itemVol = RECIPES.RESOURCES[itemKey].volume || 0.1;
-        
-        let currentVol = 0;
-        if (!store.localInventory) store.localInventory = {};
-        Object.keys(store.localInventory).forEach(ik => currentVol += store.localInventory[ik].qty * (RECIPES.RESOURCES[ik].volume || 0));
-        
-        let maxCanFit = itemVol > 0 ? Math.floor((maxVol - currentVol) / itemVol) : qty;
-        if (qty > maxCanFit) {
-            qty = maxCanFit;
-            if (qty <= 0) return NOTIFY.error('Ошибка', `На складе магазина нет места!`);
-        }
-
-        // РАСЧЕТ СТОИМОСТИ ЛОГИСТИКИ (МЕЖДУ ГОРОДАМИ ИЛИ ВНУТРИ ГОРОДА)
-        let sourceCity = cityId;
-        let targetCity = store.city || 'odesa';
-        let totalVolume = qty * itemVol;
-        let logCost = typeof GEO !== 'undefined' ? GEO.getLogisticsCost(sourceCity, targetCity, totalVolume, 'store', store.locMult || 1.0) : 0;
-
-        if (STATE.finances.balance < logCost) {
-            NOTIFY.error('Ошибка логистики', `Не хватает средств на оплату транспортной компании. Нужно $${formatMoney(logCost)}.`);
-            return;
-        }
-
-        // Списываем деньги со счета (в P&L не пишем, логистика уходит в наценку товара)
-        STATE.finances.balance -= logCost;
-        
-        if (!store.localInventory[itemKey]) store.localInventory[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
-        let locInv = store.localInventory[itemKey];
-        
-        // ВАЖНО: Стоимость доставки ложится в себестоимость товара!
-        let totalOldCost = locInv.qty * locInv.avgCost;
-        let totalNewCost = qty * globalInv.avgCost;
-        locInv.avgCost = (totalOldCost + totalNewCost + logCost) / (locInv.qty + qty);
-        locInv.quality = ((locInv.qty * (locInv.quality || 1)) + (qty * (globalInv.quality || 1))) / (locInv.qty + qty);
-        locInv.qty += qty;
-        
-        globalInv.qty -= qty;
-        if (globalInv.qty === 0) globalInv.avgCost = 0;
-        
-        NOTIFY.success('Успех', `Успешно отгружено ${qty} шт. в "${store.name}". Оплата логистики: $${formatMoney(logCost)}.`);
+        const uid = Number(document.getElementById(`trans-store-${cityId}-${itemKey}`)?.value);
+        const qty = Number(document.getElementById(`trans-qty-${cityId}-${itemKey}`)?.value);
+        if (!OPERATIONS.quantity(qty)) { NOTIFY.error('Ошибка', 'Введите положительное целое количество.'); return; }
+        const moved = OPERATIONS.transferToStore(itemKey, cityId, uid, qty);
+        if (!moved) { NOTIFY.error('Отгрузка не выполнена', 'Проверьте запас товара, свободное место и деньги на доставку.'); return; }
+        NOTIFY.success('Отгрузка выполнена', `В магазин доставлено ${moved} шт.`);
         this.update();
     },
-    
+
     // Сохранение выбранной рекламной кампании
     setCampaign(bizUid) {
         let select = document.getElementById(`campaign-${bizUid}`);
@@ -3792,7 +3524,7 @@ const UI_DASHBOARD = {
         let biz = STATE.company.businesses.find(b => b.uid === bizUid);
         if (input && biz) {
             let val = parseFloat(input.value);
-            if (isNaN(val) || val <= 0) {
+            if (!Number.isFinite(val) || val <= 0) {
                 NOTIFY.error('Ошибка', 'Введите корректную цену (больше 0).');
                 return;
             }
@@ -3806,13 +3538,14 @@ const UI_DASHBOARD = {
     saveAutoSupply(bizUid, itemKey) {
         let biz = STATE.company.businesses.find(b => b.uid === bizUid);
         if (!biz) return;
-        
+
         let input = document.getElementById(`autosupply-${bizUid}-${itemKey}`);
         if (!input) return;
-        
-        let qty = parseInt(input.value) || 0;
+
+        let qty = Number(input.value);
+        if (!Number.isSafeInteger(qty) || qty < 0) { NOTIFY.error('Ошибка', 'Введите целое количество от 0.'); return; }
         if (!biz.autoSupplyRules) biz.autoSupplyRules = {};
-        
+
         if (qty <= 0) {
             delete biz.autoSupplyRules[itemKey];
             if (typeof NOTIFY !== 'undefined') NOTIFY.info('Логистика', `Автоматическое пополнение отменено.`);
@@ -3820,7 +3553,7 @@ const UI_DASHBOARD = {
             biz.autoSupplyRules[itemKey] = qty;
             if (typeof NOTIFY !== 'undefined') NOTIFY.success('Логистика', `Автозаказ настроен. Магазин будет поддерживать запас ${qty} шт.`);
         }
-        this.updateRetailTab(); // Перерисовываем интерфейс
+        this.update();
     },
 
     // --- АНАЛИТИКА МАГАЗИНА (ЭТАП 2) ---
@@ -3839,7 +3572,7 @@ const UI_DASHBOARD = {
         // 1. Фильтрация реальной истории
         if (!biz.stats) biz.stats = {};
         let fullHistory = biz.stats.history || [];
-        
+
         // Если история пуста (первый день), берем текущие данные lastSold
         if (fullHistory.length === 0) {
              let dRev = 0, dCogs = 0, dMissed = 0;
@@ -3857,13 +3590,13 @@ const UI_DASHBOARD = {
 
         // 2. Агрегация данных по товарам
         let aggRev = 0, aggCogs = 0, aggMissed = 0;
-        let itemAgg = {}; 
-        
+        let itemAgg = {};
+
         history.forEach(dayStat => {
             aggRev += dayStat.revenue || 0;
             aggCogs += dayStat.cogs || 0;
             aggMissed += dayStat.missed || 0;
-            
+
             if (dayStat.items) {
                 Object.keys(dayStat.items).forEach(k => {
                     if (!itemAgg[k]) itemAgg[k] = { rev: 0, profit: 0, missed: 0, name: RECIPES.RESOURCES[k]?.name || k };
@@ -3882,20 +3615,20 @@ const UI_DASHBOARD = {
         let locMult = biz.locMult || 1.0;
         let cityId = biz.city || 'odesa';
         let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { rentMult: 1.0, salaryMult: 1.0 };
-        
+
         let dailyRent = tpl.area * 2 * level * locMult;
         let sales = biz.assigned?.salesman || 0;
         let mgr = biz.assigned?.store_manager || 0;
         let dailySalaries = (sales * HR.GRADES.salesman.salary + mgr * HR.GRADES.store_manager.salary) * cityData.salaryMult;
-        
-        let totalOpex = (dailyRent + dailySalaries) * actualDays;
+
+        let totalOpex = history.reduce((n,h) => n + (h.opex ?? dailyRent + dailySalaries * (1 + TAXES.RATES.payroll)), 0);
         let totalProfit = aggRev - aggCogs - totalOpex;
         let marginPct = aggRev > 0 ? (totalProfit / aggRev) * 100 : 0;
 
         // Расчет Активов
-        let realEstateValue = tpl.area * 50 * level * locMult;
+        let realEstateValue = biz.capitalCost ?? tpl.area * 50 * locMult * (1 + level * (level - 1) / 2);
         let eqCost = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 800;
-        let equipmentValue = (biz.equipment?.count || 0) * eqCost * ((biz.equipment?.condition || 0) / 100);
+        let equipmentValue = biz.equipment.bookValue ?? biz.equipment.count * eqCost * biz.equipment.condition / 100;
         let inventoryValue = 0;
         if (biz.localInventory) Object.values(biz.localInventory).forEach(inv => inventoryValue += inv.qty * inv.avgCost);
         let totalAssets = realEstateValue + equipmentValue + inventoryValue;
@@ -3904,7 +3637,7 @@ const UI_DASHBOARD = {
         // 4. Формирование таблицы ABC
         let products = Object.values(itemAgg);
         products.sort((a, b) => b.rev - a.rev);
-        
+
         let abcHtml = `<table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
             <thead style="background:var(--surface-2); color:var(--text-dim); border-bottom:1px solid var(--border);">
                 <tr>
@@ -3915,23 +3648,23 @@ const UI_DASHBOARD = {
                 </tr>
             </thead>
             <tbody>`;
-        
+
         if (products.length === 0 || aggRev === 0) {
             abcHtml += `<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-dim);">Дождитесь закрытия первого дня для анализа</td></tr>`;
         } else {
             let runningRev = 0;
             products.forEach(p => {
                 if (p.rev === 0 && p.missed === 0) return; // Скрываем пустые товары без движения
-                runningRev += p.rev;
                 let cumPct = aggRev > 0 ? (runningRev / aggRev) * 100 : 0;
+                runningRev += p.rev;
                 let abcClass = '';
                 if (p.rev === 0) abcClass = '<span style="background:rgba(231,76,60,0.1); color:var(--red); padding:2px 6px; border-radius:4px; font-weight:800;">-</span>';
                 else if (cumPct <= 80) abcClass = '<span style="background:rgba(46,204,113,0.1); color:var(--green); padding:2px 6px; border-radius:4px; font-weight:800;">A</span>';
                 else if (cumPct <= 95) abcClass = '<span style="background:rgba(243,156,18,0.1); color:var(--orange); padding:2px 6px; border-radius:4px; font-weight:800;">B</span>';
                 else abcClass = '<span style="background:rgba(231,76,60,0.1); color:var(--red); padding:2px 6px; border-radius:4px; font-weight:800;">C</span>';
-                
+
                 let pMargin = p.rev > 0 ? (p.profit / p.rev) * 100 : 0;
-                
+
                 abcHtml += `
                 <tr style="border-bottom:1px solid var(--border);">
                     <td style="padding:10px; font-weight:600; color:var(--text);">${abcClass} ${p.name}</td>
@@ -3949,10 +3682,10 @@ const UI_DASHBOARD = {
         modal.innerHTML = `
             <div style="background:var(--bg); width:95%; max-width:900px; max-height:90vh; border-radius:16px; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.4); border:1px solid var(--border); overflow:hidden; animation: scaleIn 0.2s ease-out;">
                 <div style="padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
-                    <h3 style="margin:0; font-size:1.3rem; color:var(--text);">📊 Аналитика: ${biz.name}</h3>
+                    <h3 style="margin:0; font-size:1.3rem; color:var(--text);">📊 Аналитика: ${escapeHTML(biz.name)}</h3>
                     <button onclick="document.getElementById('store-analytics-modal').remove()" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; font-size:1.2rem; display:flex; align-items:center; justify-content:center; color:var(--text-dim); cursor:pointer;">✕</button>
                 </div>
-                
+
                 <div style="padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface-2);">
                     <div style="display:flex; gap:8px;">
                         <button onclick="UI_DASHBOARD.showStoreAnalyticsModal(${bizUid}, 7)" style="${btnStyle(7)}">7 дней</button>
@@ -3986,7 +3719,7 @@ const UI_DASHBOARD = {
                     <div style="height:250px; position:relative; margin-bottom:24px; background:var(--surface-2); border-radius:12px; padding:12px; border:1px solid var(--border);">
                         <canvas id="storeAnalyticsChart"></canvas>
                     </div>
-                    
+
                     <h4 style="margin:0 0 8px 0; color:var(--text);">🏆 ABC-Анализ ассортимента</h4>
                     <div style="border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--surface);">
                         ${abcHtml}
@@ -4000,7 +3733,7 @@ const UI_DASHBOARD = {
         let labels = [];
         let revData = [];
         let missedData = [];
-        
+
         if (history.length <= 30) {
             // Если период небольшой, показываем каждый день
             history.forEach(h => {
@@ -4059,7 +3792,7 @@ const UI_DASHBOARD = {
             }
         });
     },
-    
+
     // Красивое модальное окно Журнала событий
     showEventLog() {
         let oldModal = document.getElementById('event-modal');
@@ -4068,7 +3801,7 @@ const UI_DASHBOARD = {
         let modal = document.createElement('div');
         modal.id = 'event-modal';
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(3px);';
-        
+
         let logsHtml = '';
         if (!STATE.eventLog || STATE.eventLog.length === 0) {
             logsHtml = '<p style="color:#7f8c8d; text-align:center; padding: 20px;">Новостей и событий пока нет.</p>';
@@ -4079,7 +3812,7 @@ const UI_DASHBOARD = {
                 logsHtml += `
                 <li style="border-left: 4px solid ${color}; background: #f9f9f9; padding: 10px; margin-bottom: 8px; border-radius: 0 4px 4px 0;">
                     <small style="color:#7f8c8d; display:block; margin-bottom: 4px;">📅 День ${log.day}</small>
-                    <span style="color:#2c3e50;">${log.msg}</span>
+                    <span style="color:#2c3e50;">${escapeHTML(log.msg.replace(/<[^>]*>/g, " "))}</span>
                 </li>`;
             });
             logsHtml += '</ul>';
@@ -4106,7 +3839,7 @@ const UI_DASHBOARD = {
         let modal = document.createElement('div');
         modal.id = 'city-modal';
         modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(4px);';
-        
+
         let title = actionType === 'warehouse' ? 'Где открываем или расширяем склад?' : 'Выберите город для инвестиций';
         if (bizType && typeof RECIPES !== 'undefined' && RECIPES.BUSINESSES[bizType]) {
             title = `Открытие: ${RECIPES.BUSINESSES[bizType].name}`;
@@ -4115,7 +3848,7 @@ const UI_DASHBOARD = {
         let citiesHtml = '';
         Object.keys(GEO.CITIES).forEach(cId => {
             let city = GEO.CITIES[cId];
-            
+
             let rentColor = city.rentMult > 1.1 ? '#c0392b' : (city.rentMult < 1 ? '#27ae60' : '#7f8c8d');
             let salaryColor = city.salaryMult > 1.1 ? '#c0392b' : (city.salaryMult < 1 ? '#27ae60' : '#7f8c8d');
             let demandColor = city.demandMult > 1.1 ? '#27ae60' : (city.demandMult < 1 ? '#c0392b' : '#7f8c8d');
@@ -4125,7 +3858,7 @@ const UI_DASHBOARD = {
                 let cost = WAREHOUSE.getUpgradeCost(cId);
                 let currentLvl = STATE.company.warehouses[cId] ? STATE.company.warehouses[cId].level : 0;
                 let lvlText = currentLvl === 0 ? 'Построить новый хаб' : `Расширить до Ур. ${currentLvl + 1}`;
-                
+
                 actionCode = `document.getElementById('city-modal').remove(); WAREHOUSE.upgrade('${cId}');`;
                 citiesHtml += `
                 <div onclick="${actionCode}" style="background:#fdfefe; border:2px solid #bdc3c7; border-radius:8px; padding:15px; margin-bottom:10px; cursor:pointer; transition:0.2s; display:flex; justify-content:space-between; align-items:center;">
@@ -4140,10 +3873,10 @@ const UI_DASHBOARD = {
                 </div>`;
             } else {
                 actionCode = `document.getElementById('city-modal').remove(); PRODUCTION.buyBusiness('${bizType}', '${cId}');`;
-                
+
                 let recBadge = '';
                 let borderStyle = 'border:1px solid #dcdde1; background:#ffffff;';
-                
+
                 if (cId === 'kharkiv') {
                     recBadge = `<div style="margin-top:3px;"><span style="background:#e8f8ee; color:#27ae60; border:1px solid #a3e9b9; padding:2px 6px; border-radius:6px; font-size:0.72em; font-weight:bold;">⭐ Рекомендуется для старта (Низкая аренда)</span></div>`;
                     borderStyle = 'border:2px solid #27ae60; background:#f6fcf8; box-shadow:0 2px 10px rgba(39,174,96,0.15);';
@@ -4194,10 +3927,11 @@ const UI_DASHBOARD = {
 
         let curChId = STATE.quests ? (STATE.quests.currentChapter || 1) : 1;
         let ch = QUESTS.CHAPTERS[curChId] || QUESTS.CHAPTERS[1];
-        let quests = QUESTS.LIST.filter(q => q.chapter === curChId);
+        let chapterQuests = QUESTS.LIST.filter(q => q.chapter === curChId);
+        let quests = QUESTS.LIST.filter(q => q.chapter === curChId || (q.chapter < curChId && STATE.quests.completed.includes(q.id) && !STATE.quests.claimed.includes(q.id)));
 
-        let completedCount = quests.filter(q => STATE.quests.completed && STATE.quests.completed.includes(q.id)).length;
-        let percent = quests.length > 0 ? Math.round((completedCount / quests.length) * 100) : 0;
+        let completedCount = chapterQuests.filter(q => STATE.quests.completed.includes(q.id)).length;
+        let percent = Math.round(completedCount / chapterQuests.length * 100);
 
         let questsHTML = quests.map(q => {
             let isDone = STATE.quests.completed && STATE.quests.completed.includes(q.id);
@@ -4214,7 +3948,7 @@ const UI_DASHBOARD = {
             }
 
             return `
-                <div style="background: var(--surface-2, #F5F5F7); border: 1px solid var(--border, rgba(0,0,0,0.08)); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <div class="quest-item" style="background: var(--surface-2, #F5F5F7); border: 1px solid var(--border, rgba(0,0,0,0.08)); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <div style="flex: 1; min-width: 240px;">
                         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
                             <span>${isDone ? '✅' : '🎯'}</span>
@@ -4242,7 +3976,7 @@ const UI_DASHBOARD = {
                         <p style="margin: 4px 0 0 0; color: var(--text-dim, #86868B); font-size: 0.88em;">${ch.desc}</p>
                     </div>
                     <div style="text-align: right;">
-                        <div style="font-weight: bold; color: var(--text, #1D1D1F); font-size: 0.88em;">Прогресс: ${completedCount} / ${quests.length} (${percent}%)</div>
+                        <div style="font-weight: bold; color: var(--text, #1D1D1F); font-size: 0.88em;">Прогресс: ${completedCount} / ${chapterQuests.length} (${percent}%)</div>
                         <div style="width: 140px; height: 6px; background: var(--surface-3, #E8E8ED); border-radius: 3px; overflow: hidden; margin-top: 4px; display: inline-block;">
                             <div style="width: ${percent}%; height: 100%; background: var(--blue, #007AFF); transition: width 0.3s ease;"></div>
                         </div>
@@ -4301,9 +4035,9 @@ const UI_DASHBOARD = {
                     </div>
                 </div>
             `;
-            
+
             document.getElementById('bank-modal').style.display = 'flex';
-            
+
             let ctx = document.getElementById('bankScheduleChart');
             if (this.bankChartInstance) this.bankChartInstance.destroy();
             this.bankChartInstance = new Chart(ctx, {
@@ -4348,7 +4082,7 @@ const UI_DASHBOARD = {
             let schedule = [];
             let currentAccrued = deposit.accrued;
             let dailyInt = (deposit.amount * deposit.rate) / 365;
-            
+
             for (let i = 0; i < deposit.daysLeft; i++) {
                 if (deposit.payoutType !== 'daily') currentAccrued += dailyInt;
                 schedule.push({
@@ -4372,9 +4106,9 @@ const UI_DASHBOARD = {
                     </div>
                 </div>
             `;
-            
+
             document.getElementById('bank-modal').style.display = 'flex';
-            
+
             let ctx = document.getElementById('bankScheduleChart');
             if (this.bankChartInstance) this.bankChartInstance.destroy();
             this.bankChartInstance = new Chart(ctx, {

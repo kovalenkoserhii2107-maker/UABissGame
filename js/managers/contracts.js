@@ -10,28 +10,28 @@ const CONTRACTS = {
         this.init();
         const items = Object.keys(RECIPES.RESOURCES).filter(k => !RECIPES.RESOURCES[k].isRaw);
         const item = items[Math.floor(Math.random() * items.length)];
-        
+
         let basePrice = RECIPES.RESOURCES[item].basePrice || 10;
         if (typeof MARKET !== 'undefined' && MARKET.getCurrentPrice) {
             basePrice = MARKET.getCurrentPrice(item);
         }
-        
-        let qty = Math.floor(Math.random() * 50) + 10; 
+
+        let qty = Math.floor(Math.random() * 50) + 10;
         if(item === 'drones') qty = Math.floor(Math.random() * 15) + 5;
         if(item === 'chips') qty = Math.floor(Math.random() * 100) + 50;
 
-        let premium = 1.2 + Math.random() * 0.6; 
-        let price = Math.floor(basePrice * premium);
-        let deadline = Math.floor(Math.random() * 10) + 5; 
+        let premium = 1.2 + Math.random() * 0.6;
+        let price = Math.max(0.01, Math.round(basePrice * premium * 100) / 100);
+        let deadline = Math.floor(Math.random() * 10) + 5;
 
         let contract = {
-            id: Date.now() + Math.floor(Math.random() * 1000),
+            id: OPERATIONS.id(),
             item: item, qty: qty, price: price,
-            totalReward: price * qty, penalty: Math.floor(price * qty * 0.4), deadline: deadline
+            minQuality: 1, totalReward: price * qty, penalty: Math.floor(price * qty * 0.4), deadline: deadline
         };
 
         STATE.contracts.available.push(contract);
-        if (STATE.contracts.available.length > 4) STATE.contracts.available.shift(); 
+        if (STATE.contracts.available.length > 4) STATE.contracts.available.shift();
     },
 
     accept(id) {
@@ -48,16 +48,16 @@ const CONTRACTS = {
         let idx = STATE.contracts.active.findIndex(c => c.id === id);
         if (idx !== -1) {
             let c = STATE.contracts.active[idx];
-            
+
             // Считаем общий сток по всем городам
             let totalStock = 0;
             if (STATE.company.warehouses) {
                 Object.keys(STATE.company.warehouses).forEach(cId => {
                     let wh = STATE.company.warehouses[cId];
-                    if (wh.inventory && wh.inventory[c.item]) totalStock += wh.inventory[c.item].qty;
+                    if (wh.level > 0 && wh.inventory?.[c.item] && (wh.inventory[c.item].quality ?? 1) >= (c.minQuality ?? 1)) totalStock += wh.inventory[c.item].qty;
                 });
             }
-            
+
             if (totalStock >= c.qty) {
                 // Списываем последовательно со складов разных городов и считаем себестоимость
                 let remainToDeduct = c.qty;
@@ -65,7 +65,7 @@ const CONTRACTS = {
 
                 Object.keys(STATE.company.warehouses).forEach(cId => {
                     let wh = STATE.company.warehouses[cId];
-                    if (remainToDeduct > 0 && wh.inventory && wh.inventory[c.item] && wh.inventory[c.item].qty > 0) {
+                    if (remainToDeduct > 0 && wh.level > 0 && wh.inventory?.[c.item]?.qty > 0 && (wh.inventory[c.item].quality ?? 1) >= (c.minQuality ?? 1)) {
                         let take = Math.min(remainToDeduct, wh.inventory[c.item].qty);
                         let unitCost = wh.inventory[c.item].avgCost || 0;
                         totalCogs += take * unitCost;
@@ -75,15 +75,15 @@ const CONTRACTS = {
                         remainToDeduct -= take;
                     }
                 });
-                
-                STATE.finances.balance += c.totalReward;
+
+                LEDGER.cash(c.totalReward, 'operating', 'Тендер');
                 if (typeof LEDGER !== 'undefined') {
                     LEDGER.record('rev_b2g', c.totalReward);
                     if (totalCogs > 0) LEDGER.record('exp_materials', totalCogs);
                 }
-                
+
                 STATE.finances.creditScore = Math.min(1000, (STATE.finances.creditScore || 300) + 15);
-                
+
                 STATE.contracts.active.splice(idx, 1);
                 UI_DASHBOARD.update();
                 if (typeof NOTIFY !== 'undefined') NOTIFY.success('Поставка выполнена!', `Вы заработали $${formatMoney(c.totalReward)}.`);
@@ -98,10 +98,10 @@ const CONTRACTS = {
         for (let i = STATE.contracts.active.length - 1; i >= 0; i--) {
             let c = STATE.contracts.active[i];
             c.deadline--;
-            if (c.deadline <= 0) {
-                STATE.finances.balance -= c.penalty;
+            if (c.deadline < 0) {
+                LEDGER.cash(-c.penalty, 'operating', 'Срыв тендера');
                 if (typeof LEDGER !== 'undefined') LEDGER.record('exp_fines', c.penalty);
-                STATE.finances.creditScore = Math.max(0, (STATE.finances.creditScore || 300) - 50); 
+                STATE.finances.creditScore = Math.max(0, (STATE.finances.creditScore || 300) - 50);
                 if (typeof NOTIFY !== 'undefined') NOTIFY.error('Срыв сроков поставки!', `Контракт провален. Штраф: $${formatMoney(c.penalty)}.`);
                 STATE.contracts.active.splice(i, 1);
             }

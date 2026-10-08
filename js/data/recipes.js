@@ -14,7 +14,7 @@ const RECIPES = {
         cotton:      { name: 'Хлопок / Ткань', isRaw: true, volume: 0.02, basePrice: 4, dailyMarketPool: 10000 },
         wood:        { name: 'Древесина / Доски', isRaw: true, volume: 0.05, basePrice: 5, dailyMarketPool: 8000 },
         chemicals:   { name: 'Хим. реагенты', isRaw: true, volume: 0.005, basePrice: 8, dailyMarketPool: 5000 },
-        
+
         detergent:   { name: 'Бытовая химия', isRaw: false, volume: 0.01, basePrice: 15, dailyMarketPool: 5000 },
         clothing:    { name: 'Одежда (Масс-маркет)', isRaw: false, volume: 0.01, basePrice: 35, dailyMarketPool: 3000 },
         toys:        { name: 'Детские игрушки', isRaw: false, volume: 0.02, basePrice: 25, dailyMarketPool: 4000 },
@@ -56,95 +56,95 @@ const RECIPES = {
     // Матрица бизнесов
     BUSINESSES: {
         // -- FMCG И ПОТРЕБИТЕЛЬСКИЙ СЕКТОР (Снабжение розницы) --
-        bakery_fab: { 
+        bakery_fab: { category: "food", icon: "🥖", color: "#e67e22",
             name: 'Пекарня (Хлебозавод)', area: 120, inputs: { grain: 2 }, output: 'bakery', staffReq: 2,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 30, researchCost: 0
         },
-        canned_fab: { 
+        canned_fab: { category: "food", icon: "🥫", color: "#e67e22",
             name: 'Мясокомбинат / Консервы', area: 180, inputs: { meat_raw: 1, vegetables: 1 }, output: 'canned_food', staffReq: 3,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 15, researchCost: 400
         },
-        textile_fab: { 
+        textile_fab: { category: "light", icon: "👕", color: "#e91e63",
             name: 'Швейная фабрика (Одежда)', area: 150, inputs: { cotton: 2, chemicals: 1 }, output: 'clothing', staffReq: 4,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 10, researchCost: 300
         },
-        detergent_fab: { 
+        detergent_fab: { category: "light", icon: "🧼", color: "#e91e63",
             name: 'Химкомбинат бытовой химии', area: 160, inputs: { chemicals: 2, plastic: 1 }, output: 'detergent', staffReq: 3,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 15, researchCost: 350
         },
-        furniture_fab: { 
+        furniture_fab: { category: "light", icon: "🪑", color: "#e91e63",
             name: 'Мебельная фабрика', area: 250, inputs: { wood: 2, plastic: 1 }, output: 'furniture', staffReq: 4,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 4, researchCost: 500
         },
 
         // -- TIER 2 FACTORIES --
-        parts3d: { 
+        parts3d: { category: "optics", icon: "🖨️", color: "#2196f3",
             name: 'Фабрика 3D-печати', area: 150, inputs: { plastic: 2 }, output: 'parts3d', staffReq: 2,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 20, researchCost: 0
         },
-        optics_fab: { 
+        optics_fab: { category: "optics", icon: "🔭", color: "#2196f3",
             name: 'Оптический завод', area: 200, inputs: { glass: 2, plastic: 1 }, output: 'optics', staffReq: 3,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 15, researchCost: 500
         },
-        microchips: { 
+        microchips: { category: "electronics", icon: "💾", color: "#3f51b5",
             name: 'Завод микросхем', area: 200, inputs: { silicon: 1, plastic: 1, copper: 1 }, output: 'chips', staffReq: 4,
             equipmentType: 'machine_tool', slotsPerLevel: 10, outputPerMachine: 10, researchCost: 800
         },
-        motor_fab: { 
+        motor_fab: { category: "defense", icon: "⚙️", color: "#b71c1c",
             name: 'Сборка сервоприводов', area: 200, inputs: { aluminum: 1, copper: 1 }, output: 'motors', staffReq: 3,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 10, researchCost: 800
         },
-        battery_fab: { 
+        battery_fab: { category: "defense", icon: "🔋", color: "#b71c1c",
             name: 'Химический цех (АКБ)', area: 250, inputs: { lithium: 1, copper: 1, plastic: 1 }, output: 'batteries', staffReq: 4,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 8, researchCost: 1000
         },
 
         // -- TIER 3 FACTORIES --
-        camera_fab: { 
+        camera_fab: { category: "optics", icon: "📷", color: "#2196f3",
             name: 'Сборка оптоэлектроники', area: 200, inputs: { optics: 1, chips: 1 }, output: 'camera_mod', staffReq: 5,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 5, researchCost: 1200
         },
-        drops_fab: { 
+        drops_fab: { category: "optics", icon: "🪂", color: "#2196f3",
             name: 'Сборка систем сброса', area: 100, inputs: { parts3d: 1, motors: 1 }, output: 'drops', staffReq: 3,
             equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 10, researchCost: 1000
         },
-        software: { 
+        software: { category: "electronics", icon: "💻", color: "#3f51b5",
             name: 'IT-Компания (ПО)', area: 300, inputs: {}, output: 'software', staffReq: 6,
             equipmentType: 'server_rack', slotsPerLevel: 20, outputPerMachine: 5, researchCost: 1500
         },
-        ai_lab: { 
+        ai_lab: { category: "electronics", icon: "🤖", color: "#3f51b5",
             name: 'Лаборатория ИИ', area: 300, inputs: { software: 2 }, output: 'ai_core', staffReq: 8,
             equipmentType: 'server_rack', slotsPerLevel: 10, outputPerMachine: 2, researchCost: 4000
         },
 
         // -- TIER 4 FACTORIES --
-        pc_assembly: {
+        pc_assembly: { category: "electronics", icon: "🖥️", color: "#3f51b5",
             name: 'Завод электроники (ПК)', area: 300, inputs: { chips: 3, parts3d: 2, aluminum: 1 }, output: 'smart_pc',
             staffReq: 5, equipmentType: 'machine_tool', slotsPerLevel: 10, outputPerMachine: 4, researchCost: 2000
         },
-        radio_assembly: {
+        radio_assembly: { category: "defense", icon: "📡", color: "#b71c1c",
             name: 'Сборка систем связи', area: 300, inputs: { chips: 2, plastic: 1, software: 1 }, output: 'mil_radio',
             staffReq: 5, equipmentType: 'machine_tool', slotsPerLevel: 8, outputPerMachine: 3, researchCost: 2500
         },
-        drones: { 
+        drones: { category: "defense", icon: "🚁", color: "#b71c1c",
             name: 'Сборка FPV-дронов', area: 400, inputs: { parts3d: 1, motors: 4, batteries: 1, camera_mod: 1 }, output: 'drones',
             staffReq: 8, equipmentType: 'machine_tool', slotsPerLevel: 15, outputPerMachine: 5, researchCost: 3000
         },
-        drones_ai_fab: { 
+        drones_ai_fab: { category: "defense", icon: "🛡️", color: "#b71c1c",
             name: 'Оборонный завод (ШІ-Дроны)', area: 600, inputs: { drones: 1, ai_core: 1 }, output: 'drones_ai',
             staffReq: 10, equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 2, researchCost: 6000
         },
 
         // -- TIER 5 FACTORIES (Оборудование) --
-        display_factory: {
+        display_factory: { category: "equip", icon: "🏪", color: "#607d8b",
             name: 'Завод торг. оборудования', area: 250, inputs: { plastic: 5, aluminum: 2, smart_pc: 1 }, output: 'retail_display',
             staffReq: 5, equipmentType: 'machine_tool', slotsPerLevel: 10, outputPerMachine: 2, researchCost: 2500
         },
-        server_assembly: {
+        server_assembly: { category: "equip", icon: "🗄️", color: "#607d8b",
             name: 'Завод серверных систем', area: 400, inputs: { aluminum: 5, chips: 10, copper: 5 }, output: 'server_rack',
             staffReq: 8, equipmentType: 'machine_tool', slotsPerLevel: 8, outputPerMachine: 1, researchCost: 3500
         },
-        heavy_machinery: { 
+        heavy_machinery: { category: "equip", icon: "🏗️", color: "#607d8b",
             name: 'Машиностроительный завод', area: 600, inputs: { aluminum: 10, motors: 5, chips: 3 }, output: 'machine_tool',
             staffReq: 10, equipmentType: 'machine_tool', slotsPerLevel: 5, outputPerMachine: 1, researchCost: 5000
         },
@@ -153,13 +153,13 @@ const RECIPES = {
         retail_store: {
             name: 'Фирменный магазин', area: 100, inputs: {}, output: 'none',
             // ДОБАВЛЕНЫ НОВЫЕ ПОТРЕБИТЕЛЬСКИЕ ТОВАРЫ ДЛЯ ПРОДАЖИ!
-            accepts: ['vegetables', 'bakery', 'canned_food', 'detergent', 'clothing', 'toys', 'furniture', 'smart_pc', 'software', 'camera_mod', 'optics', 'drones'], 
-            staffReq: 4, equipmentType: 'retail_display', slotsPerLevel: 5, isRetail: true, researchCost: 0 
+            accepts: ['vegetables', 'bakery', 'canned_food', 'detergent', 'clothing', 'toys', 'furniture', 'smart_pc', 'software', 'camera_mod', 'optics', 'drones'],
+            staffReq: 4, equipmentType: 'retail_display', slotsPerLevel: 5, isRetail: true, researchCost: 0
         },
         marketing_agency: {
-            name: 'Отдел Маркетинга', area: 150, inputs: {}, output: 'none', 
-            staffReq: 5, equipmentType: 'smart_pc', 
-            slotsPerLevel: 5, isMarketing: true, researchCost: 0 
+            name: 'Отдел Маркетинга', area: 150, inputs: {}, output: 'none',
+            staffReq: 5, equipmentType: 'smart_pc',
+            slotsPerLevel: 5, isMarketing: true, researchCost: 0
         }
     }
 };

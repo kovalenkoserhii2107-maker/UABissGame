@@ -13,7 +13,7 @@ const EVENTS = {
                 type: 'good',
                 execute: () => {
                     let amount = 1500 + Math.floor(Math.random() * 3000);
-                    STATE.finances.balance += amount;
+                    LEDGER.cash(amount, 'operating', 'Грант');
                     // Записываем ДОХОД в бухгалтерию
                     if (typeof LEDGER !== 'undefined') LEDGER.record('rev_other', amount);
                     return { msg: '🏆 Государственный грант на инновации!', details: `Получено: +$${formatMoney(amount)}` };
@@ -23,7 +23,7 @@ const EVENTS = {
                 type: 'bad',
                 execute: () => {
                     let amount = 500 + Math.floor(Math.random() * 1500);
-                    STATE.finances.balance -= amount;
+                    LEDGER.cash(-amount, 'operating', 'Штраф');
                     // Записываем РАСХОД в бухгалтерию (в ту самую строку)
                     if (typeof LEDGER !== 'undefined') LEDGER.record('exp_fines', amount);
                     return { msg: '🚨 Внеплановая проверка пожарной безопасности.', details: `Выписан штраф: -$${formatMoney(amount)}` };

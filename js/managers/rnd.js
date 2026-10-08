@@ -9,7 +9,7 @@ const RND = {
                 staff: { scientist: 0, lead_scientist: 0 }
             };
         }
-        
+
         if (!STATE.rnd.staff) STATE.rnd.staff = { scientist: 0, lead_scientist: 0 };
         if (typeof STATE.rnd.staff.scientist !== 'number' || isNaN(STATE.rnd.staff.scientist)) STATE.rnd.staff.scientist = 0;
         if (typeof STATE.rnd.staff.lead_scientist !== 'number' || isNaN(STATE.rnd.staff.lead_scientist)) STATE.rnd.staff.lead_scientist = 0;
@@ -31,7 +31,8 @@ const RND = {
         this.init();
         let cost = this.getUpgradeCost();
         if (STATE.finances.balance >= cost) {
-            STATE.finances.balance -= cost;
+            LEDGER.cash(-cost, 'investing', 'НИИ');
+            STATE.rnd.facility.capitalCost = (STATE.rnd.facility.capitalCost ?? 10000 * STATE.rnd.facility.level * (STATE.rnd.facility.level + 1) / 2) + cost;
             STATE.rnd.facility.level++;
             NOTIFY.success('Успех', 'Корпус НИИ расширен!');
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
@@ -41,7 +42,7 @@ const RND = {
     },
 
     installEquipment(qty) {
-        if (isNaN(qty) || qty <= 0) return;
+        if (!OPERATIONS.quantity(qty)) return;
         this.init();
         let maxSlots = this.getMaxStaff();
         let freeSlots = maxSlots - (STATE.rnd.facility.equipment.count || 0);
@@ -64,12 +65,14 @@ const RND = {
         }
 
         // Последовательное списание со складов
+        let installedCost = 0;
         let remainToDeduct = qty;
         if (STATE.company.warehouses) {
             Object.keys(STATE.company.warehouses).forEach(cId => {
                 let wh = STATE.company.warehouses[cId];
                 if (remainToDeduct > 0 && wh && wh.inventory && wh.inventory['smart_pc'] && wh.inventory['smart_pc'].qty > 0) {
                     let take = Math.min(remainToDeduct, wh.inventory['smart_pc'].qty);
+                    installedCost += take * wh.inventory['smart_pc'].avgCost;
                     wh.inventory['smart_pc'].qty -= take;
                     if (wh.inventory['smart_pc'].qty === 0) wh.inventory['smart_pc'].avgCost = 0;
                     remainToDeduct -= take;
@@ -77,7 +80,9 @@ const RND = {
             });
         }
 
-        let currentTotalHealth = (STATE.rnd.facility.equipment.count || 0) * (STATE.rnd.facility.equipment.condition || 100);
+        let currentTotalHealth = (STATE.rnd.facility.equipment.count || 0) * (STATE.rnd.facility.equipment.condition ?? 100);
+        const eq = STATE.rnd.facility.equipment;
+        eq.bookValue = (eq.bookValue ?? eq.count * RECIPES.RESOURCES.smart_pc.basePrice * eq.condition / 100) + installedCost;
         STATE.rnd.facility.equipment.count += qty;
         STATE.rnd.facility.equipment.condition = (currentTotalHealth + (qty * 100)) / STATE.rnd.facility.equipment.count;
         NOTIFY.success('Успех', `Установлено ${qty} рабочих станций в лабораторию НИИ.`);
@@ -86,27 +91,27 @@ const RND = {
 
     repairEquipment() {
         this.init();
-        if (STATE.rnd.facility.equipment.count === 0) { 
-            NOTIFY.error('Ошибка', 'Нет оборудования для ремонта.'); 
-            return; 
+        if (STATE.rnd.facility.equipment.count === 0) {
+            NOTIFY.error('Ошибка', 'Нет оборудования для ремонта.');
+            return;
         }
-        
+
         // Строгая проверка, чтобы 0% не воспринимался как пустота
         let cond = STATE.rnd.facility.equipment.condition !== undefined ? STATE.rnd.facility.equipment.condition : 100;
         let damage = 100 - cond;
-        
-        if (damage <= 0) { 
-            NOTIFY.success('Успех', 'Оборудование в идеальном состоянии.'); 
-            return; 
+
+        if (damage <= 0) {
+            NOTIFY.success('Успех', 'Оборудование в идеальном состоянии.');
+            return;
         }
-        
+
         let eqCost = RECIPES.RESOURCES['smart_pc'].basePrice || 800;
         // Стоимость полного ТО = 10% от цены новых ПК
-        let repairCost = (STATE.rnd.facility.equipment.count * eqCost) * 0.10 * (damage / 100); 
-        
+        let repairCost = (STATE.rnd.facility.equipment.count * eqCost) * 0.10 * (damage / 100);
+
         if (STATE.finances.balance >= repairCost) {
-            STATE.finances.balance -= repairCost;
-            if (typeof LEDGER !== 'undefined') LEDGER.record('exp_repair', repairCost); 
+            LEDGER.cash(-repairCost, 'operating', 'Ремонт НИИ');
+            if (typeof LEDGER !== 'undefined') LEDGER.record('exp_repair', repairCost);
             STATE.rnd.facility.equipment.condition = 100;
             NOTIFY.success('Успех', `ТО лаборатории завершено! Списано: $${formatMoney(repairCost)}`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
@@ -127,13 +132,14 @@ const RND = {
         let remainingPCs = pcs - workingLeads;
         let workingScientists = Math.min(scientists, remainingPCs);
         let rawRP = (workingScientists * HR.GRADES.scientist.rp) + (workingLeads * HR.GRADES.lead_scientist.rp);
-        
+
         // ИСПРАВЛЕНО: Теперь при 0% оборудование выдает 0.0 (полная остановка)
         let conditionMult = STATE.rnd.facility.equipment.condition < 70 ? Math.max(0.0, STATE.rnd.facility.equipment.condition / 70) : 1.0;
         return Math.floor(rawRP * conditionMult);
     },
 
     assignStaff(grade) {
+        if (!['scientist', 'lead_scientist'].includes(grade)) return;
         this.init();
         if (((STATE.rnd.staff.scientist || 0) + (STATE.rnd.staff.lead_scientist || 0)) >= this.getMaxStaff()) {
             NOTIFY.error('Ошибка', 'Нет мест в НИИ!'); return;
@@ -153,9 +159,10 @@ const RND = {
     },
 
     startProject(bizId) {
+        if (!RECIPES.BUSINESSES[bizId] || STATE.rnd.activeProject === bizId) return;
         this.init();
         if (STATE.rnd.facility.level === 0) { NOTIFY.error('Ошибка', 'Нет НИИ!'); return; }
-        
+
         if (STATE.rnd.activeProject && STATE.rnd.activeProject !== bizId) {
             this.pauseProject();
         }
@@ -163,22 +170,22 @@ const RND = {
         let isUnlocked = STATE.rnd.unlocked.includes(bizId);
         let currentLevel = STATE.rnd.techLevels[bizId] || 1.0;
         let tpl = RECIPES.BUSINESSES[bizId];
-        
+
         // ИСПРАВЛЕНО: Синхронизировано на 1000 RP для базовых
         let targetRP = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost;
-        
-        if (!isUnlocked && tpl.researchCost === 0) { 
-            NOTIFY.error('Ошибка', 'Эта технология не требует исследований.'); 
-            return; 
+
+        if (!isUnlocked && tpl.researchCost === 0) {
+            NOTIFY.error('Ошибка', 'Эта технология не требует исследований.');
+            return;
         }
-        
-        if (isUnlocked && currentLevel >= 2.0) { 
-            NOTIFY.error('Ошибка', 'Технология уже прокачана до максимума (2.0)!'); 
-            return; 
+
+        if (isUnlocked && currentLevel >= 2.0) {
+            NOTIFY.error('Ошибка', 'Технология уже прокачана до максимума (2.0)!');
+            return;
         }
 
         STATE.rnd.activeProject = bizId;
-        
+
         if (!STATE.rnd.savedProgress) STATE.rnd.savedProgress = {};
         if (STATE.rnd.savedProgress[bizId] !== undefined) {
             STATE.rnd.points = STATE.rnd.savedProgress[bizId];
@@ -193,18 +200,18 @@ const RND = {
     pauseProject() {
         this.init();
         if (!STATE.rnd.activeProject) return;
-        
+
         let currentBiz = STATE.rnd.activeProject;
         if (!STATE.rnd.savedProgress) STATE.rnd.savedProgress = {};
-        
+
         // Сохраняем накопленный прогресс в объект приостановленных
         if (STATE.rnd.points > 0) {
             STATE.rnd.savedProgress[currentBiz] = STATE.rnd.points;
         }
-        
+
         STATE.rnd.activeProject = null;
         STATE.rnd.points = 0;
-        
+
         if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
     },
 
@@ -212,23 +219,23 @@ const RND = {
         this.init();
         let lvl = STATE.rnd.facility.level || 0;
         if (lvl > 0) {
-            let adminCost = lvl * 250; 
-            STATE.finances.balance -= adminCost;
+            let adminCost = lvl * 250;
+            LEDGER.cash(-adminCost, 'operating', 'Аренда НИИ');
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_admin', adminCost);
-            
-            let rp = this.getDailyRP();
+
+            let rp = STATE.rnd.activeProject ? this.getDailyRP() : 0;
+            STATE.rnd.lastRP = rp;
             let pcs = STATE.rnd.facility.equipment.count || 0;
             if (rp > 0 && pcs > 0) {
-                STATE.rnd.facility.equipment.condition -= 2.0;
-                if (STATE.rnd.facility.equipment.condition < 0) STATE.rnd.facility.equipment.condition = 0;
+                OPERATIONS.wear(STATE.rnd.facility.equipment, 2, 'smart_pc');
             }
 
             if (STATE.rnd.activeProject) {
                 STATE.rnd.points += rp;
-                let activeKey = STATE.rnd.activeProject; 
+                let activeKey = STATE.rnd.activeProject;
                 let tpl = RECIPES.BUSINESSES[activeKey];
                 let isUnlocked = STATE.rnd.unlocked.includes(activeKey);
-                
+
                 // ИСПРАВЛЕНО: Синхронизировано на 1000 RP для базовых
                 let targetRP = isUnlocked ? (tpl.researchCost > 0 ? tpl.researchCost * 2 : 1000) : tpl.researchCost;
 
@@ -245,10 +252,10 @@ const RND = {
                     if (newLevel >= 2.0) {
                         STATE.rnd.techLevels[activeKey] = 2.0;
                         NOTIFY.success('Успех', `Технология "${tpl.name}" достигла уровня 2.0!`);
-                        
+
                         STATE.rnd.activeProject = null;
                         STATE.rnd.points = 0;
-                        
+
                         if (STATE.rnd.savedProgress && STATE.rnd.savedProgress[activeKey]) {
                             delete STATE.rnd.savedProgress[activeKey];
                         }

@@ -1,85 +1,42 @@
-// Главный игровой цикл
 const GAME = {
-    
-    // Инициализация при старте игры
-    init() {
-        if (typeof LEDGER !== 'undefined') LEDGER.init();
-        if (typeof MARKET !== 'undefined') MARKET.init();
-        if (typeof WAREHOUSE !== 'undefined') WAREHOUSE.init();
-        if (typeof QUESTS !== 'undefined') {
-            QUESTS.init();
-            QUESTS.checkProgress();
-        }
-        if (typeof STOCK_MARKET !== 'undefined') STOCK_MARKET.init();
-        UI_DASHBOARD.update();
-        if (typeof TUTORIAL !== 'undefined') {
-            TUTORIAL.init();
-        }
+    processing: false,
+    prepare() {
+        LEDGER.init(); WAREHOUSE.init(); HR.init(); RND.init(); PRODUCTION.init();
+        MARKET.init(); STOCK_MARKET.init(); QUESTS.init(); TAXES.init();
     },
-
-    // Логика завершения хода
+    init() {
+        PERSISTENCE.load(); this.prepare(); QUESTS.checkProgress();
+        UI_DASHBOARD.update(); TUTORIAL.init();
+        ACCESSIBILITY.init();
+    },
     nextDay() {
-        STATE.time.day++;
-
-        // 1. Финансы
-        FINANCE.processDailyClearing();
-        
-        // 2. Списание ФОТ с записью в книгу
-        let dailySalaries = HR.getDailySalaryFund();
-        if (dailySalaries > 0) {
-            STATE.finances.balance -= dailySalaries;
-            LEDGER.record('exp_salary', dailySalaries);
-        }
-
-        // 3. Отработка механик
-        WAREHOUSE.processDaily(); // Склады (аренда всех хабов и автопополнение магазинов)
-        HR.processDaily();
-        CONTRACTS.processDaily();
-        RND.processDaily();
-        
-        // Запись истории RP для графика
-        if (!STATE.history) STATE.history = { rp: [] };
-        if (!STATE.history.rp) STATE.history.rp = [];
-        if (typeof RND !== 'undefined') {
-            STATE.history.rp.push(RND.getDailyRP());
+        if (this.processing) return;
+        const previous = JSON.stringify(STATE);
+        this.processing = true;
+        try {
+            STATE.time.day++;
+            LOGISTICS.processDaily();
+            FINANCE.processDailyClearing();
+            const salaries = HR.getDailySalaryFund();
+            LEDGER.cash(-salaries, 'operating', 'Зарплаты'); LEDGER.record('exp_salary', salaries);
+            WAREHOUSE.processDaily(); HR.processDaily(); RND.processDaily();
+            STATE.history.rp.push(STATE.rnd.lastRP ?? 0);
             if (STATE.history.rp.length > 30) STATE.history.rp.shift();
-        }
-
-        PRODUCTION.processProduction();
-        if (typeof STOCK_MARKET !== 'undefined') STOCK_MARKET.processDaily();
-        MARKET.simulate();
-        if (typeof B2B_AI !== 'undefined' && B2B_AI.simulateMarketActions) {
-            B2B_AI.simulateMarketActions();
-        }
-        LOGISTICS.processDaily(); // Логистика
-        RETAIL.processDaily();
-        EVENTS.simulate();
-        
-        if (typeof B2B_AI !== 'undefined' && STATE.time.day % 7 === 0) {
-            B2B_AI.generateOffers();
-        }
-        
-        // 4. Списание налогов и формирование налоговой базы
-        if (typeof TAXES !== 'undefined') TAXES.processDaily();
-        
-        // 5. Закрытие бухгалтерского дня (Перенос данных)
-        LEDGER.endOfDay();
-
-        // 6. Проверка прогресса квестов и достижений
-        if (typeof QUESTS !== 'undefined') QUESTS.checkProgress();
-
-        UI_DASHBOARD.update();
-
-        if (STATE.finances.balance < 0) {
-            if (typeof NOTIFY !== 'undefined') {
-                let overdraftPenalty = Math.abs(STATE.finances.balance) * 0.002;
-                NOTIFY.error('Бизнес-Овердрафт ⚠️', `Счета ушли в минус ($${formatMoney(Math.abs(STATE.finances.balance))}). Ежедневный штраф банка: $${formatMoney(overdraftPenalty)} (0.2%). Сократите издержки или возьмите кредит!`);
-            }
+            PRODUCTION.processProduction(); RETAIL.processDaily();
+            CONTRACTS.processDaily(); EVENTS.simulate();
+            MARKET.simulate(); B2B_AI.simulateMarketActions();
+            if (STATE.time.day % 7 === 0) B2B_AI.generateOffers();
+            STOCK_MARKET.processDaily(); TAXES.processDaily();
+            LEDGER.endOfDay(); QUESTS.checkProgress();
+            PERSISTENCE.validate(STATE);
+        } catch (error) {
+            PERSISTENCE.replace(JSON.parse(previous));
+            NOTIFY.error('День не закрыт', error.message + ' Состояние восстановлено.');
+            console.error(error);
+        } finally {
+            this.processing = false;
+            UI_DASHBOARD.update();
         }
     }
 };
-
-// Запуск игры после загрузки страницы
-window.onload = () => {
-    GAME.init();
-};
+window.addEventListener('load', () => GAME.init());

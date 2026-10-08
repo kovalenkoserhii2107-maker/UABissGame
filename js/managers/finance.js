@@ -1,6 +1,6 @@
 // Модуль управления финансами (Кредиты и Депозиты)
 const FINANCE = {
-    
+
     getCurrentRate() {
         // Базовая ставка 12% + премия за риск
         // Рейтинг 800+ = 13% (премия 1%)
@@ -11,96 +11,44 @@ const FINANCE = {
         return rate;
     },
 
+    warehouseCost(cityId, level) {
+        if (!level) return 0;
+        const mult = GEO.getCity(cityId).rentMult;
+        let cost = Math.floor(5000 * mult);
+        for (let i = 1; i < level; i++) cost += Math.floor(10000 * Math.pow(1.8, i - 1) * mult);
+        return cost;
+    },
+
     getAssetsBreakdown() {
-        let cash = Math.max(0, STATE.finances.balance);
-        let realEstateValue = 0;
-        let equipmentValue = 0;
-
-        if (STATE.company && STATE.company.businesses) {
-            STATE.company.businesses.forEach(b => {
-                let tpl = typeof RECIPES !== 'undefined' ? RECIPES.BUSINESSES[b.type] : null;
-                if (!tpl) return;
-                let locMult = b.locMult || 1.0; 
-                realEstateValue += tpl.area * 50 * locMult;
-                for (let i = 1; i < (b.level || 1); i++) realEstateValue += (tpl.area * 50 * i * locMult); 
-                if (b.equipment && b.equipment.count > 0) {
-                    let eqPrice = RECIPES.RESOURCES[tpl.equipmentType] ? RECIPES.RESOURCES[tpl.equipmentType].basePrice : 0;
-                    equipmentValue += (b.equipment.count * eqPrice) * ((b.equipment.condition || 0) / 100);
-                }
-            });
+        let realEstateValue = 0, equipmentValue = 0, inventoryValue = 0, logisticsValue = 0;
+        let receivablesValue = 0, depositValue = 0, portfolioValue = 0;
+        for (const b of STATE.company.businesses) {
+            const tpl = RECIPES.BUSINESSES[b.type];
+            const level = b.level ?? 1;
+            const legacyCost = tpl.area * 50 * (b.locMult ?? 1) * (1 + level * (level - 1) / 2);
+            realEstateValue += b.capitalCost ?? legacyCost;
+            equipmentValue += b.equipment.bookValue ?? b.equipment.count * RECIPES.RESOURCES[tpl.equipmentType].basePrice * b.equipment.condition / 100;
+            inventoryValue += OPERATIONS.inventoryValue(b.localInventory);
+            inventoryValue += OPERATIONS.inventoryValue(b.dailyIncoming);
         }
-        
-        if (typeof WAREHOUSE !== 'undefined' && STATE.company.warehouses) {
-            Object.keys(STATE.company.warehouses).forEach(cId => {
-                let wh = STATE.company.warehouses[cId];
-                if (wh.level > 0) {
-                    for (let i = 1; i < wh.level; i++) {
-                        realEstateValue += WAREHOUSE.LEVELS[i].upgradeCost;
-                    }
-                }
-            });
+        for (const [city, wh] of Object.entries(STATE.company.warehouses)) {
+            realEstateValue += wh.capitalCost ?? this.warehouseCost(city, wh.level);
+            inventoryValue += OPERATIONS.inventoryValue(wh.inventory);
         }
-        
-        if (STATE.rnd && STATE.rnd.facility && STATE.rnd.facility.level) {
-            let rndLvl = STATE.rnd.facility.level || 0;
-            for (let i = 1; i <= rndLvl; i++) realEstateValue += i * 10000;
-            if (STATE.rnd.facility.equipment && STATE.rnd.facility.equipment.count > 0) {
-                let pcPrice = typeof RECIPES !== 'undefined' && RECIPES.RESOURCES['smart_pc'] ? RECIPES.RESOURCES['smart_pc'].basePrice : 800;
-                equipmentValue += (STATE.rnd.facility.equipment.count * pcPrice) * ((STATE.rnd.facility.equipment.condition || 0) / 100);
-            }
+        const facility = STATE.rnd.facility;
+        if (facility) {
+            realEstateValue += facility.capitalCost ?? 10000 * facility.level * (facility.level + 1) / 2;
+            equipmentValue += facility.equipment.bookValue ?? facility.equipment.count * RECIPES.RESOURCES.smart_pc.basePrice * facility.equipment.condition / 100;
         }
-        let fixedAssets = realEstateValue + equipmentValue;
-
-        let inventoryValue = 0;
-        if (STATE.company && STATE.company.warehouses) {
-            Object.keys(STATE.company.warehouses).forEach(cId => {
-                let wh = STATE.company.warehouses[cId];
-                if (wh.inventory) {
-                    Object.keys(wh.inventory).forEach(k => {
-                        let val = (wh.inventory[k].qty || 0) * (wh.inventory[k].avgCost || 0);
-                        if (!isNaN(val)) inventoryValue += val;
-                    });
-                }
-            });
-        }
-        if (STATE.company && STATE.company.businesses) {
-            STATE.company.businesses.forEach(b => {
-                if (b.localInventory) {
-                    Object.keys(b.localInventory).forEach(k => {
-                        let val = (b.localInventory[k].qty || 0) * (b.localInventory[k].avgCost || 0);
-                        if (!isNaN(val)) inventoryValue += val;
-                    });
-                }
-            });
-        }
-
-        let logisticsValue = 0;
-        if (STATE.logistics && STATE.logistics.deliveries) {
-            STATE.logistics.deliveries.forEach(d => { logisticsValue += (d.cost || 0); });
-        }
-
-        let totalLiabilities = 0;
-        if (STATE.finances.loans) STATE.finances.loans.forEach(l => totalLiabilities += l.remainingPrincipal);
-        if (STATE.finances.balance < 0) totalLiabilities += Math.abs(STATE.finances.balance);
-
-        let depositValue = 0;
-        if (STATE.finances.deposits) {
-            STATE.finances.deposits.forEach(d => depositValue += (d.amount + (d.accrued || 0)));
-        }
-
-        let portfolioValue = 0;
-        if (typeof STOCK_MARKET !== 'undefined' && STATE.stockMarket && STATE.stockMarket.portfolio) {
-            Object.keys(STATE.stockMarket.portfolio).forEach(id => {
-                let shares = STATE.stockMarket.portfolio[id];
-                let comp = STATE.stockMarket.companies[id];
-                if (comp && shares > 0) {
-                    portfolioValue += shares * comp.sharePrice;
-                }
-            });
-        }
-
-        let netWorth = cash + inventoryValue + logisticsValue + fixedAssets + depositValue + portfolioValue - totalLiabilities;
-        return { cash, fixedAssets, inventoryValue, logisticsValue, depositValue, portfolioValue, totalLiabilities, netWorth };
+        for (const d of STATE.logistics?.deliveries ?? []) logisticsValue += d.cost + (d.logCost ?? 0);
+        for (const r of STATE.logistics?.receivables ?? []) receivablesValue += r.amount;
+        for (const d of STATE.finances.deposits) depositValue += d.amount + d.accrued;
+        for (const [id, shares] of Object.entries(STATE.stockMarket?.portfolio ?? {})) portfolioValue += shares * (STATE.stockMarket.companies[id]?.sharePrice ?? 0);
+        const cash = Math.max(0, STATE.finances.balance);
+        const totalLiabilities = STATE.finances.loans.reduce((n, l) => n + l.remainingPrincipal, 0) + Math.max(0, -STATE.finances.balance);
+        const fixedAssets = realEstateValue + equipmentValue;
+        const totalAssets = cash + fixedAssets + inventoryValue + logisticsValue + receivablesValue + depositValue + portfolioValue;
+        return { cash, realEstateValue, equipmentValue, fixedAssets, inventoryValue, logisticsValue, receivablesValue, depositValue, portfolioValue, totalAssets, totalLiabilities, netWorth: totalAssets - totalLiabilities };
     },
 
     calculateNetWorth() {
@@ -116,8 +64,9 @@ const FINANCE = {
     // (Остальная логика уже перенесена в getAssetsBreakdown)
 
     takeLoan(amount, termDays) {
+        if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(termDays) || termDays < 1 || termDays > 3650) return false;
         let currentDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
-        
+
         if (currentDebt + amount > this.getAvailableLimit()) {
             NOTIFY.error('Ошибка', 'Кредитный комитет отклонил заявку: превышен лимит риска.');
             return;
@@ -133,13 +82,13 @@ const FINANCE = {
         // Фиксируем только платеж по телу кредита
         let dailyPrincipal = amount / termDays;
 
-        STATE.finances.balance += amount;
-        STATE.finances.balance -= originationFee;
-        
+        LEDGER.cash(amount, 'financing', 'Получение кредита');
+        LEDGER.cash(-originationFee, 'financing', 'Комиссия кредита');
+
         if (typeof LEDGER !== 'undefined') LEDGER.record('fin_fees', originationFee);
 
         STATE.finances.loans.push({
-            id: Date.now(),
+            id: OPERATIONS.id(),
             amount: amount,
             remainingPrincipal: amount,
             remainingDays: termDays,
@@ -159,14 +108,14 @@ const FINANCE = {
             // Считаем проценты за текущий недозакрытый день
             let dailyInterest = (loan.remainingPrincipal * loan.rate) / 365;
             let totalToPay = loan.remainingPrincipal + dailyInterest;
-            
+
             if (STATE.finances.balance >= totalToPay) {
-                STATE.finances.balance -= totalToPay;
+                LEDGER.cash(-totalToPay, 'financing', 'Досрочное погашение');
                 if (typeof LEDGER !== 'undefined') LEDGER.record('fin_expense', dailyInterest);
-                
+
                 STATE.finances.loans.splice(idx, 1);
                 STATE.finances.creditScore = Math.min(1000, STATE.finances.creditScore + 20); // Позитивный эффект на скоринг
-                
+
                 NOTIFY.success('Успех', `Кредит досрочно погашен! Списано $${formatMoney(totalToPay)} (в т.ч. проценты за 1 день: $${formatMoney(dailyInterest)}).`);
                 UI_DASHBOARD.update();
             } else {
@@ -179,7 +128,7 @@ const FINANCE = {
         let totalInterest = 0;
         let remainingPrincipal = amount;
         let dailyPrincipal = amount / termDays;
-        
+
         for (let i = 0; i < termDays; i++) {
             let dailyInterest = (remainingPrincipal * rate) / 365;
             totalInterest += dailyInterest;
@@ -194,7 +143,7 @@ const FINANCE = {
         let termDays = loan.remainingDays;
         let rate = loan.rate;
         let dailyPrincipal = loan.dailyPrincipal;
-        
+
         for (let i = 0; i < termDays; i++) {
             let dailyInterest = (remainingPrincipal * rate) / 365;
             schedule.push({
@@ -210,28 +159,29 @@ const FINANCE = {
     },
 
     getDepositRate(termDays, payoutType) {
-        let base = 0.04; 
-        if (termDays >= 30) base = 0.06;  
-        if (termDays >= 90) base = 0.09;  
-        if (termDays >= 180) base = 0.12; 
-        if (termDays >= 270) base = 0.14; 
-        if (termDays >= 360) base = 0.16; 
-        if (payoutType === 'end') base += 0.01; 
+        let base = 0.04;
+        if (termDays >= 30) base = 0.06;
+        if (termDays >= 90) base = 0.09;
+        if (termDays >= 180) base = 0.12;
+        if (termDays >= 270) base = 0.14;
+        if (termDays >= 360) base = 0.16;
+        if (payoutType === 'end') base += 0.01;
         return base;
     },
 
     openDeposit(amount, termDays, payoutType) {
-        if (!STATE.finances.deposits) STATE.finances.deposits = []; 
-        
+        if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(termDays) || termDays < 1 || termDays > 3650 || !['daily', 'end'].includes(payoutType)) return false;
+        if (!STATE.finances.deposits) STATE.finances.deposits = [];
+
         if (STATE.finances.balance >= amount) {
-            STATE.finances.balance -= amount;
+            LEDGER.cash(-amount, 'investing', 'Открытие вклада');
             let rate = this.getDepositRate(termDays, payoutType);
-            
+
             STATE.finances.deposits.push({
-                id: Date.now(), amount: amount, termDays: termDays,
-                daysLeft: termDays, rate: rate, payoutType: payoutType, accrued: 0 
+                id: OPERATIONS.id(), amount: amount, termDays: termDays,
+                daysLeft: termDays, rate: rate, payoutType: payoutType, accrued: 0
             });
-            
+
             NOTIFY.success('Успех', `Депозит на $${formatMoney(amount)} открыт под ${(rate*100).toFixed(1)}% годовых.`);
             UI_DASHBOARD.update();
         } else {
@@ -243,27 +193,28 @@ const FINANCE = {
         let totalDailyPayment = 0;
         for (let i = STATE.finances.loans.length - 1; i >= 0; i--) {
             let loan = STATE.finances.loans[i];
-            
+
             // НОВОЕ: Проценты динамически считаются на остаток тела
             let dailyInterest = (loan.remainingPrincipal * loan.rate) / 365;
-            let paymentToday = loan.dailyPrincipal + dailyInterest;
-            
+            let principal = Math.min(loan.dailyPrincipal, loan.remainingPrincipal);
+            let paymentToday = principal + dailyInterest;
+
             if (typeof LEDGER !== 'undefined') LEDGER.record('fin_expense', dailyInterest);
-            
+
             totalDailyPayment += paymentToday;
-            loan.remainingPrincipal -= loan.dailyPrincipal;
+            loan.remainingPrincipal = Math.max(0, loan.remainingPrincipal - principal);
             loan.remainingDays--;
 
             if (loan.remainingDays <= 0) {
                 STATE.finances.loans.splice(i, 1);
-                STATE.finances.creditScore = Math.min(1000, STATE.finances.creditScore + 15); 
+                STATE.finances.creditScore = Math.min(1000, STATE.finances.creditScore + 15);
             }
         }
-        STATE.finances.balance -= totalDailyPayment;
+        LEDGER.cash(-totalDailyPayment, 'financing', 'Платежи по кредитам');
         // Банк 2.0: Бизнес-Овердрафт (штраф 0.2% в день от суммы долга)
         if (STATE.finances.balance < 0) {
             let overdraftPenalty = Math.abs(STATE.finances.balance) * 0.002;
-            STATE.finances.balance -= overdraftPenalty;
+            LEDGER.cash(-overdraftPenalty, 'financing', 'Овердрафт');
             if (typeof LEDGER !== 'undefined') LEDGER.record('fin_expense', overdraftPenalty);
             // Жесткое падение рейтинга при овердрафте
             STATE.finances.creditScore = Math.max(0, STATE.finances.creditScore - 15);
@@ -278,46 +229,45 @@ const FINANCE = {
         for (let i = STATE.finances.deposits.length - 1; i >= 0; i--) {
             let dep = STATE.finances.deposits[i];
             let dailyInt = (dep.amount * dep.rate) / 365;
-            
+
             if (typeof LEDGER !== 'undefined') LEDGER.record('fin_income', dailyInt);
-            
+
             if (dep.payoutType === 'daily') {
-                STATE.finances.balance += dailyInt; 
+                LEDGER.cash(dailyInt, 'investing', 'Проценты по вкладу');
             } else {
-                dep.accrued += dailyInt; 
+                dep.accrued += dailyInt;
             }
-            
+
             dep.daysLeft--;
             if (dep.daysLeft <= 0) {
-                STATE.finances.balance += dep.amount + dep.accrued;
+                LEDGER.cash(dep.amount + dep.accrued, 'investing', 'Возврат вклада');
                 STATE.finances.deposits.splice(i, 1);
             }
         }
-        
+
         // НОВОЕ: Динамический пересчет кредитного рейтинга (Банк 2.0)
         let assets = this.getAssetsBreakdown();
         let nw = assets.netWorth;
         let totalDebt = assets.totalLiabilities;
         // Debt/Equity = Долговая нагрузка
-        let debtRatio = nw > 0 ? (totalDebt / nw) : (totalDebt > 0 ? 1 : 0);
-        
+        let debtRatio = nw > 0 ? (totalDebt / nw) : (totalDebt > 0 ? Infinity : 0);
+
         let targetScore = 400; // Базовый скоринг
         if (nw > 50000) targetScore += 50;
         if (nw > 250000) targetScore += 100;
         if (nw > 1000000) targetScore += 150;
         if (STATE.finances.balance > 100000) targetScore += 100;
-        
+
         if (debtRatio < 0.1) targetScore += 150;
         else if (debtRatio < 0.3) targetScore += 50;
-        else if (debtRatio > 0.7) targetScore -= 100;
         else if (debtRatio > 1.0) {
             targetScore -= 300; // Жесткий штраф за высокую долговую нагрузку
-        }
-        
+        } else if (debtRatio > 0.7) targetScore -= 100;
+
         if (STATE.finances.balance < 0) targetScore -= 300;
-        
+
         targetScore = Math.max(0, Math.min(1000, targetScore));
-        
+
         // Плавное движение текущего рейтинга к целевому
         // Ускоренное падение (по 10 пунктов), медленный рост (по 2 пункта)
         if (STATE.finances.creditScore < targetScore) {

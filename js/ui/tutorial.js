@@ -27,7 +27,7 @@ const TUTORIAL = {
             trigger: { type: 'click' }
         },
         {
-            target: '#finance-pnl-container',
+            target: '#ui-finance-dashboard',
             tab: 'tab-finance',
             title: 'Отчет о Прибылях и Убытках (P&L) 💰',
             text: 'Здесь формируется ежедневный финансовый отчет. Вы сможете видеть всю выручку, расходы на зарплаты, аренду, налоги и, самое главное, чистую прибыль (Net Income).',
@@ -40,7 +40,7 @@ const TUTORIAL = {
             trigger: { type: 'click' }
         },
         {
-            target: '#hr-hiring-container',
+            target: '#ui-hire-retail',
             tab: 'tab-hr',
             title: 'Найм специалистов 🧑‍💼',
             text: 'Любой бизнес строят люди. Здесь вы будете нанимать директоров, продавцов, логистов и других специалистов, необходимых для работы ваших предприятий.',
@@ -53,7 +53,7 @@ const TUTORIAL = {
             trigger: { type: 'click' }
         },
         {
-            target: '#ui-market-container',
+            target: '#ui-market-businesses',
             tab: 'tab-market',
             title: 'Закупка товаров 📦',
             text: 'Чтобы магазинам было что продавать, вам нужно закупать товары оптом на этой бирже. Цены здесь динамические и зависят от спроса на рынке.',
@@ -66,7 +66,7 @@ const TUTORIAL = {
             trigger: { type: 'click' }
         },
         {
-            target: '#ui-warehouse-container',
+            target: '#ui-warehouse-list',
             tab: 'tab-warehouse',
             title: 'Управление запасами 🏭',
             text: 'Купленные на бирже товары попадают сюда. Вы сможете расширять склады, следить за остатками и настраивать автоматическое снабжение ваших магазинов.',
@@ -142,13 +142,13 @@ const TUTORIAL = {
             trigger: { type: 'click' }
         },
         {
-            target: '[onclick*="HR.assignToBusiness"]',
+            target: '#store-modal-body',
             tab: 'tab-retail',
             title: 'Назначение персонала 🧑‍💼',
             text: 'Прокрутите вниз до блока «Персонал» и нажмите на зеленые кнопки «+», чтобы закрепить нанятых Директора и Продавца за вашим магазином.',
             trigger: {
                 type: 'condition',
-                check: (state) => state.company && state.company.businesses && state.company.businesses.some(b => b.type === 'retail_store' && b.assigned && ((b.assigned.store_manager || 0) >= 1 || (b.assigned.salesman || 0) >= 1))
+                check: (state) => state.company && state.company.businesses && state.company.businesses.some(b => b.type === 'retail_store' && b.assigned && ((b.assigned.store_manager || 0) >= 1 && (b.assigned.salesman || 0) >= 1))
             }
         },
         {
@@ -158,7 +158,7 @@ const TUTORIAL = {
             trigger: { type: 'click' }
         },
         {
-            target: '#market-target-city',
+            target: '#ui-market-businesses',
             tab: 'tab-market',
             title: 'Закупка Хлеба или Овощей 🍞',
             text: 'Выберите город вашего магазина, купите 50-100 шт. Хлеба или Овощей и нажмите «Купить».',
@@ -166,6 +166,24 @@ const TUTORIAL = {
                 type: 'condition',
                 check: (state) => (state.logistics && state.logistics.deliveries && state.logistics.deliveries.length > 0) || (state.company && state.company.warehouses && Object.values(state.company.warehouses).some(w => Object.values(w.inventory || {}).some(i => i.qty > 0)))
             }
+        },
+        {
+            target: '[onclick="GAME.nextDay()"]',
+            title: 'Дождитесь доставки',
+            text: 'Закрывайте дни кнопкой «Следующий день», пока товар не поступит на склад.',
+            trigger: { type: 'condition', check: s => Object.values(s.company.warehouses).some(w => Object.values(w.inventory).some(i => i.qty > 0)) }
+        },
+        {
+            target: '#ui-warehouse-list', tab: 'tab-warehouse',
+            title: 'Товар на полки',
+            text: 'В строке товара выберите магазин и количество, затем нажмите «Отгрузить». Можно настроить автопополнение в карточке магазина.',
+            trigger: { type: 'condition', check: s => s.company.businesses.some(b => b.type === 'retail_store' && Object.values(b.localInventory ?? {}).some(i => i.qty > 0)) }
+        },
+        {
+            target: '[onclick="GAME.nextDay()"]',
+            title: 'Первый торговый день',
+            text: 'Закройте день, чтобы обслужить покупателей. Обучение завершится после первой продажи.',
+            trigger: { type: 'condition', check: s => s.ledger.total.rev_b2c > 0 }
         },
         {
             target: null, // Центрированное поздравление
@@ -197,6 +215,8 @@ const TUTORIAL = {
             STATE.tutorial = { isActive: !alreadyDone, step: 0 };
         }
 
+        try { if (!force && !localStorage.getItem(PERSISTENCE.KEY) && localStorage.getItem('uabiz_tutorial_done') === '1') STATE.tutorial.isActive = false; } catch (e) {}
+        this.hide();
         this._buildDOM();
         this.scrollParent = document.querySelector('.content');
         this._attachUpdateHook();
@@ -310,6 +330,7 @@ const TUTORIAL = {
         }
 
         // Если для шага требуется определенная вкладка, автоматически открываем её
+        if (step.target.startsWith('[onclick*') && step.target.includes('tab-')) UI_DASHBOARD.closeStoreModal();
         if (step.tab && typeof UI_DASHBOARD !== 'undefined') {
             const tabBtn = document.querySelector(`[onclick*="'${step.tab}'"]`);
             if (tabBtn && !tabBtn.classList.contains('active')) {
@@ -317,18 +338,26 @@ const TUTORIAL = {
             }
         }
 
-        const el = document.querySelector(step.target);
+        let selector = step.target;
+        if (step.trigger.type === 'condition') {
+            for (const id of ['city-modal', 'market-item-modal']) {
+                const modal = document.getElementById(id);
+                if (modal && modal.getClientRects().length) selector = '#' + id + ' > div';
+            }
+        }
+        if (step.target === '[onclick="GAME.nextDay()"]') UI_DASHBOARD.closeMarketModal();
+        const el = document.querySelector(selector);
         if (!el) {
             console.warn('[TUTORIAL] Целевой элемент не найден для шага:', step.target);
             this._drawFullscreen();
             return;
         }
 
-        this._currentTargetSelector = step.target;
+        this._currentTargetSelector = selector;
         try {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
         } catch(e) {}
-        this._scrollTimer = setTimeout(() => this._drawAround(el), 150);
+        this._drawAround(el);
         this._attachReposition();
     },
 
@@ -419,6 +448,7 @@ const TUTORIAL = {
     advance() {
         if (!STATE.tutorial || !STATE.tutorial.isActive) return;
         STATE.tutorial.step++;
+        PERSISTENCE.save();
         if (STATE.tutorial.step >= this.STEPS.length) {
             this.finish(false);
         } else {
@@ -436,6 +466,7 @@ const TUTORIAL = {
             STATE.tutorial.step = this.STEPS.length;
         }
         this.hide();
+        PERSISTENCE.save();
         try {
             if (typeof localStorage !== 'undefined') {
                 localStorage.setItem('uabiz_tutorial_done', '1');
@@ -490,10 +521,13 @@ const TUTORIAL = {
             const original = UI_DASHBOARD.update.bind(UI_DASHBOARD);
             UI_DASHBOARD.update = function () {
                 original();
+                const previousStep = STATE.tutorial?.step;
                 TUTORIAL.check();
+                if (STATE.tutorial?.isActive && STATE.tutorial.step === previousStep) TUTORIAL.renderStep();
             };
             this._updateHooked = true;
         };
+        document.addEventListener('click', () => { if (STATE.tutorial?.isActive) setTimeout(() => this.renderStep(), 70); });
         tryHook();
     },
 
@@ -513,12 +547,3 @@ const TUTORIAL = {
         }
     }
 };
-
-// Автозапуск при загрузке документа
-if (typeof document !== 'undefined') {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => TUTORIAL.init());
-    } else {
-        TUTORIAL.init();
-    }
-}

@@ -4,10 +4,15 @@ const RETAIL = {
         if (!STATE.retail) STATE.retail = { prices: {}, brand: 10, history: [] };
     },
 
+    displayEfficiency(biz) {
+        const count = biz.equipment?.count ?? 0;
+        return count ? 0.6 + Math.min(count, 5) * 0.1 * (biz.equipment.condition ?? 100) / 100 : 0.5;
+    },
+
     // Главный цикл розницы (вызывается каждый день в gameLoop)
     processDaily() {
         this.init();
-        
+
         let brandPower = 0;
         let storeBoosts = {};    // UID магазина -> сила трафика
         let productBoosts = {};  // Товар -> сила эластичности цены
@@ -17,30 +22,30 @@ const RETAIL = {
         STATE.company.businesses.forEach(biz => {
             let tpl = RECIPES.BUSINESSES[biz.type];
             if (!tpl.isMarketing) return;
-            
+
             // Стоимость и множитель кампаний: 0 - Органика, 1 - Контекст, 2 - Медиа, 3 - ТВ/Национальная
             let campaignCosts = { 0: 0, 1: 100, 2: 500, 3: 2000 };
             let campaignMults = { 0: 1.0, 1: 1.5, 2: 2.5, 3: 5.0 };
-            
+
             let campType = biz.campaign || 0;
             dailyMarketingCost += campaignCosts[campType];
-            
+
             let marketers = biz.assigned.marketer || 0;
             let pr = biz.assigned.pr_manager || 0;
             let totalStaff = marketers + pr;
-            
+
             // Если нет ПК, сотрудники простаивают
             let eqCount = biz.equipment ? (biz.equipment.count || 0) : 0;
             let workingRatio = totalStaff > 0 ? Math.min(1, eqCount / totalStaff) : 0;
-            
+
             // Расчет сырой силы агентства
-            let rawPower = ((marketers * 0.2) + (pr * 0.5)) * workingRatio;
+            let rawPower = ((marketers * 0.2) + (pr * 0.5)) * workingRatio * ((biz.equipment.condition ?? 100) / 100) * (biz.equipment.quality ?? 1);
             let finalPower = rawPower * campaignMults[campType];
-            
+
             // Распределение силы по таргетам
             let tType = biz.targetType || 'brand';
             let tId = biz.targetId || '';
-            
+
             if (tType === 'brand') brandPower += finalPower;
             else if (tType === 'store') {
                 if (!storeBoosts[tId]) storeBoosts[tId] = 0;
@@ -54,13 +59,13 @@ const RETAIL = {
 
         // Списание бюджета на рекламу и глобальный Бренд
         if (dailyMarketingCost > 0) {
-            STATE.finances.balance -= dailyMarketingCost;
+            LEDGER.cash(-dailyMarketingCost, 'operating', 'Реклама');
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_marketing', dailyMarketingCost);
         }
 
         // Динамика бренда (растет от PR, но органически забывается на 0.1% в день)
         STATE.retail.brand += brandPower;
-        STATE.retail.brand -= 0.1; 
+        STATE.retail.brand -= 0.1;
         if (STATE.retail.brand < 1) STATE.retail.brand = 1;
         if (STATE.retail.brand > 100) STATE.retail.brand = 100;
 
@@ -72,7 +77,7 @@ const RETAIL = {
         STATE.company.businesses.forEach(biz => {
             let tpl = RECIPES.BUSINESSES[biz.type];
             if (!tpl.isRetail) return;
-            
+
             if (!biz.stats) biz.stats = { lastSold: {} };
             biz.stats.lastSold = {}; // Обнуляем статистику за вчера
 
@@ -80,77 +85,80 @@ const RETAIL = {
             let mgr = biz.assigned.store_manager || 0;
             let totalStaff = sales + mgr;
             let maxStaff = tpl.staffReq * (biz.level || 1);
-            
+
             // Без директора или продавцов магазин закрыт
-            if (mgr === 0 || sales === 0) return;
+            const open = mgr > 0 && sales > 0;
             let staffEfficiency = Math.min(1.0, totalStaff / maxStaff);
 
             // 1. ЕМКОСТЬ И ТРАФИК (Гео-экономика)
             let cityId = biz.city || 'odesa';
             let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { population: 1000000, demandMult: 1.0 };
-            
+
             // Базовая емкость рынка: 2000 человек на каждый миллион населения с учетом спроса
             let maxCapacity = Math.floor((cityData.population / 1000000) * 2000 * cityData.demandMult);
 
             // Органика (5%) + Буст от Агентства
-            let baseTraffic = maxCapacity * 0.05; 
+            let baseTraffic = maxCapacity * 0.05;
             let storeBonus = (storeBoosts[biz.uid] || 0) * 100;
-            
+
             let potentialTraffic = (baseTraffic + storeBonus) * brandTrafficMult;
-            
+
             // Жесткий срез по емкости локации
-            let actualTraffic = Math.floor(Math.min(potentialTraffic, maxCapacity) * staffEfficiency);
+            let actualTraffic = open ? Math.floor(Math.min(potentialTraffic, maxCapacity) * staffEfficiency) : 0;
 
             // Качество витрин и торгового оборудования
             let eqCount = biz.equipment ? (biz.equipment.count || 0) : 0;
-            let eqCondition = biz.equipment ? (biz.equipment.condition || 100) : 100;
+            let eqCondition = biz.equipment ? (biz.equipment.condition ?? 100) : 100;
             // Базовые полки дают 0.5 (50%), торговые витрины повышают до 1.0 - 1.5
-            let displayEfficiency = (eqCount > 0) ? (0.6 + (Math.min(eqCount, 5) * 0.1) * (eqCondition / 100)) : 0.5;
+            let displayEfficiency = this.displayEfficiency(biz);
+            let spendingBudget = actualTraffic * 15 * cityData.demandMult;
 
             // 2. ПРОДАЖА ТОВАРОВ
             if (biz.localInventory) {
                 Object.keys(biz.localInventory).forEach(itemKey => {
                     let inv = biz.localInventory[itemKey];
-                    
+
                     // Мы УДАЛИЛИ строку "if (inv.qty <= 0) return;", чтобы магазин считал спрос на пустые полки
 
                     // Ищем базовую ценность товара
                     let basePrice = (RECIPES.RESOURCES[itemKey] && RECIPES.RESOURCES[itemKey].basePrice) ? RECIPES.RESOURCES[itemKey].basePrice : 1;
                     // Ожидаемая (якорная) розничная цена в глазах покупателя:
-                    let anchorRetailPrice = basePrice * 2.5; 
-                    
+                    let anchorRetailPrice = basePrice * 2.5;
+
                     let b2bPrice = typeof MARKET !== 'undefined' ? MARKET.getCurrentPrice(itemKey) : 1;
                     // Если цена не задана, ставим якорную
                     let retailPrice = (biz.prices && biz.prices[itemKey]) ? biz.prices[itemKey] : anchorRetailPrice;
-                    
+
                     // Наценка считается от якорной цены, а не от скачущей оптовой
                     let markup = retailPrice / anchorRetailPrice; // 1.0 = нормальная розничная цена
 
                     // 3. ЭЛАСТИЧНОСТЬ ЦЕНЫ И КОНВЕРСИЯ
                     // Базово люди терпят цену до anchorRetailPrice (+20% наценки от якоря).
                     let brandTolerance = (STATE.retail.brand || 5) / 100;
-                    let baseTolerance = 0.20 + brandTolerance; 
-                    let productBonus = (productBoosts[itemKey] || 0) * 0.15; 
+                    let baseTolerance = 0.20 + brandTolerance;
+                    let productBonus = (productBoosts[itemKey] || 0) * 0.15;
                     let tolerance = Math.min(2.0, baseTolerance + productBonus);
 
                     // Штраф за завышение цены относительно якоря:
                     let pricePenalty = 1.0 - ((markup - 1.0) / tolerance);
-                    
+
                     if (pricePenalty < 0) pricePenalty = 0; // Слишком дорого
                     if (pricePenalty > 1.5) pricePenalty = 1.5; // Демпинг (распродажа) повышает конверсию до х1.5
 
                     // Финальный расчет конверсии
                     let baseConversion = 0.15; // 15% зашедших покупают товар (если цена ок)
-                    let qualityBonus = inv.quality || 1.0; 
+                    let qualityBonus = Math.min(2, Math.sqrt(inv.quality ?? 1)) * (1 + Math.min(0.2, (inv.brand ?? 0) * 0.025));
                     let finalConversion = baseConversion * pricePenalty * qualityBonus * displayEfficiency;
-                    
+
                     // Сколько ЛЮДЕЙ хотят купить этот товар (Потенциальный спрос)
-                    let potentialSales = Math.floor(actualTraffic * finalConversion);
+                    let basketSize = Math.max(0.05, Math.min(12, 60 / basePrice));
+                    let potentialSales = Math.floor(actualTraffic * finalConversion * basketSize);
                     potentialSales = Math.floor(potentialSales * (0.8 + Math.random() * 0.4)); // Рыночный шум
 
                     // Фактические продажи (не больше, чем есть на полке)
-                    let actualSales = Math.min(potentialSales, inv.qty);
-                    
+                    let actualSales = Math.max(0, Math.min(potentialSales, inv.qty, Math.floor(spendingBudget / retailPrice)));
+                    spendingBudget -= actualSales * retailPrice;
+
                     // Упущенные продажи (сколько человек ушли к конкурентам)
                     let missedSales = potentialSales - actualSales;
                     let missedRevenue = missedSales * retailPrice;
@@ -158,12 +166,12 @@ const RETAIL = {
                     if (actualSales > 0 || missedSales > 0) {
                         let revenue = actualSales * retailPrice;
                         let cogs = actualSales * (inv.avgCost || 0); // Себестоимость проданного
-                        
+
                         inv.qty -= actualSales;
                         if (inv.qty === 0) inv.avgCost = 0;
 
                         // Зачисляем выручку на баланс компании
-                        STATE.finances.balance += revenue;
+                        LEDGER.cash(revenue, 'operating', 'Розничная продажа');
                         totalB2CRevenue += revenue;
 
                         // Запись в статистику магазина (С УЧЕТОМ УПУЩЕННОЙ ВЫГОДЫ)
@@ -174,7 +182,7 @@ const RETAIL = {
                             missedQty: missedSales,
                             missedRevenue: missedRevenue
                         };
-                        
+
                         // Запись в глобальную бухгалтерию
                         if (typeof LEDGER !== 'undefined') {
                             if (revenue > 0) LEDGER.record('rev_b2c', revenue);
@@ -196,26 +204,27 @@ const RETAIL = {
                     dMissed += s.missedRevenue || 0;
                 });
             }
-            
+
             // Удаляем запись за этот же день, если она вдруг уже есть (защита от двойного вызова)
             if (biz.stats.history.length > 0 && biz.stats.history[biz.stats.history.length - 1].day === STATE.time.day) {
                 biz.stats.history.pop();
             }
-            
+
             biz.stats.history.push({
                 day: STATE.time.day,
+                opex: tpl.area * 2 * biz.level * biz.locMult + Object.entries(biz.assigned).reduce((n,[grade,count]) => n + count * HR.GRADES[grade].salary * cityData.salaryMult * (1 + TAXES.RATES.payroll), 0),
                 revenue: dRev,
                 cogs: dCogs,
                 missed: dMissed,
                 items: JSON.parse(JSON.stringify(biz.stats.lastSold || {}))
             });
-            
+
             // Храним историю максимум 3 года, чтобы не перегружать память
-            if (biz.stats.history.length > 1000) biz.stats.history.shift(); 
+            if (biz.stats.history.length > 1000) biz.stats.history.shift();
             // =========================================
 
         }); // конец STATE.company.businesses.forEach
-        
+
         return totalB2CRevenue;
     }
 };

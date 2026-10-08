@@ -7,9 +7,9 @@ const WAREHOUSE = {
             Object.keys(GEO.CITIES).forEach(cId => {
                 STATE.company.warehouses[cId] = { level: (cId === 'odesa' ? 1 : 0), inventory: {} };
             });
-            delete STATE.company.inventory; 
+            delete STATE.company.inventory;
         }
-        
+
         // БРОНЯ: Восстанавливаем целостность данных для ВСЕХ городов
         Object.keys(GEO.CITIES).forEach(cId => {
             if (!STATE.company.warehouses[cId]) {
@@ -51,7 +51,7 @@ const WAREHOUSE = {
         let mult = city.rentMult || 1.0;
 
         // Постройка первого хаба в городе стоит базово $5,000 * rentMult региона
-        if (!wh || wh.level === 0) return Math.floor(5000 * mult); 
+        if (!wh || wh.level === 0) return Math.floor(5000 * mult);
         return Math.floor(10000 * Math.pow(1.8, wh.level - 1) * mult);
     },
 
@@ -63,6 +63,11 @@ const WAREHOUSE = {
         return Math.floor(100 * Math.pow(1.5, wh.level - 1) * city.rentMult);
     },
 
+    freeSpace(cityId) {
+        const pending = (STATE.logistics?.deliveries ?? []).filter(d => d.targetCity === cityId).reduce((v, d) => v + d.qty * OPERATIONS.volume(d.item), 0);
+        return Math.max(0, this.getMaxVolume(cityId) - this.getCurrentVolume(cityId) - pending);
+    },
+
     getCurrentVolume(cityId) {
         let vol = 0;
         let wh = STATE.company.warehouses[cityId];
@@ -70,7 +75,7 @@ const WAREHOUSE = {
             Object.keys(wh.inventory).forEach(key => {
                 let item = wh.inventory[key];
                 if (item.qty > 0 && RECIPES.RESOURCES[key]) {
-                    vol += item.qty * (RECIPES.RESOURCES[key].volume || 1.0);
+                    vol += item.qty * OPERATIONS.volume(key);
                 }
             });
         }
@@ -78,18 +83,19 @@ const WAREHOUSE = {
     },
 
     upgrade(cityId) {
-        if (!cityId || typeof cityId !== 'string') return;
+        if (!GEO.CITIES[cityId]) return;
 
         this.init();
         let cost = this.getUpgradeCost(cityId);
         let wh = STATE.company.warehouses[cityId];
         let city = GEO.getCity(cityId);
-        
+
         if (STATE.finances.balance >= cost) {
-            STATE.finances.balance -= cost;
+            LEDGER.cash(-cost, 'investing', 'Склад');
+            wh.capitalCost = (wh.capitalCost ?? FINANCE.warehouseCost(cityId, wh.level)) + cost;
             if (wh.level === 0) {
                 wh.level = 1;
-                wh.inventory = {};
+                wh.inventory ??= {};
                 if (typeof NOTIFY !== 'undefined') NOTIFY.success('Новый хаб', `Открыт складской комплекс в г. ${city.name}.`);
             } else {
                 wh.level++;
@@ -105,43 +111,25 @@ const WAREHOUSE = {
         this.init();
         let totalRent = 0;
         Object.keys(STATE.company.warehouses).forEach(cId => totalRent += this.getDailyRent(cId));
-        
+
         if (totalRent > 0) {
-            STATE.finances.balance -= totalRent;
+            LEDGER.cash(-totalRent, 'operating', 'Аренда склада');
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_admin', totalRent);
         }
 
         STATE.company.businesses.forEach(biz => {
             let tpl = RECIPES.BUSINESSES[biz.type];
             if (!tpl.isRetail || !biz.autoSupplyRules) return;
-            let city = biz.city || 'odesa'; 
+            let city = biz.city || 'odesa';
             let localWh = STATE.company.warehouses[city];
             if (!localWh || localWh.level === 0) return;
 
             Object.keys(biz.autoSupplyRules).forEach(itemKey => {
-                let targetQty = biz.autoSupplyRules[itemKey]; 
-                if (!biz.localInventory) biz.localInventory = {};
-                if (!biz.localInventory[itemKey]) biz.localInventory[itemKey] = { qty: 0, avgCost: 0, quality: 1.0 };
-                
-                let storeItem = biz.localInventory[itemKey];
-                let deficit = targetQty - storeItem.qty;
-
-                if (deficit > 0 && localWh.inventory[itemKey] && localWh.inventory[itemKey].qty > 0) {
-                    let whItem = localWh.inventory[itemKey];
-                    let transferQty = Math.min(deficit, whItem.qty);
-                    
-                    let oldTotalCost = storeItem.qty * storeItem.avgCost;
-                    let transferTotalCost = transferQty * whItem.avgCost;
-                    let oldTotalQ = storeItem.qty * (storeItem.quality || 1.0);
-                    let transferTotalQ = transferQty * (whItem.quality || 1.0);
-                    
-                    storeItem.qty += transferQty;
-                    storeItem.avgCost = (oldTotalCost + transferTotalCost) / storeItem.qty;
-                    storeItem.quality = (oldTotalQ + transferTotalQ) / storeItem.qty;
-                    
-                    whItem.qty -= transferQty;
-                    if (whItem.qty === 0) { whItem.avgCost = 0; whItem.quality = 1.0; }
-                }
+                const target = biz.autoSupplyRules[itemKey];
+                const current = biz.localInventory?.[itemKey]?.qty ?? 0;
+                const available = localWh.inventory[itemKey]?.qty ?? 0;
+                const qty = Math.min(Math.max(0, target - current), available);
+                if (qty > 0) OPERATIONS.transferToStore(itemKey, city, biz.uid, qty);
             });
         });
     }

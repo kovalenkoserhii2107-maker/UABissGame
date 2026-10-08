@@ -5,11 +5,11 @@ const HR = {
         junior: { name: 'Junior (Сборщик)', role: 'factory', prodMult: 0.4, salary: 30, hireCost: 150 },
         middle: { name: 'Middle (Специалист)', role: 'factory', prodMult: 0.7, salary: 60, hireCost: 500 },
         senior: { name: 'Senior (Инженер)', role: 'factory', prodMult: 1.0, salary: 120, hireCost: 1500 },
-        
+
         // Научный персонал (R&D)
         scientist: { name: 'Лаборант', role: 'rnd', rp: 3, salary: 150, hireCost: 800 },
         lead_scientist: { name: 'Ст. научный сотрудник', role: 'rnd', rp: 10, salary: 400, hireCost: 3000 },
-        
+
         // --- НОВОЕ: Персонал Розничной сети (B2C) ---
         salesman: { name: 'Продавец-консультант', role: 'retail', prodMult: 1.0, salary: 40, hireCost: 200 },
         store_manager: { name: 'Директор магазина', role: 'retail', prodMult: 1.5, salary: 100, hireCost: 800 },
@@ -26,13 +26,14 @@ const HR = {
     },
 
     hire(grade) {
+        if (!this.GRADES[grade]) return;
         this.init();
         let cost = this.GRADES[grade].hireCost;
         if (STATE.finances.balance >= cost) {
-            STATE.finances.balance -= cost;
+            LEDGER.cash(-cost, 'operating', 'Найм');
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_hr', cost);
             if (!STATE.hr.staff[grade]) STATE.hr.staff[grade] = 0;
-            
+
             STATE.hr.staff[grade]++;
             NOTIFY.success('Успех', `Нанят ${this.GRADES[grade].name}. Зачислен в кадровый резерв.`);
             UI_DASHBOARD.update();
@@ -42,10 +43,11 @@ const HR = {
     },
 
     fire(grade) {
+        if (!this.GRADES[grade]) return;
         this.init();
         if (this.getUnassigned(grade) > 0) {
             let severancePay = this.GRADES[grade].salary * 2;
-            STATE.finances.balance -= severancePay;
+            LEDGER.cash(-severancePay, 'operating', 'Выходное пособие');
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_hr', severancePay);
             STATE.hr.staff[grade]--;
             NOTIFY.info('Уведомление', `Вы уволили специалиста. Выплачено выходное пособие: $${formatMoney(severancePay)}.`);
@@ -60,7 +62,7 @@ const HR = {
         let nextGrade = null;
         let trainCost = 0;
         let trainDays = 0;
-        
+
         // НОВАЯ ЭКОНОМИКА: Обучать дешево, но требует времени
         if (grade === 'junior') { nextGrade = 'middle'; trainCost = 250; trainDays = 3; }
         else if (grade === 'middle') { nextGrade = 'senior'; trainCost = 800; trainDays = 7; }
@@ -72,10 +74,10 @@ const HR = {
 
         if (this.getUnassigned(grade) > 0) {
             if (STATE.finances.balance >= trainCost) {
-                STATE.finances.balance -= trainCost;
+                LEDGER.cash(-trainCost, 'operating', 'Обучение');
                 if (typeof LEDGER !== 'undefined') LEDGER.record('exp_hr', trainCost);
                 STATE.hr.staff[grade]--; // Забираем из штата
-                
+
                 // Помещаем в академию
                 STATE.hr.trainingQueue.push({
                     fromGrade: grade,
@@ -83,7 +85,7 @@ const HR = {
                     daysLeft: trainDays,
                     salary: this.GRADES[grade].salary // Платим старую ЗП во время учебы
                 });
-                
+
                 NOTIFY.info('Уведомление', `Сотрудник отправлен на курсы. Обучение займет ${trainDays} дн. (Стоимость курса: $${formatMoney(trainCost)}).`);
                 UI_DASHBOARD.update();
             } else {
@@ -97,26 +99,26 @@ const HR = {
     // Ежедневный прогресс обучения
     processDaily() {
         this.init();
-        
+
         // Объект для сбора статистики по сегодняшним выпускникам
-        let graduatedToday = {}; 
+        let graduatedToday = {};
 
         // Идем с конца массива, чтобы безопасно удалять элементы
         for (let i = STATE.hr.trainingQueue.length - 1; i >= 0; i--) {
             let trainee = STATE.hr.trainingQueue[i];
             trainee.daysLeft--;
-            
+
             if (trainee.daysLeft <= 0) {
                 // Зачисляем в штат
                 if (!STATE.hr.staff[trainee.toGrade]) STATE.hr.staff[trainee.toGrade] = 0;
-                STATE.hr.staff[trainee.toGrade]++; 
-                
+                STATE.hr.staff[trainee.toGrade]++;
+
                 // Добавляем в счетчик для уведомления
                 if (!graduatedToday[trainee.toGrade]) graduatedToday[trainee.toGrade] = 0;
                 graduatedToday[trainee.toGrade]++;
 
                 // Убираем из академии
-                STATE.hr.trainingQueue.splice(i, 1); 
+                STATE.hr.trainingQueue.splice(i, 1);
             }
         }
 
@@ -129,7 +131,7 @@ const HR = {
                 let gradeName = this.GRADES[grade].name.split(' ')[0]; // Берем только первое слово (Junior, Middle и т.д.)
                 msgParts.push(`${gradeName}: ${count} чел.`);
             });
-            
+
             NOTIFY.success('Успех', `Обучение завершено! В кадровый резерв поступили новые специалисты: ${msgParts.join(', ')}`);
         }
     },
@@ -142,12 +144,14 @@ const HR = {
             let biz = STATE.company.businesses.find(b => b.uid === bizUid);
             if (biz) {
                 if (!biz.assigned) biz.assigned = {};
-                
+
                 let tpl = RECIPES.BUSINESSES[biz.type];
+                const role = tpl.isRetail ? 'retail' : tpl.isMarketing ? 'marketing' : 'factory';
+                if (this.GRADES[grade].role !== role) return;
                 let level = biz.level || 1; // Учитываем уровень объекта
                 let maxStaff = tpl.staffReq * level;
                 let assignedTotal = Object.values(biz.assigned).reduce((a, b) => a + (Number(b) || 0), 0);
-                
+
                 // Проверка: есть ли физическое место на объекте
                 if (assignedTotal < maxStaff) {
                     biz.assigned[grade] = (biz.assigned[grade] || 0) + 1;
@@ -170,10 +174,11 @@ const HR = {
     },
 
     getUnassigned(grade) {
+        if (!this.GRADES[grade]) return 0;
         this.init();
         let totalOfGrade = STATE.hr.staff[grade] || 0;
         let assignedOfGrade = 0;
-        
+
         // 1. Ищем сотрудников на ВСЕХ объектах (Заводы, Магазины, Офисы)
         STATE.company.businesses.forEach(biz => {
             if (biz.assigned && biz.assigned[grade]) {
@@ -187,7 +192,7 @@ const HR = {
                 assignedOfGrade += STATE.rnd.staff[grade];
             }
         }
-        
+
         return totalOfGrade - assignedOfGrade;
     },
 
@@ -209,7 +214,7 @@ const HR = {
             if (!biz.assigned) return;
             let cityId = biz.city || 'odesa';
             let cityMult = typeof GEO !== 'undefined' ? GEO.getCity(cityId).salaryMult : 1.0;
-            
+
             Object.keys(biz.assigned).forEach(grade => {
                 let count = biz.assigned[grade] || 0;
                 if (count > 0 && this.GRADES[grade]) {

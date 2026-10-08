@@ -11,3 +11,7 @@ function formatFinancialResult(amount) {
     if (amount < 0) return '-$' + formatMoney(Math.abs(amount));
     return '$' + formatMoney(0);
 }
+
+function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
