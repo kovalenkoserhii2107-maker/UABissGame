@@ -164,42 +164,103 @@
     }
 
     .header-inner {
-        max-width: 1280px;
+        max-width: 1600px;
         margin: 0 auto;
-        padding: 12px 24px;
+        padding: 14px 24px;
         display: flex;
         align-items: center;
-        gap: 20px;
-        flex-wrap: wrap;
+        gap: 16px;
     }
-
     .brand-mark {
         display: flex;
         align-items: center;
         gap: 8px;
+        flex: none;
         font-family: var(--font-display);
-        font-weight: 700;
-        font-size: 1.1rem;
-        color: var(--text);
+        font-weight: 800;
+        font-size: 1.4rem;
+        letter-spacing: -0.02em;
     }
-    .brand-mark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
-
+    .brand-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--blue), #8e44ad);
+        display: grid;
+        place-items: center;
+        color: white;
+        font-size: 1.2rem;
+        box-shadow: 0 4px 12px rgba(0,122,255,0.25);
+    }
     .header-metrics {
-        display: flex;
-        gap: 24px;
-        background: var(--surface-2);
-        padding: 6px 16px;
-        border-radius: 12px;
-        border: 1px solid var(--surface-3);
+        flex: 1;
+        min-width: 0;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        padding: 8px 0;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.02);
     }
-
-    .header-block { display: flex; flex-direction: column; gap: 2px; }
-    .header-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 700; }
-    .header-value { font-size: 1rem; font-weight: 600; color: var(--text); }
-    .header-value.balance { color: var(--green); font-size: 1.1rem; }
-    .header-value-sub { font-size: 0.8rem; color: var(--text-faint); font-weight: 500; }
-
-    .header-spacer { flex: 1; }
+    .header-block {
+        min-width: 0;
+        padding: 0 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        border-right: 1px solid var(--border);
+    }
+    .header-block:last-child { border-right: none; }
+    .metric-icon { font-size: 1.35rem; }
+    .header-label {
+        font-size: .65rem;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        font-weight: 800;
+        letter-spacing: .02em;
+        white-space: nowrap;
+    }
+    .header-value {
+        max-width: 100%;
+        font-size: 1.1rem;
+        font-weight: 800;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .header-value.balance { color: var(--green); }
+    .header-value.capital { color: var(--blue); }
+    .header-value.rating { color: var(--orange); }
+    .header-value-sub { font-size: .75rem; color: var(--text-faint); font-weight: 500; }
+    .header-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+    .header-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 44px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text);
+        font-family: var(--font-body);
+        font-size: .85rem;
+        font-weight: 700;
+        white-space: nowrap;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+    }
+    .header-action:hover { background: var(--surface-3); }
+    .header-action > span:first-child { font-size: 1.1rem; }
+    .header-action-primary {
+        background: linear-gradient(135deg, var(--blue), #2980b9);
+        color: white;
+        border-color: transparent;
+        box-shadow: 0 4px 12px rgba(0,122,255,0.25);
+    }
+    .header-action-primary:hover { background: var(--blue); }
 
     .btn-primary-lg { padding: 12px 24px; font-size: 0.95rem; border-radius: var(--radius); background: var(--blue); color: white; border: none; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3); transition: transform 0.1s, box-shadow 0.1s; }
     .btn-primary-lg:active { transform: scale(0.97); box-shadow: 0 2px 6px rgba(0, 122, 255, 0.2); }
@@ -227,56 +288,74 @@
     @keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
     @media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; padding-left: 16px; } }
 
-    /* Горизонтальный свайп вкладок (ПК) */
+    /* All navigation items stay visible; narrow rows wrap instead of clipping. */
     .tabs-wrap {
         position: sticky;
-        top: 170px; /* Еще чуть-чуть опустил, чтобы шапка вообще не перекрывала верхний отступ */
+        top: var(--header-height, 140px);
         z-index: 99;
-        display: flex;
-        justify-content: center; /* Центрируем вкладки на ПК, как просил пользователь */
-        align-items: center; /* Центрируем по вертикали */
-        padding: 12px 16px !important; /* Перебиваем кривой inline-стиль из HTML */
+        padding: 10px 16px;
         background: rgba(245, 245, 247, 0.92);
         backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
         border-bottom: 1px solid var(--border);
     }
-    .tabs-wrap::-webkit-scrollbar { display: none; }
-
     .tabs {
-        display: flex;
-        flex-wrap: nowrap;
-        gap: 4px;
-        background: var(--surface-3);
-        padding: 4px;
-        border-radius: 12px;
-        min-width: max-content;
+        max-width: 100%;
+        min-width: 0;
         margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+        padding: 5px;
+        border-radius: 16px;
+        background: rgba(0,0,0,0.04);
+        box-shadow: inset 0 2px 5px rgba(0,0,0,0.02);
     }
     .tab {
-        padding: 8px 14px;
-        border-radius: 8px;
-        color: var(--text-dim);
-        font-size: 0.86rem;
-        font-weight: 500;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: background .18s ease, color .18s ease, box-shadow .18s ease;
-        user-select: none;
-        min-height: 38px;
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 6px;
+        min-height: 40px;
+        padding: 8px 10px;
+        border-radius: 11px;
+        color: var(--text-dim);
+        font-size: .85rem;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+        transition: background .18s ease, color .18s ease, box-shadow .18s ease;
     }
+    .tab > span { font-size: 1.1rem; }
     .tab:hover { color: var(--text); }
     .tab.active {
         background: var(--surface);
         color: var(--text);
-        font-weight: 600;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 1px rgba(0,0,0,0.04);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    @media (max-width: 1199px) {
+        .header-inner { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; }
+        .header-actions { justify-self: end; }
+        .header-metrics { grid-column: 1 / -1; grid-row: 2; }
+        .metric-icon { display: none; }
+    }
+    @media (max-width: 600px) {
+        .header-inner { padding: 10px 12px; gap: 8px; }
+        .brand-name { display: none; }
+        .brand-icon { width: 30px; height: 30px; font-size: 1rem; }
+        .header-actions { min-width: 0; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+        .header-action { width: 100%; min-height: 40px; padding: 6px 4px; font-size: .7rem; border-radius: 8px; white-space: normal; }
+        .header-action > span:first-child { display: none; }
+        .header-label { font-size: .55rem; }
+        .header-value { font-size: .8rem; }
+        .header-value-sub { font-size: .6rem; }
+        .header-block { padding: 0 4px; }
+        .tabs-wrap { position: static; padding: 8px 12px; }
+        .tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0; background: transparent; box-shadow: none; }
+        .tab { min-width: 0; min-height: 44px; padding: 6px 4px; font-size: .72rem; white-space: normal; background: var(--surface); border: 1px solid var(--border); }
+        .tab > span { font-size: 1rem; flex: none; }
+        .tab.active { background: var(--blue-dim); color: var(--blue); border-color: rgba(0,122,255,.4); }
     }
 
     .content {
@@ -308,162 +387,12 @@
        ========================================================= */
     @media (max-width: 900px) {
 
-        /* --- 1. ШАПКА: Всегда прилипает к верху --- */
-        .app-header {
-            position: sticky !important;
-            top: 0 !important;
-            z-index: 1000 !important;
-            padding-bottom: 8px !important;
-            background: rgba(255, 255, 255, 0.95) !important;
-        }
-
-        /* Первая строка: Логотип и Кнопки */
-        .header-inner {
-            display: flex !important;
-            flex-wrap: wrap !important; /* ОБЯЗАТЕЛЬНО wrap, чтобы вторая строчка (метрики) могла уйти вниз */
-            padding: 8px 6px !important;
-            gap: 6px !important;
-            align-items: center !important;
-        }
-
-        .brand-mark {
-            order: 1;
-            font-size: 1rem !important;
-            gap: 4px !important;
-            margin-right: auto !important; /* Отталкивает кнопки вправо */
-        }
-        .brand-mark > div { width: 22px !important; height: 22px !important; font-size: 0.85rem !important; border-radius: 6px !important; }
-
-        /* Компактные кнопки управления (На первой строке справа) */
-        .header-inner > div:last-child {
-            order: 2;
-            display: flex !important;
-            flex-wrap: nowrap !important; /* Сами кнопки не переносятся */
-            gap: 4px !important;
-            justify-content: flex-end;
-            align-items: center !important;
-        }
-        .header-inner > div:last-child::-webkit-scrollbar { display: none; }
-
-        .header-inner > div:last-child button {
-            padding: 4px 6px !important;
-            font-size: 0.6rem !important;
-            min-height: 26px !important;
-            border-radius: 6px !important;
-            gap: 2px !important;
-            white-space: nowrap !important; /* Текст внутри кнопок не переносится */
-        }
-        .header-inner > div:last-child button span {
-            font-size: 0.8rem !important;
-        }
-        /* Возвращаем текст на кнопки на мобильном */
-        button[title="Пройти обучение с нуля"] span:last-child,
-        button[title="Бизнес-журнал"] span:last-child { display: inline !important; }
-
-        .header-spacer { display: none !important; }
-
-        /* --- 2. МЕТРИКИ: На втором уровне (4 в ряд) --- */
-        .header-metrics {
-            order: 3;
-            width: 100% !important; /* Занимает всю ширину, заставляя перенестись на новую строку */
-            display: grid !important;
-            grid-template-columns: repeat(4, 1fr) !important;
-            gap: 4px !important;
-            padding: 0 !important;
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            margin-top: 4px !important;
-        }
-
-        .header-block {
-            background: var(--surface-2) !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 6px !important;
-            padding: 4px 2px !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            min-width: 0 !important; /* Отменяем инлайн-стили 90px/120px */
-            border-right: 1px solid var(--border) !important;
-        }
-        /* Прячем крупные эмодзи в шапке, чтобы сэкономить место */
-        .header-block > div { display: none !important; }
-
-        .header-label {
-            font-size: 0.45rem !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            width: 100% !important;
-            text-align: center !important;
-            line-height: 1.1 !important;
-            margin-bottom: 2px !important;
-        }
-        .header-value { font-size: 0.7rem !important; }
-        .header-value.balance { font-size: 0.75rem !important; }
-        .header-value-sub { display: none !important; } /* Прячем текст "/1000" */
-
-
-        /* --- 3. МЕНЮ ВКЛАДОК: Прокручивается вниз вместе с сайтом --- */
-        .tabs-wrap {
-            position: static !important; /* ✅ Отключаем прилипание для телефона */
-            padding: 8px 4px !important;
-            background: transparent !important;
-            border: none !important;
-            backdrop-filter: none !important;
-        }
-        .tabs {
-            display: grid !important;
-            grid-template-columns: repeat(3, 1fr) !important; /* По 3 вкладки в ряд */
-            gap: 4px !important;
-            background: transparent !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-        }
-        .tab {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            justify-content: flex-start !important;
-            gap: 3px !important;
-            padding: 6px 4px !important;
-            font-size: 0.65rem !important;
-            min-height: auto !important;
-            border-radius: 6px !important;
-            background: var(--surface) !important;
-            border: 1px solid var(--border) !important;
-            white-space: nowrap !important;
-        }
-        .tab.active {
-            background: var(--blue-dim) !important;
-            border-color: rgba(0, 122, 255, 0.4) !important;
-            color: var(--blue) !important;
-        }
-        .tab > span[style*="font-size"] { font-size: 0.85rem !important; }
-
-
         /* --- 4. Фиксы контента --- */
         .content { padding: 8px 12px 30px !important; }
         .card { padding: 14px; border-radius: 14px; margin-bottom: 12px; }
         input, select { font-size: 16px !important; padding: 10px 12px; border-radius: 10px; }
         div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; gap: 12px !important; }
         table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    }
-
-    /* Дополнительное сжатие для совсем маленьких экранов (iPhone SE) */
-    @media (max-width: 400px) {
-        .header-value { font-size: 0.72rem !important; }
-        .header-value.balance { font-size: 0.78rem !important; }
-        .header-inner > div:last-child button { font-size: 0.6rem !important; padding: 4px 5px !important; }
-    }
-
-    /* Ещё меньший экран — уменьшаем шрифты */
-    @media (max-width: 400px) {
-        .header-value { font-size: 0.82rem !important; }
-        .header-value.balance { font-size: 0.9rem !important; }
-        .tab { min-width: 44px; font-size: 0.52rem !important; padding: 4px 6px !important; }
     }
 
     /* =========================================================
@@ -730,8 +659,10 @@
         .tab-content, .tab-content div, .tab-content section, .tab-content li { min-width: 0; }
         canvas { max-width: 100%; }
         :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
-        .save-menu { position: relative; font-size: .9rem; }
-        .save-menu summary { cursor: pointer; padding: 12px; border-radius: 12px; background: var(--surface-2); }
+        .save-menu { position: relative; min-width: 0; }
+        .save-menu summary { list-style: none; }
+        .save-menu summary::-webkit-details-marker { display: none; }
+        .save-menu[open] summary { background: var(--surface-3); }
         .save-menu > div { position: absolute; right: 0; top: 100%; z-index: 100; width: min(320px, 85vw); padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); }
         .save-menu button, .save-menu input { display: block; max-width: 100%; margin: 10px 0; }
         .tutorial-curtain { z-index: 1000005; }
@@ -745,12 +676,11 @@
             .tab-content [style*="display:flex"], .tab-content [style*="display: flex"] { flex-wrap: wrap; }
             input, select { max-width: 100%; }
             [role="dialog"] > div { max-width: calc(100vw - 16px); }
-            .tabs-wrap { justify-content: flex-start !important; }
+            .save-menu > div { left: 0; right: auto; }
         }
 
         #tutorial-root { z-index: 1000005; }
-        .tabs-wrap { top: var(--header-height, 170px); justify-content: flex-start !important; }
-        .tabs { margin-inline: auto; }
+
         .tutorial-curtain { pointer-events: none; }
         .tutorial-tooltip { pointer-events: none; }
         .tutorial-tooltip-actions { pointer-events: auto; }
@@ -773,82 +703,59 @@
             </div>
         </div>
 
-        <div class="header-inner" style="max-width: 1400px; margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
-
-            <!-- Логотип -->
-            <div class="brand-mark" style="display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 800; font-size: 1.6rem; letter-spacing: -0.02em; color: var(--text);">
-                <div style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, var(--blue), #8e44ad); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.3rem; box-shadow: 0 4px 12px rgba(0,122,255,0.3);">⚡</div>
-                UABiz
+        <div class="header-inner">
+            <div class="brand-mark"><div class="brand-icon">⚡</div><span class="brand-name">UABiz</span></div>
+            <div class="header-metrics">
+                <div class="header-block">
+                    <div class="metric-icon">📅</div><span class="header-label">Опер. день</span>
+                    <span class="header-value" id="ui-day">1</span>
+                </div>
+                <div class="header-block">
+                    <div class="metric-icon">💵</div><span class="header-label">Кэш (Свободно)</span>
+                    <span class="header-value balance">$<span id="ui-balance">25000.00</span></span>
+                </div>
+                <div class="header-block">
+                    <div class="metric-icon">📈</div><span class="header-label">Капитализация</span>
+                    <span class="header-value capital">$<span id="ui-header-networth">0.00</span></span>
+                </div>
+                <div class="header-block">
+                    <div class="metric-icon">⭐</div><span class="header-label">Кредит. рейтинг</span>
+                    <span class="header-value rating"><span id="ui-credit">200</span><span class="header-value-sub">/1000</span></span>
+                </div>
             </div>
-
-            <!-- Главные Метрики (Apple Widget Style) -->
-            <div class="header-metrics" style="display: flex; gap: 30px; background: var(--surface); padding: 12px 30px; border-radius: 20px; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
-
-                <div class="header-block" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 90px; border-right: 1px solid rgba(0,0,0,0.05); padding-right: 30px;">
-                    <div style="font-size: 2rem; margin-bottom: 6px;">📅</div>
-                    <span class="header-label" style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800; letter-spacing: 0.04em; margin-bottom: 2px;">Опер. День</span>
-                    <span class="header-value" id="ui-day" style="font-size: 1.25rem; font-weight: 800; color: var(--text);">1</span>
-                </div>
-
-                <div class="header-block" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 120px; border-right: 1px solid rgba(0,0,0,0.05); padding-right: 30px;">
-                    <div style="font-size: 2rem; margin-bottom: 6px;">💵</div>
-                    <span class="header-label" style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800; letter-spacing: 0.04em; margin-bottom: 2px;">Кэш (Свободно)</span>
-                    <span class="header-value balance" style="font-size: 1.25rem; font-weight: 800; color: var(--green);">$<span id="ui-balance">25000.00</span></span>
-                </div>
-
-                <div class="header-block" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 120px; border-right: 1px solid rgba(0,0,0,0.05); padding-right: 30px;">
-                    <div style="font-size: 2rem; margin-bottom: 6px;">📈</div>
-                    <span class="header-label" style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800; letter-spacing: 0.04em; margin-bottom: 2px;">Капитализация</span>
-                    <span class="header-value" style="font-size: 1.25rem; font-weight: 800; color: var(--blue);">$<span id="ui-header-networth">0.00</span></span>
-                </div>
-
-                <div class="header-block" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 120px;">
-                    <div style="font-size: 2rem; margin-bottom: 6px;">⭐</div>
-                    <span class="header-label" style="font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800; letter-spacing: 0.04em; margin-bottom: 2px;">Кредит. Рейтинг</span>
-                    <span class="header-value" style="font-size: 1.25rem; font-weight: 800; color: var(--orange);"><span id="ui-credit">200</span><span class="header-value-sub" style="font-size: 0.85rem; color: var(--text-faint);">/1000</span></span>
-                </div>
-
-            </div>
-
-            <div class="header-spacer" style="flex: 1;"></div>
-
-            <!-- Действия -->
-            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                <details class="save-menu"><summary>💾 Сохранение</summary><div>
-                    <p>Игра сохраняется автоматически в этом браузере.</p>
-                    <button onclick="PERSISTENCE.export()">Экспорт в файл</button>
-                    <label for="save-import">Импорт из файла</label><input id="save-import" type="file" accept=".json,application/json" onchange="PERSISTENCE.importFile(this.files[0]); this.value=''">
-                    <button onclick="PERSISTENCE.newGame()">Новая игра</button>
-                </div></details>
-                <button onclick="TUTORIAL.restart()" title="Пройти обучение с нуля" style="background: var(--surface-2); color: var(--text); border: 1px solid var(--border); padding: 12px 18px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: 0.2s; font-size:0.95rem;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='var(--surface-2)'">
-                    <span style="font-size: 1.2rem;">🎓</span> Обучение
-                </button>
-                <button onclick="UI_DASHBOARD.showEventLog()" title="Бизнес-журнал" style="background: var(--surface-2); color: var(--text); border: 1px solid var(--border); padding: 12px 18px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: 0.2s; font-size:0.95rem;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='var(--surface-2)'">
-                    <span style="font-size: 1.2rem;">📜</span> Журнал
-                </button>
-                <button onclick="GAME.nextDay()" style="background: linear-gradient(135deg, var(--blue), #2980b9); color: white; border: none; padding: 14px 28px; border-radius: 12px; font-weight: 800; font-size: 1.05rem; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 15px rgba(0,122,255,0.4); transition: transform 0.1s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(0,122,255,0.5)'" onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 15px rgba(0,122,255,0.4)'">
-                    Следующий день ➔
-                </button>
+            <div class="header-actions">
+                <details class="save-menu">
+                    <summary class="header-action"><span>💾</span> Сохранение</summary>
+                    <div>
+                        <p>Игра сохраняется автоматически в этом браузере.</p>
+                        <button onclick="PERSISTENCE.export()">Экспорт в файл</button>
+                        <label for="save-import">Импорт из файла</label><input id="save-import" type="file" accept=".json,application/json" onchange="PERSISTENCE.importFile(this.files[0]); this.value=''">
+                        <button onclick="PERSISTENCE.newGame()">Новая игра</button>
+                    </div>
+                </details>
+                <button class="header-action" onclick="TUTORIAL.restart()" title="Пройти обучение с нуля"><span>🎓</span> Обучение</button>
+                <button class="header-action" onclick="UI_DASHBOARD.showEventLog()" title="Бизнес-журнал"><span>📜</span> Журнал</button>
+                <button class="header-action header-action-primary" onclick="GAME.nextDay()">Следующий день ➔</button>
             </div>
         </div>
     </header> <!-- ✅ ТЕПЕРЬ ШАПКА ЗАКАНЧИВАЕТСЯ ЗДЕСЬ -->
         <!-- ============ СЕГМЕНТИРОВАННЫЙ КОНТРОЛ (вкладки) ============ -->
-        <nav class="tabs-wrap" style="display: flex; justify-content: center; padding: 0 24px 16px 24px; overflow-x: auto; scrollbar-width: none;">
-            <div class="tabs" style="display: flex; flex-wrap: nowrap; gap: 6px; background: rgba(0,0,0,0.04); padding: 6px; border-radius: 18px; min-width: max-content; box-shadow: inset 0 2px 5px rgba(0,0,0,0.02);">
-                <div class="tab active" onclick="UI_DASHBOARD.switchTab(event, 'tab-dashboard')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📊</span> Компания</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-retail')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">🏪</span> Розница</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-production')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">🏭</span> Производство</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-warehouse')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📦</span> Склады</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-b2b')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">🤝</span> B2B Контракты</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-market')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">🛒</span> Рынок</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-contracts')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📜</span> B2G Тендеры</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-marketing')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📢</span> Маркетинг</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-rnd')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">🧪</span> R&D</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-hr')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">👥</span> HR</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-bank')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">🏦</span> Банк</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-finance')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📉</span> Отчетность</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-stock')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📊</span> Фондовый рынок</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-wiki')" style="padding: 10px 20px; border-radius: 14px; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;"><span style="font-size:1.3rem;">📖</span> База знаний</div>
+        <nav class="tabs-wrap" aria-label="Главное меню">
+            <div class="tabs">
+                <div class="tab active" onclick="UI_DASHBOARD.switchTab(event, 'tab-dashboard')"><span>📊</span> Компания</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-retail')"><span>🏪</span> Розница</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-production')"><span>🏭</span> Производство</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-warehouse')"><span>📦</span> Склады</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-b2b')"><span>🤝</span> B2B Контракты</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-market')"><span>🛒</span> Рынок</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-contracts')"><span>📜</span> B2G Тендеры</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-marketing')"><span>📢</span> Маркетинг</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-rnd')"><span>🧪</span> R&D</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-hr')"><span>👥</span> HR</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-bank')"><span>🏦</span> Банк</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-finance')"><span>📉</span> Отчетность</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-stock')"><span>📊</span> Фондовый рынок</div>
+                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-wiki')"><span>📖</span> База знаний</div>
             </div>
         </nav>
 
