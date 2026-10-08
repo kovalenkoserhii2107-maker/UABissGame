@@ -29,6 +29,47 @@ const baseURL = process.env.GAME_URL || "http://127.0.0.1:8000";
       () => typeof GAME !== "undefined" && PERSISTENCE.ready,
     );
     await page.evaluate(() => TUTORIAL.skip());
+    // Header controls, navigation and save popup remain within the viewport.
+    for (const width of [1920, 1440, 1280, 1200, 1024, 768, 600, 390, 360]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const layout = await page.evaluate(() => {
+        const rect = (el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x, right: r.right, y: r.y, bottom: r.bottom };
+        };
+        return {
+          items: [
+            ...document.querySelectorAll(
+              ".header-actions > button, .save-menu summary, .tabs .tab",
+            ),
+          ].map(rect),
+          rows: new Set(
+            [...document.querySelectorAll(".tabs .tab")].map(
+              (el) => el.getBoundingClientRect().y,
+            ),
+          ).size,
+          actions: rect(document.querySelector(".header-actions")),
+          metrics: rect(document.querySelector(".header-metrics")),
+        };
+      });
+      assert.ok(
+        layout.items.every((item) => item.x >= 0 && item.right <= width + 1),
+        `Controls overflow at ${width}`,
+      );
+      if (width >= 1440) assert.equal(layout.rows, 1);
+      if (width >= 1200)
+        assert.ok(
+          layout.actions.y < layout.metrics.bottom &&
+            layout.actions.bottom > layout.metrics.y,
+        );
+      await page.locator(".save-menu summary").click();
+      const popup = await page.locator(".save-menu > div").boundingBox();
+      assert.ok(
+        popup.x >= 0 && popup.x + popup.width <= width + 1,
+        `Save popup overflows at ${width}`,
+      );
+      await page.locator(".save-menu summary").click();
+    }
     // Every configured factory appears without maintaining a second catalogue.
     assert.equal(
       await page.evaluate(() => {
@@ -44,7 +85,9 @@ const baseURL = process.env.GAME_URL || "http://127.0.0.1:8000";
     // All views render at desktop and mobile widths without widening the page.
     for (const width of [1440, 390, 360]) {
       await page.setViewportSize({ width, height: 1000 });
-      for (let i = 0; i < 14; i++) {
+      const tabs = page.locator(".tabs .tab");
+      assert.equal(await tabs.count(), 13);
+      for (let i = 0; i < (await tabs.count()); i++) {
         await page
           .locator(".tabs .tab")
           .nth(i)
@@ -62,7 +105,37 @@ const baseURL = process.env.GAME_URL || "http://127.0.0.1:8000";
         );
         assert.ok(size.error === undefined || size.error === "none");
       }
+      await page.locator("#header-help").click();
+      assert.equal(await page.locator("#tab-help").isVisible(), true);
+      assert.equal(
+        await page.locator("#help-start-tutorial").isVisible(),
+        true,
+      );
+      assert.equal(await page.locator("#ui-wiki-container").isVisible(), true);
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 2,
+        ),
+        true,
+      );
     }
+    await page.locator("#help-start-tutorial").click();
+    assert.equal(
+      await page.evaluate(
+        () =>
+          STATE.tutorial.isActive &&
+          STATE.tutorial.step === 0 &&
+          document.getElementById("tab-dashboard").classList.contains("active"),
+      ),
+      true,
+    );
+    await page.evaluate(() => TUTORIAL.skip());
+    await page.locator("#nav-tab-stock").click();
+    assert.equal(await page.locator("#stock-launch-ipo").isDisabled(), true);
+    assert.match(
+      await page.locator("#ui-ipo-status").innerText(),
+      /ещё не вышла/,
+    );
     await page.setViewportSize({ width: 1440, height: 1000 });
     // Real bank action: cash flow is +970, and all asset displays agree.
     const bank = await page.evaluate(() => {
@@ -160,7 +233,26 @@ const baseURL = process.env.GAME_URL || "http://127.0.0.1:8000";
     });
     assert.equal(invalid, true);
     // Tutorial is tested through actual buttons, up to a retail sale.
-    await page.evaluate(() => PERSISTENCE.newGame());
+    const beforeRestart = await page.evaluate(() => {
+      PERSISTENCE.save();
+      return localStorage.getItem(PERSISTENCE.KEY);
+    });
+    await page.locator("#header-restart").click();
+    assert.equal(
+      await page.evaluate(() =>
+        localStorage.getItem(PERSISTENCE.KEY + "_backup"),
+      ),
+      beforeRestart,
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          STATE.time.day === 1 &&
+          STATE.finances.balance === 25000 &&
+          !STATE.stockMarket.companies.player,
+      ),
+      true,
+    );
     for (let guard = 0; guard < 60; guard++) {
       await page.waitForTimeout(220);
       const step = await page.evaluate(() =>
@@ -239,7 +331,7 @@ const baseURL = process.env.GAME_URL || "http://127.0.0.1:8000";
     assert.equal(errors.length, 0, errors.join("\n"));
     assert.equal(missing.length, 0, missing.join("\n"));
     console.log(
-      "Browser checks passed: 14 tabs, 3 widths, bank, reload, forms, keyboard, charts, saves, complete tutorial.",
+      "Browser checks passed: 13 tabs, merged help, 9 header widths, restart backup, bank, reload, forms, keyboard, charts, saves, complete tutorial.",
     );
   } catch (e) {
     await page.screenshot({ path: "/tmp/uabiss-browser-failure.png" });

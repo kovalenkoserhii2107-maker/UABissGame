@@ -248,6 +248,23 @@ const PERSISTENCE = {
             if (!number(day[key], -Number.MAX_VALUE)) fail();
           for (const key of ["operations", "inflow", "outflow"])
             if (day[key] !== undefined && !number(day[key])) fail();
+          for (const key of ["netWorthBefore", "netWorthAfter"])
+            if (day[key] !== undefined && !number(day[key], -Number.MAX_VALUE))
+              fail();
+          if (day.movements !== undefined) {
+            if (!Array.isArray(day.movements)) fail();
+            for (const movement of day.movements)
+              if (
+                !object(movement) ||
+                typeof movement.description !== "string" ||
+                movement.description.length > 200 ||
+                !["operating", "investing", "financing"].includes(
+                  movement.activity,
+                ) ||
+                !number(movement.amount, -Number.MAX_VALUE)
+              )
+                fail();
+          }
           if (
             Math.abs(
               day.closing -
@@ -350,6 +367,11 @@ const PERSISTENCE = {
     }
     if (state.stockMarket) {
       const sm = state.stockMarket;
+      if (
+        sm.ipoDay !== undefined &&
+        (!integer(sm.ipoDay, 1) || sm.ipoDay > state.time.day)
+      )
+        fail();
       if (
         !object(sm) ||
         !object(sm.companies) ||
@@ -534,7 +556,7 @@ const PERSISTENCE = {
   newGame() {
     if (
       !confirm(
-        "Начать новую игру? Текущее сохранение будет сохранено как резервная копия.",
+        "Перезапустить компанию? День, деньги, объекты и весь прогресс будут сброшены. Текущее сохранение останется в резервной копии.",
       )
     )
       return;
@@ -549,6 +571,7 @@ const PERSISTENCE = {
       this.lastError = null;
       GAME.prepare();
       UI_DASHBOARD.closeStoreModal();
+      UI_DASHBOARD.resetNavigation?.();
       UI_DASHBOARD.update();
       TUTORIAL.init();
     } catch (e) {

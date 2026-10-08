@@ -5,6 +5,12 @@ const EVENTS = {
         // Храним только последние 30 событий, чтобы не засорять память
         while (STATE.eventLog.length > 30) STATE.eventLog.pop();
 
+        // An unopened company has no premises to inspect or products to promote.
+        const hasPremises = STATE.company.businesses.length > 0 ||
+            Object.values(STATE.company.warehouses).some(wh => wh.level > 0) ||
+            (STATE.rnd.facility?.level ?? 0) > 0;
+        if (!hasPremises) return;
+
         // Шанс события — 10% каждый день
         if (Math.random() > 0.10) return;
 
@@ -23,7 +29,7 @@ const EVENTS = {
                 type: 'bad',
                 execute: () => {
                     let amount = 500 + Math.floor(Math.random() * 1500);
-                    LEDGER.cash(-amount, 'operating', 'Штраф');
+                    LEDGER.cash(-amount, 'operating', 'Штраф пожарной инспекции');
                     // Записываем РАСХОД в бухгалтерию (в ту самую строку)
                     if (typeof LEDGER !== 'undefined') LEDGER.record('exp_fines', amount);
                     return { msg: '🚨 Внеплановая проверка пожарной безопасности.', details: `Выписан штраф: -$${formatMoney(amount)}` };

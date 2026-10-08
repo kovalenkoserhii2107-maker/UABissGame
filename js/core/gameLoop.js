@@ -14,6 +14,7 @@ const GAME = {
         const previous = JSON.stringify(STATE);
         this.processing = true;
         try {
+            const netWorthBefore = FINANCE.calculateNetWorth();
             STATE.time.day++;
             LOGISTICS.processDaily();
             FINANCE.processDailyClearing();
@@ -27,6 +28,8 @@ const GAME = {
             MARKET.simulate(); B2B_AI.simulateMarketActions();
             if (STATE.time.day % 7 === 0) B2B_AI.generateOffers();
             STOCK_MARKET.processDaily(); TAXES.processDaily();
+            STATE.ledger.cashFlow.today.netWorthBefore = netWorthBefore;
+            STATE.ledger.cashFlow.today.netWorthAfter = FINANCE.calculateNetWorth();
             LEDGER.endOfDay(); QUESTS.checkProgress();
             PERSISTENCE.validate(STATE);
         } catch (error) {

@@ -3,6 +3,7 @@ const STOCK_MARKET = {
     TOTAL_SHARES: 100000,
     FREE_FLOAT_PERCENT: 0.30, // 30% акций доступны для торговли
     BROKER_FEE: 0.015, // 1.5% комиссия брокера
+    IPO_THRESHOLD: 500000,
 
     init() {
         if (!STATE.stockMarket) {
@@ -17,7 +18,7 @@ const STOCK_MARKET = {
 
         STATE.stockMarket.costBasis ??= {};
         for (const [id, amount] of Object.entries(STATE.stockMarket.portfolio)) STATE.stockMarket.costBasis[id] ??= amount * STATE.stockMarket.companies[id].sharePrice;
-        // Инициализация компании игрока происходит теперь только после достижения капитализации $500,000 (в processDaily)
+        // Existing listings are retained; new companies list only by explicit choice.
 
         // Инициализация NPC компаний
         if (typeof B2B_AI !== 'undefined' && B2B_AI.competitors) {
@@ -42,30 +43,34 @@ const STOCK_MARKET = {
         }
     },
 
+    launchIPO() {
+        this.init();
+        const playerNetWorth = FINANCE.calculateNetWorth();
+        if (STATE.stockMarket.companies.player) return false;
+        if (playerNetWorth < this.IPO_THRESHOLD) {
+            NOTIFY.error('IPO недоступно', 'Нужна капитализация от $' + formatMoney(this.IPO_THRESHOLD) + '.');
+            return false;
+        }
+        STATE.stockMarket.companies.player = {
+            id: 'player',
+            name: STATE.company.name || 'Моя Корпорация',
+            netWorthHistory: [],
+            sharePrice: playerNetWorth / this.TOTAL_SHARES,
+            sharesAvailable: this.TOTAL_SHARES * this.FREE_FLOAT_PERCENT,
+            isPlayer: true
+        };
+        STATE.stockMarket.ipoDay = STATE.time.day;
+        NOTIFY.success('Выход на IPO 📈', 'Ваша компания размещена на бирже. Листинг не меняет баланс денег.');
+        UI_DASHBOARD.update();
+        return true;
+    },
+
     processDaily() {
         this.init();
-
-        // 1. Изменение макро-тренда (Экономические циклы + шум)
-        // Цикл примерно 360 дней. Тренд колеблется от 0.7 до 1.3
+        // Экономические циклы и шум влияют на котировки, не на свободный кэш.
         let cycle = Math.sin((STATE.time.day / 360) * Math.PI * 2) * 0.25;
-        let noise = (Math.random() - 0.5) * 0.1; // Шум от -5% до +5%
+        let noise = (Math.random() - 0.5) * 0.1;
         STATE.stockMarket.macroTrend = 1.0 + cycle + noise;
-
-        // 1.5 Проверка на IPO (Выход компании игрока на биржу)
-        let playerNetWorth = typeof FINANCE !== 'undefined' ? FINANCE.calculateNetWorth() : 0;
-        if (!STATE.stockMarket.companies['player'] && playerNetWorth >= 500000) {
-            STATE.stockMarket.companies['player'] = {
-                id: 'player',
-                name: (STATE.company && STATE.company.name) ? STATE.company.name : 'Моя Корпорация',
-                netWorthHistory: [],
-                sharePrice: playerNetWorth / this.TOTAL_SHARES,
-                sharesAvailable: this.TOTAL_SHARES * this.FREE_FLOAT_PERCENT,
-                isPlayer: true
-            };
-            if (typeof NOTIFY !== 'undefined') {
-                NOTIFY.success('Выход на IPO 📈', 'Поздравляем! Капитализация достигла $500,000. Ваши акции теперь торгуются на бирже.');
-            }
-        }
 
         // 2. Обновление котировок для всех компаний
         Object.keys(STATE.stockMarket.companies).forEach(id => {

@@ -7,7 +7,7 @@ const LEDGER = {
         exp_depreciation: 0, exp_taxes_payroll: 0, exp_taxes_corp: 0,
         fin_income: 0, fin_expense: 0, fin_fees: 0
     },
-    newCashDay() { return { opening: STATE.finances.balance, closing: STATE.finances.balance, operating: 0, investing: 0, financing: 0, operations: 0, inflow: 0, outflow: 0 }; },
+    newCashDay() { return { opening: STATE.finances.balance, closing: STATE.finances.balance, operating: 0, investing: 0, financing: 0, operations: 0, inflow: 0, outflow: 0, movements: [] }; },
     init() {
         STATE.ledger ??= { history: [] };
         for (const name of ['today', 'yesterday', 'total']) STATE.ledger[name] = { ...this.categories, ...STATE.ledger[name] };
@@ -26,6 +26,15 @@ const LEDGER = {
         this.init();
         STATE.finances.balance += amount;
         const day = STATE.ledger.cashFlow.today;
+        // Old saves may have a partial day without descriptions. Retain its totals.
+        if (amount !== 0) {
+            day.movements ??= [];
+            description ||= 'Денежная операция';
+            const direction = Math.sign(amount);
+            let movement = day.movements.find(m => m.description === description && m.activity === activity && Math.sign(m.amount) === direction);
+            if (movement) movement.amount += amount;
+            else day.movements.push({ description, activity, amount });
+        }
         if (amount !== 0) day.operations = (day.operations ?? 0) + 1;
         day.inflow = (day.inflow ?? 0) + Math.max(0, amount);
         day.outflow = (day.outflow ?? 0) + Math.max(0, -amount);
@@ -47,8 +56,8 @@ const LEDGER = {
         STATE.ledger.today = { ...this.categories };
         const cf = STATE.ledger.cashFlow;
         cf.today.closing = STATE.finances.balance;
-        cf.yesterday = { ...cf.today };
-        cf.history.unshift({ ...cf.today, day: STATE.time.day });
+        cf.yesterday = { ...cf.today, day: STATE.time.day };
+        cf.history.unshift(cf.yesterday);
         cf.history.length = Math.min(cf.history.length, 365);
         cf.today = this.newCashDay();
     }

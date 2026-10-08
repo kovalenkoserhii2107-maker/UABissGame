@@ -532,6 +532,7 @@ const TUTORIAL = {
     },
 
     restart() {
+        UI_DASHBOARD.switchTab(null, 'tab-dashboard');
         try {
             if (typeof localStorage !== 'undefined') {
                 localStorage.removeItem('uabiz_tutorial_done');

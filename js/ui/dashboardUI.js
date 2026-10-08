@@ -53,6 +53,8 @@ const UI_DASHBOARD = {
         if (!document.getElementById('dash-kpi-cash')) return;
         this.initCharts();
         this.renderQuestWidget();
+        const cashExplanation = document.getElementById('ui-cash-explanation');
+        if (cashExplanation) cashExplanation.innerHTML = this.cashExplanationHTML();
 
         const assets = FINANCE.getAssetsBreakdown();
         const { cash, inventoryValue, fixedAssets, netWorth } = assets;
@@ -2258,6 +2260,7 @@ const UI_DASHBOARD = {
                             <tr><td>Чистое изменение денег</td><td data-testid="cashflow-net">$${formatMoney(netCashFlow)}</td></tr>
                             <tr><td>Деньги на конец периода</td><td>$${formatMoney(cashReport.closing)}</td></tr>
                         </tbody></table>
+                        <details style="margin-top:16px;"><summary style="cursor:pointer;">Причины изменения денег</summary><div style="margin-top:12px;">${this.cashExplanationHTML(cashReport)}</div></details>
                     </section>` : ''}
 
                 ${(STATE.financeTab === 'all' || STATE.financeTab === 'ratios') ? `
@@ -2501,15 +2504,42 @@ const UI_DASHBOARD = {
         console.error(err);
     },
 
+    resetNavigation() {
+        document.querySelectorAll('[id$="-modal"]').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.header-actions details').forEach(el => el.open = false);
+        this.switchTab(null, 'tab-dashboard');
+    },
+
+    cashExplanationHTML(report) {
+        const today = STATE.ledger.cashFlow.today;
+        report ??= today.operations ? today : STATE.ledger.cashFlow.yesterday;
+        const delta = report.closing - report.opening;
+        const signed = amount => `${amount >= 0 ? '+' : '−'}$${formatMoney(Math.abs(amount))}`;
+        const movements = [...(report.movements ?? [])];
+        const unrecorded = delta - movements.reduce((sum, movement) => sum + movement.amount, 0);
+        if (Math.abs(unrecorded) > 0.000001) movements.push({ description: 'Операции до обновления сохранения', amount: unrecorded });
+        const rows = movements.map(m => `<li style="display:flex; justify-content:space-between; gap:16px; padding:6px 0;"><span>${escapeHTML(m.description)}</span><strong style="white-space:nowrap; color:${m.amount < 0 ? 'var(--red)' : 'var(--green)'};">${signed(m.amount)}</strong></li>`).join('');
+        const netWorth = Number.isFinite(report.netWorthBefore) && Number.isFinite(report.netWorthAfter)
+            ? `<p style="margin-top:12px;">Капитализация при закрытии дня: <strong>${signed(report.netWorthAfter - report.netWorthBefore)}</strong>.</p>` : '';
+        return `<h3 style="margin-bottom:12px;">Движение денег · день ${report.day ?? STATE.time.day}</h3>
+            <p>Было <strong>$${formatMoney(report.opening)}</strong> → стало <strong>$${formatMoney(report.closing)}</strong>. Изменение: <strong style="color:${delta < 0 ? 'var(--red)' : 'var(--green)'};">${signed(delta)}</strong>.</p>
+            <ul style="padding:0; margin:12px 0;">${rows || '<li style="list-style:none; color:var(--text-dim);">Денежных операций не было.</li>'}</ul>
+            ${netWorth}<p style="margin-top:12px; color:var(--text-dim); font-size:.85rem;">Кэш — свободные деньги. Капитализация — все активы минус долги; на неё также влияют износ оборудования и стоимость купленных акций. Колебания котировок сами по себе не списывают кэш.</p>`;
+    },
+
     switchTab(event, tabId) {
         try {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            const help = document.getElementById('header-help');
+            help?.classList.toggle('active', tabId === 'tab-help');
+            help?.setAttribute('aria-expanded', String(tabId === 'tab-help'));
             let targetEl = document.getElementById(tabId);
             if (targetEl) targetEl.classList.add('active');
             if (event && event.currentTarget) event.currentTarget.classList.add('active');
+            else document.querySelector(`.tabs .tab[aria-controls="${tabId}"]`)?.classList.add('active');
 
-            if (tabId === 'tab-wiki') {
+            if (tabId === 'tab-help') {
                 if (typeof WIKI !== 'undefined') WIKI.render();
                 else alert("WIKI is undefined!");
             }
@@ -2634,6 +2664,14 @@ const UI_DASHBOARD = {
         let macroColor = macroChange >= 0 ? '#34C759' : '#FF3B30';
 
         let html = `
+            <div id="ui-ipo-status" class="card">
+                <h3>${STATE.stockMarket.companies.player ? 'Ваша компания размещена на бирже' : 'Ваша компания ещё не вышла на биржу'}</h3>
+                <p style="margin:12px 0; color:var(--text-dim);">${STATE.stockMarket.companies.player
+                    ? 'Листинг сохранён. Котировка ваших акций не заменяет капитализацию в верхней панели.'
+                    : `В списке ниже торгуются компании-конкуренты. IPO вашей компании доступно при капитализации от $${formatMoney(STOCK_MARKET.IPO_THRESHOLD)} и запускается вручную.`}</p>
+                ${!STATE.stockMarket.companies.player ? `<button id="stock-launch-ipo" class="header-action" onclick="STOCK_MARKET.launchIPO()" ${FINANCE.calculateNetWorth() < STOCK_MARKET.IPO_THRESHOLD ? 'disabled' : ''}>📈 Выйти на IPO</button>` : ''}
+                <p style="margin-top:12px; font-size:.85rem; color:var(--text-dim);">Размещение компании не меняет кэш. Деньги на бирже меняются при покупке и продаже акций, оплате комиссии или получении дивидендов. Переоценка купленных акций меняет капитализацию.</p>
+            </div>
             <div class="card" style="margin-bottom: 20px;">
                 <!-- Top bar -->
                 <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--border); padding-bottom: 12px; margin-bottom: 20px;">
@@ -2679,7 +2717,7 @@ const UI_DASHBOARD = {
                 <tr style="border-bottom: 1px solid var(--border); background: ${isSelected ? 'var(--surface-2)' : 'transparent'}; cursor: pointer; transition: background 0.1s;" onclick="UI_DASHBOARD.selectStock('${comp.id}')" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background='${isSelected ? 'var(--surface-2)' : 'transparent'}'">
                     <td style="padding: 8px 4px;">
                         <div style="color: ${comp.isPlayer ? 'var(--blue)' : 'var(--text)'}; font-weight: bold;">${escapeHTML(comp.name)}</div>
-                        <div style="font-size: 0.65rem; color: var(--text-dim);">${comp.id.toUpperCase()} ${comp.isAcquired ? '<span style="color:var(--blue);">[SUB]</span>' : ''}</div>
+                        <div style="font-size: 0.65rem; color: var(--text-dim);">${comp.id.toUpperCase()} · ${comp.isPlayer ? 'Ваша компания' : 'Компания-конкурент'} ${comp.isAcquired ? '<span style="color:var(--blue);">[SUB]</span>' : ''}</div>
                     </td>
                     <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: var(--text);">
                         $${comp.sharePrice.toFixed(2)}

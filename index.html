@@ -253,6 +253,8 @@
         box-shadow: 0 2px 5px rgba(0,0,0,0.02);
     }
     .header-action:hover { background: var(--surface-3); }
+    .header-action:disabled { opacity: .55; cursor: not-allowed; }
+    .header-action.active { color: var(--blue); background: var(--blue-dim); border-color: rgba(0,122,255,.4); }
     .header-action > span:first-child { font-size: 1.1rem; }
     .header-action-primary {
         background: linear-gradient(135deg, var(--blue), #2980b9);
@@ -317,17 +319,17 @@
         justify-content: center;
         gap: 6px;
         min-height: 40px;
-        padding: 8px 10px;
+        padding: 8px 8px;
         border-radius: 11px;
         color: var(--text-dim);
-        font-size: .85rem;
+        font-size: .8rem;
         font-weight: 600;
         white-space: nowrap;
         cursor: pointer;
         user-select: none;
         transition: background .18s ease, color .18s ease, box-shadow .18s ease;
     }
-    .tab > span { font-size: 1.1rem; }
+    .tab > span { font-size: 1rem; }
     .tab:hover { color: var(--text); }
     .tab.active {
         background: var(--surface);
@@ -344,8 +346,8 @@
         .header-inner { padding: 10px 12px; gap: 8px; }
         .brand-name { display: none; }
         .brand-icon { width: 30px; height: 30px; font-size: 1rem; }
-        .header-actions { min-width: 0; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
-        .header-action { width: 100%; min-height: 40px; padding: 6px 4px; font-size: .7rem; border-radius: 8px; white-space: normal; }
+        .header-actions { min-width: 0; width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+        .header-action { width: 100%; min-height: 44px; padding: 6px 2px; font-size: .65rem; border-radius: 8px; white-space: normal; }
         .header-action > span:first-child { display: none; }
         .header-label { font-size: .55rem; }
         .header-value { font-size: .8rem; }
@@ -665,6 +667,7 @@
         .save-menu[open] summary { background: var(--surface-3); }
         .save-menu > div { position: absolute; right: 0; top: 100%; z-index: 100; width: min(320px, 85vw); padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); }
         .save-menu button, .save-menu input { display: block; max-width: 100%; margin: 10px 0; }
+        @media (max-width: 1199px) { .save-menu > div { left: 0; right: auto; } }
         .tutorial-curtain { z-index: 1000005; }
         .tutorial-ring { z-index: 1000006; }
         .tutorial-tooltip { z-index: 1000007; }
@@ -730,11 +733,11 @@
                         <p>Игра сохраняется автоматически в этом браузере.</p>
                         <button onclick="PERSISTENCE.export()">Экспорт в файл</button>
                         <label for="save-import">Импорт из файла</label><input id="save-import" type="file" accept=".json,application/json" onchange="PERSISTENCE.importFile(this.files[0]); this.value=''">
-                        <button onclick="PERSISTENCE.newGame()">Новая игра</button>
                     </div>
                 </details>
-                <button class="header-action" onclick="TUTORIAL.restart()" title="Пройти обучение с нуля"><span>🎓</span> Обучение</button>
+                <button id="header-help" class="header-action" onclick="UI_DASHBOARD.switchTab(event, 'tab-help')" aria-controls="tab-help" aria-expanded="false" title="Обучение и база знаний"><span>🎓</span> Помощь</button>
                 <button class="header-action" onclick="UI_DASHBOARD.showEventLog()" title="Бизнес-журнал"><span>📜</span> Журнал</button>
+                <button id="header-restart" class="header-action" onclick="PERSISTENCE.newGame()" title="Начать компанию заново"><span>↻</span> Рестарт</button>
                 <button class="header-action header-action-primary" onclick="GAME.nextDay()">Следующий день ➔</button>
             </div>
         </div>
@@ -755,7 +758,6 @@
                 <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-bank')"><span>🏦</span> Банк</div>
                 <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-finance')"><span>📉</span> Отчетность</div>
                 <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-stock')"><span>📊</span> Фондовый рынок</div>
-                <div class="tab" onclick="UI_DASHBOARD.switchTab(event, 'tab-wiki')"><span>📖</span> База знаний</div>
             </div>
         </nav>
 
@@ -827,6 +829,8 @@
                     <div style="font-size: 1.6rem; font-weight: 800; color: var(--text);"><span id="dash-kpi-objects">0</span></div>
                 </div>
             </div>
+
+            <div id="ui-cash-explanation" class="card"></div>
 
             <!-- 2. ГРАФИКИ (CHART.JS) -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 24px; margin-bottom: 32px;">
@@ -1353,7 +1357,14 @@
         </div>
 
         <!-- ВКЛАДКА: ВНУТРЕННЯЯ БАЗА ЗНАНИЙ (WIKI) -->
-        <div id="tab-wiki" class="tab-content">
+        <div id="tab-help" class="tab-content" role="region" aria-labelledby="help-title">
+            <div class="card" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;">
+                <div>
+                    <h2 id="help-title">Помощь и обучение</h2>
+                    <p style="margin-top:8px; color:var(--text-dim);">Пошаговое знакомство с игрой и справочник всех механик компании.</p>
+                </div>
+                <button id="help-start-tutorial" class="header-action header-action-primary" onclick="TUTORIAL.restart()">🎓 Пройти обучение</button>
+            </div>
             <div id="ui-wiki-container"></div>
         </div>
 
