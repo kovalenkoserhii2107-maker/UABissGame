@@ -62,18 +62,14 @@ const UI_DASHBOARD = {
         document.getElementById('dash-kpi-cash').innerText = formatMoney(STATE.finances.balance);
         document.getElementById('dash-kpi-networth').innerText = formatMoney(netWorth);
 
-        let yesterday = STATE.ledger.yesterday;
-        let rev = 0; let burn = 0;
-        if (yesterday) {
-            rev = (yesterday.rev_b2b||0) + (yesterday.rev_b2g||0) + (yesterday.rev_b2c||0) + (yesterday.rev_other||0) + (yesterday.fin_income||0);
-            burn = (yesterday.exp_depreciation||0) + (yesterday.exp_logistics||0) + (yesterday.exp_materials||0) + (yesterday.exp_salary||0) + (yesterday.exp_admin||0) + (yesterday.exp_hr||0) + (yesterday.exp_fines||0) + (yesterday.exp_repair||0) + (yesterday.exp_taxes_payroll||0) + (yesterday.exp_taxes_corp||0) + (yesterday.exp_marketing||0) + (yesterday.fin_expense||0) + (yesterday.fin_fees||0);
-        }
+        const dailyProfit = LEDGER.result(STATE.ledger.yesterday);
+        const rev = dailyProfit.revenue, burn = dailyProfit.expenses;
 
         if (document.getElementById('dash-kpi-revenue')) document.getElementById('dash-kpi-revenue').innerText = formatMoney(rev);
         if (document.getElementById('dash-kpi-burn')) document.getElementById('dash-kpi-burn').innerText = formatMoney(burn);
 
         if (document.getElementById('dash-kpi-brand')) document.getElementById('dash-kpi-brand').innerText = (STATE.retail && STATE.retail.brand) ? STATE.retail.brand.toFixed(1) : '10.0';
-        if (document.getElementById('dash-kpi-credit')) document.getElementById('dash-kpi-credit').innerText = typeof FINANCE !== 'undefined' ? formatMoney(FINANCE.getAvailableLimit()) : '0.00';
+        if (document.getElementById('dash-kpi-credit')) document.getElementById('dash-kpi-credit').innerText = typeof FINANCE !== 'undefined' ? formatMoney(FINANCE.getRemainingCredit()) : '0.00';
 
         let staffCount = typeof HR !== 'undefined' ? HR.getTotalStaff() : 0;
         if (document.getElementById('dash-kpi-staff')) document.getElementById('dash-kpi-staff').innerText = staffCount;
@@ -105,15 +101,15 @@ const UI_DASHBOARD = {
             let incomeData = [];
             let expenseData = [];
 
-            let hist = STATE.ledger.cashFlow.history.slice(0, 7).reverse();
+            let hist = LEDGER.cashHistory(7);
             while (hist.length < 7) hist.unshift(null);
 
             hist.forEach((dayData, i) => {
-                let dayNum = STATE.time.day - (hist.length - i - 1) - 1;
+                let dayNum = dayData?.day;
                 labels.push(`Д ${dayNum > 0 ? dayNum : '-'}`);
                 if (dayData) {
-                    let inc = dayData.inflow ?? 0;
-                    let exp = dayData.outflow ?? 0;
+                    let inc = dayData.inflow;
+                    let exp = dayData.outflow;
                     incomeData.push(inc);
                     expenseData.push(exp);
                 } else {
@@ -127,8 +123,8 @@ const UI_DASHBOARD = {
                     data: {
                         labels: labels,
                         datasets: [
-                            { label: 'Доходы', data: incomeData, backgroundColor: '#34C759', borderRadius: 4 },
-                            { label: 'Расходы', data: expenseData, backgroundColor: '#FF3B30', borderRadius: 4 }
+                            { label: 'Поступления денег', data: incomeData, backgroundColor: '#34C759', borderRadius: 4 },
+                            { label: 'Выплаты денег', data: expenseData, backgroundColor: '#FF3B30', borderRadius: 4 }
                         ]
                     },
                     options: {
@@ -209,19 +205,9 @@ const UI_DASHBOARD = {
         // Сводка Финансов (Вчерашний P&L)
         let finDiv = document.getElementById('dash-fin-summary');
         if (finDiv && STATE.ledger && STATE.ledger.yesterday) {
-            let y = STATE.ledger.yesterday;
-
-            let yRevB2C = y.rev_b2c || 0;
-            let yRevOther = y.rev_other || 0;
-            let yRev = (y.rev_b2b||0) + (y.rev_b2g||0) + yRevB2C + yRevOther;
-
-            let yOpex = (y.exp_salary||0) + (y.exp_admin||0) + (y.exp_hr||0) + (y.exp_fines||0) + (y.exp_repair||0) + (y.exp_taxes_payroll||0) + (y.exp_marketing||0);
-            let yMaterials = y.exp_materials || 0;
-
-            let yEbitda = yRev - yMaterials - yOpex;
-            let yFin = (y.fin_income||0) - (y.fin_expense||0) - (y.fin_fees||0);
-            let yEbt = yEbitda + yFin;
-            let yNet = yEbt - (y.exp_taxes_corp||0);
+            const profit = LEDGER.result(STATE.ledger.yesterday);
+            const yRev = profit.revenue, yOpex = profit.opex, yMaterials = profit.cogs;
+            const yEbitda = profit.ebitda, yNet = profit.net;
 
             let ebitdaColor = yEbitda > 0 ? 'var(--green)' : (yEbitda < 0 ? 'var(--red)' : 'var(--text-dim)');
             let netColor = yNet > 0 ? 'var(--green)' : (yNet < 0 ? 'var(--red)' : 'var(--text-dim)');
@@ -1120,9 +1106,9 @@ const UI_DASHBOARD = {
             let cityId = biz.city || 'odesa';
             let cityData = typeof GEO !== 'undefined' ? GEO.getCity(cityId) : { name: 'Одесса', rentMult: 1.0, salaryMult: 1.0 };
 
-            let salaryCost = (((biz.assigned.junior||0) * HR.GRADES.junior.salary) + ((biz.assigned.middle||0) * HR.GRADES.middle.salary) + ((biz.assigned.senior||0) * HR.GRADES.senior.salary)) * cityData.salaryMult;
-            let adminCost = tpl.area * 2 * level * cityData.rentMult;
-            let upgradeCost = tpl.area * 50 * level * cityData.rentMult;
+            let salaryCost = HR.getBusinessSalary(biz);
+            let adminCost = tpl.area * 2 * level * biz.locMult;
+            let upgradeCost = tpl.area * 50 * level * biz.locMult;
 
             let localWh = STATE.company.warehouses[cityId];
             if (localWh && !localWh.inventory) localWh.inventory = {};
@@ -1227,7 +1213,7 @@ const UI_DASHBOARD = {
                         <div>
                             <div style="font-weight:700; font-size:1.05rem; color:var(--text);">${escapeHTML(biz.name || tpl.name)}</div>
                             <div style="font-size:0.78rem; color:var(--text-dim);">
-                                Ур.${level} • 📍 ${cityData.name} • 🔬 Тех. v${q_tech.toFixed(2)} • 💸 $${formatMoney(adminCost+salaryCost)}/дн
+                                Ур.${level} • 📍 ${cityData.name} • 🔬 Тех. v${q_tech.toFixed(2)} • 💸 $${formatMoney(adminCost + salaryCost * (1 + TAXES.RATES.payroll))}/дн
                             </div>
                         </div>
                     </div>
@@ -1832,7 +1818,7 @@ const UI_DASHBOARD = {
 
         this.initCharts();
         let totalDebt = STATE.finances.loans ? STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0) : 0;
-        let availableLimit = FINANCE.getAvailableLimit() - totalDebt;
+        let availableLimit = FINANCE.getRemainingCredit();
 
         if (typeof Chart !== 'undefined' && document.getElementById('chart-bank-credit')) {
             let ctx = document.getElementById('chart-bank-credit').getContext('2d');
@@ -1869,7 +1855,7 @@ const UI_DASHBOARD = {
         }
 
         if (document.getElementById('ui-rate')) document.getElementById('ui-rate').innerText = (FINANCE.getCurrentRate() * 100).toFixed(1);
-        if (document.getElementById('ui-credit-limit')) document.getElementById('ui-credit-limit').innerText = formatMoney(FINANCE.getAvailableLimit());
+        if (document.getElementById('ui-credit-limit')) document.getElementById('ui-credit-limit').innerText = formatMoney(FINANCE.getRemainingCredit());
 
         let assets = FINANCE.getAssetsBreakdown();
         if (document.getElementById('ui-col-cash')) document.getElementById('ui-col-cash').innerText = '$' + formatMoney(Math.max(0, assets.cash) * 0.50);
@@ -1878,11 +1864,11 @@ const UI_DASHBOARD = {
         if (document.getElementById('ui-col-inv')) document.getElementById('ui-col-inv').innerText = '$' + formatMoney(assets.inventoryValue * 0.50);
 
         let currentDebt = assets.totalLiabilities;
-        let debtRatio = assets.netWorth > 0 ? (currentDebt / assets.netWorth) : (currentDebt > 0 ? 1 : 0);
+        let debtRatio = FINANCE.getReports().debtEquity;
 
         if (document.getElementById('ui-debt-ratio')) {
             let drEl = document.getElementById('ui-debt-ratio');
-            drEl.innerText = debtRatio.toFixed(2);
+            drEl.innerText = debtRatio === null ? '—' : Number.isFinite(debtRatio) ? debtRatio.toFixed(2) : '∞';
             drEl.style.color = debtRatio > 1.0 ? 'var(--red)' : (debtRatio > 0.5 ? 'var(--orange)' : 'var(--text)');
         }
 
@@ -1902,7 +1888,7 @@ const UI_DASHBOARD = {
         let loansList = document.getElementById('ui-active-loans');
         if (loansList) {
             let totalDebt = STATE.finances.loans.reduce((sum, l) => sum + l.remainingPrincipal, 0);
-            if(document.getElementById('ui-debt')) document.getElementById('ui-debt').innerText = formatMoney(totalDebt);
+            if(document.getElementById('ui-debt')) document.getElementById('ui-debt').innerText = formatMoney(assets.totalLiabilities);
 
             loansList.innerHTML = '';
             if (STATE.finances.loans.length === 0) {
@@ -1911,7 +1897,7 @@ const UI_DASHBOARD = {
                 STATE.finances.loans.forEach(l => {
                     let currentDailyInterest = (l.remainingPrincipal * l.rate) / 365;
                     let currentDailyPayment = l.dailyPrincipal + currentDailyInterest;
-                    let totalInterestLeft = FINANCE.calculateTotalInterest(l.remainingPrincipal, l.rate, l.remainingDays);
+                    let totalInterestLeft = FINANCE.generatePaymentSchedule(l).reduce((sum, payment) => sum + payment.interest, 0);
 
                     loansList.innerHTML += `
                     <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;">
@@ -1953,7 +1939,7 @@ const UI_DASHBOARD = {
         if (depList) {
             if (!STATE.finances.deposits) STATE.finances.deposits = [];
 
-            let totalDeposits = STATE.finances.deposits.reduce((sum, d) => sum + d.amount, 0);
+            let totalDeposits = assets.depositValue;
             if (document.getElementById('ui-total-deposits')) document.getElementById('ui-total-deposits').innerText = formatMoney(totalDeposits);
 
             depList.innerHTML = '';
@@ -2012,33 +1998,31 @@ const UI_DASHBOARD = {
 
         if (!STATE.financeTab) STATE.financeTab = 'all';
 
-        const assets = FINANCE.getAssetsBreakdown();
+        const report = FINANCE.getReports();
+        const assets = report.assets;
         const { cash, inventoryValue, logisticsValue, receivablesValue, portfolioValue, totalLiabilities, totalAssets, realEstateValue, equipmentValue } = assets;
         const depositsValue = assets.depositValue;
         const rndIpValue = 0;
-        const currentAssets = cash + inventoryValue + logisticsValue + receivablesValue + depositsValue + portfolioValue;
+        const currentAssets = report.currentAssets;
         const nonCurrentAssets = assets.fixedAssets;
-        let startCapital = STATE.finances.startCapital || 25000;
-        let retainedEarnings = totalAssets - totalLiabilities - startCapital;
-        let totalEquity = startCapital + retainedEarnings;
-
-        // 2. Расчет P&L (Yesterday & Total)
-        let y = STATE.ledger.yesterday || {};
-        let t = STATE.ledger.total || {};
+        const { startCapital, retainedEarnings, revaluation, openingAdjustment, totalEquity } = report;
+        const y = report.periodLedger, t = STATE.ledger.total;
+        const yp = report.periodProfit, tp = report.totalProfit;
+        const periodLabel = report.currentActivity ? 'Текущие операции' : report.cashReport.day ? `Закрытие дня ${report.cashReport.day}` : 'Начало игры';
 
         let yRevB2C = y.rev_b2c || 0; let tRevB2C = t.rev_b2c || 0;
         let yRevB2B = y.rev_b2b || 0; let tRevB2B = t.rev_b2b || 0;
         let yRevB2G = y.rev_b2g || 0; let tRevB2G = t.rev_b2g || 0;
         let yRevOther = y.rev_other || 0; let tRevOther = t.rev_other || 0;
 
-        let yRev = yRevB2B + yRevB2G + yRevB2C + yRevOther;
-        let tRev = tRevB2B + tRevB2G + tRevB2C + tRevOther;
+        let yRev = yp.revenue;
+        let tRev = tp.revenue;
 
-        let yCogs = y.exp_materials || 0;
-        let tCogs = t.exp_materials || 0;
+        let yCogs = yp.cogs;
+        let tCogs = tp.cogs;
 
-        let yGross = yRev - yCogs;
-        let tGross = tRev - tCogs;
+        let yGross = yp.gross;
+        let tGross = tp.gross;
 
         let yTaxPayroll = y.exp_taxes_payroll || 0; let tTaxPayroll = t.exp_taxes_payroll || 0;
         let yTaxCorp = y.exp_taxes_corp || 0; let tTaxCorp = t.exp_taxes_corp || 0;
@@ -2047,37 +2031,36 @@ const UI_DASHBOARD = {
         let yExpRepair = y.exp_repair || 0; let tExpRepair = t.exp_repair || 0;
         let yExpFines = y.exp_fines || 0; let tExpFines = t.exp_fines || 0;
 
-        let yOpex = (y.exp_salary || 0) + (y.exp_admin || 0) + (y.exp_hr || 0) + yTaxPayroll + yExpMarketing + yExpRepair + yExpFines + yExpLogistics;
-        let tOpex = (t.exp_salary || 0) + (t.exp_admin || 0) + (t.exp_hr || 0) + tTaxPayroll + tExpMarketing + tExpRepair + tExpFines + tExpLogistics;
+        let yOpex = yp.opex;
+        let tOpex = tp.opex;
 
-        let yEbitda = yGross - yOpex;
-        let tEbitda = tGross - tOpex;
+        let yEbitda = yp.ebitda;
+        let tEbitda = tp.ebitda;
 
-        let yDepr = y.exp_depreciation || 0;
-        let tDepr = t.exp_depreciation || 0;
+        let yDepr = yp.depreciation;
+        let tDepr = tp.depreciation;
 
-        let yEbit = yEbitda - yDepr;
-        let tEbit = tEbitda - tDepr;
+        let yEbit = yp.ebit;
+        let tEbit = tp.ebit;
 
-        let yFin = (y.fin_income || 0) - (y.fin_expense || 0) - (y.fin_fees || 0);
-        let tFin = (t.fin_income || 0) - (t.fin_expense || 0) - (t.fin_fees || 0);
+        let yFin = yp.financial;
+        let tFin = tp.financial;
 
-        let yEbt = yEbit + yFin;
-        let tEbt = tEbit + tFin;
+        let yEbt = yp.ebt;
+        let tEbt = tp.ebt;
 
-        let yNet = yEbt - yTaxCorp;
-        let tNet = tEbt - tTaxCorp;
+        let yNet = yp.net;
+        let tNet = tp.net;
 
         // 3. Финансовые показатели
-        let netMargin = tRev > 0 ? ((tNet / tRev) * 100).toFixed(1) : '0.0';
-        let grossMargin = tRev > 0 ? ((tGross / tRev) * 100).toFixed(1) : '0.0';
-        let ebitdaMargin = tRev > 0 ? ((tEbitda / tRev) * 100).toFixed(1) : '0.0';
-        let roe = totalEquity > 0 ? ((tNet / totalEquity) * 100).toFixed(1) : '0.0';
-        let roa = totalAssets > 0 ? ((tNet / totalAssets) * 100).toFixed(1) : '0.0';
+        let netMargin = tRev > 0 ? ((tNet / tRev) * 100).toFixed(1) + '%' : '—';
+        let grossMargin = tRev > 0 ? ((tGross / tRev) * 100).toFixed(1) + '%' : '—';
+        let ebitdaMargin = tRev > 0 ? ((tEbitda / tRev) * 100).toFixed(1) + '%' : '—';
+        let roe = totalEquity > 0 ? ((tNet / totalEquity) * 100).toFixed(1) + '%' : '—';
+        let roa = totalAssets > 0 ? ((tNet / totalAssets) * 100).toFixed(1) + '%' : '—';
 
-        let currentLiabDiv = totalLiabilities > 0 ? totalLiabilities : 1;
-        let currentRatio = totalLiabilities > 0 ? (currentAssets / totalLiabilities).toFixed(2) : '∞';
-        let debtEquityRatio = totalEquity > 0 ? (totalLiabilities / totalEquity).toFixed(2) : '0.00';
+        let currentRatio = report.currentRatio === null ? '—' : Number.isFinite(report.currentRatio) ? report.currentRatio.toFixed(2) : '∞';
+        let debtEquityRatio = report.debtEquity === null ? '—' : Number.isFinite(report.debtEquity) ? report.debtEquity.toFixed(2) : '∞';
 
         // 4. Налоговый календарь
         let taxInfoHTML = '';
@@ -2085,16 +2068,17 @@ const UI_DASHBOARD = {
             let tb = STATE.taxes.taxableBase || 0;
             let dtr = STATE.taxes.daysToReport || 30;
             let corpRate = (typeof GEO !== 'undefined' && GEO.COUNTRIES['ua']) ? GEO.COUNTRIES['ua'].taxes.corporate : 0.18;
-            let estimatedTax = tb > 0 ? tb * corpRate : 0;
+            const projectedTaxBase = tb + LEDGER.result(STATE.ledger.today).ebt;
+            let estimatedTax = Math.max(0, projectedTaxBase) * corpRate;
 
             taxInfoHTML = `
                 <div style="background: rgba(0,122,255,0.05); border: 1px solid rgba(0,122,255,0.15); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                     <div>
                         <div style="color: var(--blue, #007AFF); font-weight: bold; font-size: 0.95em;">🏛 Налоговый календарь (Отчетный период ДФС)</div>
-                        <small style="color: var(--text-dim, #86868B);">Дней до подачи декларации: <strong>${dtr} дн.</strong> | Налоговая база прибыли: <strong style="color:${tb >= 0 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'};">$${formatMoney(tb)}</strong></small>
+                        <small style="color: var(--text-dim, #86868B);">Дней до подачи декларации: <strong>${dtr} дн.</strong> | Налоговая база закрытых дней: <strong style="color:${tb >= 0 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'};">$${formatMoney(tb)}</strong></small>
                     </div>
                     <div style="text-align: right; background: var(--surface, #fff); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border, #dcdde1);">
-                        <small style="color: var(--text-dim, #86868B); display: block;">Резерв налога на прибыль (18%):</small>
+                        <small style="color: var(--text-dim, #86868B); display: block;">Оценка налога по учтённым операциям (${(corpRate * 100).toFixed(0)}%):</small>
                         <strong style="font-size: 1.15em; color: var(--red, #FF3B30); font-family: var(--font-mono);">$${formatMoney(estimatedTax)}</strong>
                     </div>
                 </div>
@@ -2102,8 +2086,7 @@ const UI_DASHBOARD = {
         }
 
         // РАСЧЕТ CASH FLOW (Движение Денежных Средств)
-        const cfToday = STATE.ledger.cashFlow.today;
-        const cashReport = cfToday.operations ? cfToday : STATE.ledger.cashFlow.yesterday;
+        const cashReport = report.cashReport;
         const cfo = cashReport.operating, cfi = cashReport.investing, cff = cashReport.financing;
         const netCashFlow = cfo + cfi + cff;
 
@@ -2118,25 +2101,25 @@ const UI_DASHBOARD = {
                 <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--green, #34C759);">
                     <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Чистая прибыль (Кумулятивно)</small>
                     <div style="font-size: 1.35rem; font-weight: bold; color: ${tNet >= 0 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(tNet)}</div>
-                    <small style="color: var(--text-dim);">Рентабельность (ROS): <strong style="color:var(--text);">${netMargin}%</strong></small>
+                    <small style="color: var(--text-dim);">Рентабельность (ROS): <strong style="color:var(--text);">${netMargin}</strong></small>
                 </div>
 
                 <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--blue, #007AFF);">
                     <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">EBITDA (Операционная прибыль)</small>
                     <div style="font-size: 1.35rem; font-weight: bold; color: ${tEbitda >= 0 ? 'var(--blue, #007AFF)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(tEbitda)}</div>
-                    <small style="color: var(--text-dim);">EBITDA Margin: <strong style="color:var(--text);">${ebitdaMargin}%</strong></small>
+                    <small style="color: var(--text-dim);">EBITDA Margin: <strong style="color:var(--text);">${ebitdaMargin}</strong></small>
                 </div>
 
                 <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid var(--orange, #FF9500);">
                     <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Ликвидность (Current Ratio)</small>
-                    <div style="font-size: 1.35rem; font-weight: bold; color: ${currentRatio >= 1.2 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">${currentRatio}x</div>
+                    <div style="font-size: 1.35rem; font-weight: bold; color: ${report.currentRatio >= 1.2 ? 'var(--green, #34C759)' : 'var(--red, #FF3B30)'}; margin-top: 4px; font-family: var(--font-mono);">${currentRatio}x</div>
                     <small style="color: var(--text-dim);">Норма: ≥ 1.50 (Покрытие долга)</small>
                 </div>
 
                 <div class="card" style="padding: 14px; margin-bottom: 0; border-left: 4px solid #8e44ad;">
                     <small style="color: var(--text-dim); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Капитализация (Net Worth)</small>
                     <div style="font-size: 1.35rem; font-weight: bold; color: var(--text); margin-top: 4px; font-family: var(--font-mono);">$${formatMoney(totalEquity)}</div>
-                    <small style="color: var(--text-dim);">ROE: <strong style="color:var(--text);">${roe}%</strong> | ROA: <strong style="color:var(--text);">${roa}%</strong></small>
+                    <small style="color: var(--text-dim);">ROE: <strong style="color:var(--text);">${roe}</strong> | ROA: <strong style="color:var(--text);">${roa}</strong></small>
                 </div>
             </div>
 
@@ -2167,7 +2150,7 @@ const UI_DASHBOARD = {
                     <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
                         <tr style="border-bottom: 1px solid var(--border); color: var(--text-dim); text-align: right;">
                             <th style="text-align:left; padding: 6px 0;">Статья отчета</th>
-                            <th style="padding: 6px;">Вчера</th>
+                            <th style="padding: 6px;">${periodLabel}</th>
                             <th style="padding: 6px;">Всего</th>
                         </tr>
 
@@ -2213,6 +2196,7 @@ const UI_DASHBOARD = {
                         </div>
                     </div>
 
+                    <p data-testid="balance-reconciliation" style="margin-bottom:12px; color:${Math.abs(report.reconciliation) < 0.000001 ? 'var(--green)' : 'var(--red)'};">${Math.abs(report.reconciliation) < 0.000001 ? 'Баланс сходится.' : 'Расхождение баланса: $' + formatMoney(report.reconciliation)}</p>
                     <table style="width:100%; font-size:0.86rem; border-collapse: collapse;">
                         <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">I. ОБОРОТНЫЕ АКТИВЫ (CURRENT ASSETS)</th></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Денежные средства на расчетном счете:</td><td style="text-align:right; font-family:var(--font-mono); font-weight:600;">$${formatMoney(cash)}</td></tr>
@@ -2239,7 +2223,9 @@ const UI_DASHBOARD = {
 
                         <tr style="background: var(--surface-2); font-weight:bold;"><th colspan="2" style="padding:6px; text-align:left; color:var(--blue);">IV. СОБСТВЕННЫЙ КАПИТАЛ (EQUITY)</th></tr>
                         <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Уставный капитал:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(startCapital)}</td></tr>
-                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Нераспределенная прибыль (Retained Earnings):</td><td style="text-align:right; font-family:var(--font-mono); color:${retainedEarnings>=0?'var(--green)':'var(--red)'};">$${formatMoney(retainedEarnings)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Нераспределенная прибыль (Retained Earnings):</td><td data-testid="equity-retained" style="text-align:right; font-family:var(--font-mono); color:${retainedEarnings>=0?'var(--green)':'var(--red)'};">$${formatMoney(retainedEarnings)}</td></tr>
+                        <tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Переоценка портфеля акций:</td><td data-testid="equity-revaluation" style="text-align:right; font-family:var(--font-mono);">$${formatMoney(revaluation)}</td></tr>
+                        ${Math.abs(openingAdjustment) > 0.000001 ? `<tr><td style="padding:4px 0 4px 12px; color:var(--text-dim);">Входящий остаток прежнего учёта:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(openingAdjustment)}</td></tr>` : ''}
                         <tr style="font-weight:bold; border-top:1px dashed var(--border);"><td style="padding:4px 0;">Итого Капитал:</td><td style="text-align:right; font-family:var(--font-mono);">$${formatMoney(totalEquity)}</td></tr>
 
                         <tr style="font-weight:bold; font-size:1.02rem; background: rgba(0,122,255,0.08); border-top:2px solid var(--blue);"><td style="padding:6px 0; color:var(--blue);">ИТОГО ПАССИВОВ И КАПИТАЛА:</td><td style="text-align:right; color:var(--blue); font-family:var(--font-mono);">$${formatMoney(totalLiabilities + totalEquity)}</td></tr>
@@ -2250,7 +2236,7 @@ const UI_DASHBOARD = {
                 <!-- 3. ДВИЖЕНИЕ ДЕНЕЖНЫХ СРЕДСТВ (CASH FLOW) -->
                 ${(STATE.financeTab === 'all' || STATE.financeTab === 'cashflow') ? `
                     <section class="card" id="finance-cashflow-container">
-                        <h3>🌊 Движение денежных средств (${cfToday.operations ? 'текущий день' : 'закрытый день'})</h3>
+                        <h3>🌊 Движение денежных средств (${periodLabel})</h3>
                         <p>Фактические поступления и выплаты. Положительное значение — поступление.</p>
                         <table><tbody>
                             <tr><td>Деньги на начало периода</td><td>$${formatMoney(cashReport.opening)}</td></tr>
@@ -2275,37 +2261,37 @@ const UI_DASHBOARD = {
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <small style="color: var(--text-dim);">Рентабельность продаж (ROS)</small>
-                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--blue); font-family: var(--font-mono);">${netMargin}%</div>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--blue); font-family: var(--font-mono);">${netMargin}</div>
                             <small style="color: var(--text-dim);">Чистая прибыль / Выручка</small>
                         </div>
 
                         <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <small style="color: var(--text-dim);">Валовая маржинальность (Gross Margin)</small>
-                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--green); font-family: var(--font-mono);">${grossMargin}%</div>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--green); font-family: var(--font-mono);">${grossMargin}</div>
                             <small style="color: var(--text-dim);">Валовая прибыль / Выручка</small>
                         </div>
 
                         <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <small style="color: var(--text-dim);">Рентабельность капитала (ROE)</small>
-                            <div style="font-size: 1.25rem; font-weight: bold; color: #8e44ad; font-family: var(--font-mono);">${roe}%</div>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: #8e44ad; font-family: var(--font-mono);">${roe}</div>
                             <small style="color: var(--text-dim);">Прибыль / Собственный капитал</small>
                         </div>
 
                         <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <small style="color: var(--text-dim);">Рентабельность активов (ROA)</small>
-                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--orange); font-family: var(--font-mono);">${roa}%</div>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: var(--orange); font-family: var(--font-mono);">${roa}</div>
                             <small style="color: var(--text-dim);">Прибыль / Все активы</small>
                         </div>
 
                         <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <small style="color: var(--text-dim);">Коэффициент автономии (Debt/Equity)</small>
-                            <div style="font-size: 1.25rem; font-weight: bold; color: ${debtEquityRatio > 1.0 ? 'var(--red)' : (debtEquityRatio > 0.5 ? 'var(--orange)' : 'var(--text)')}; font-family: var(--font-mono);">${debtEquityRatio}x</div>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: ${report.debtEquity > 1.0 ? 'var(--red)' : (report.debtEquity > 0.5 ? 'var(--orange)' : 'var(--text)')}; font-family: var(--font-mono);">${debtEquityRatio}x</div>
                             <small style="color: var(--text-dim);">Обязательства / Капитал (Норма: <1.0)</small>
                         </div>
 
                         <div style="background: var(--surface-2); padding: 12px; border-radius: 8px;">
                             <small style="color: var(--text-dim);">Коэффициент ликвидности</small>
-                            <div style="font-size: 1.25rem; font-weight: bold; color: ${currentRatio>=1.2?'var(--green)':'var(--red)'}; font-family: var(--font-mono);">${currentRatio}x</div>
+                            <div style="font-size: 1.25rem; font-weight: bold; color: ${report.currentRatio>=1.2?'var(--green)':'var(--red)'}; font-family: var(--font-mono);">${currentRatio}x</div>
                             <small style="color: var(--text-dim);">Оборотные активы / Обязательства</small>
                         </div>
                     </div>
@@ -2511,8 +2497,7 @@ const UI_DASHBOARD = {
     },
 
     cashExplanationHTML(report) {
-        const today = STATE.ledger.cashFlow.today;
-        report ??= today.operations ? today : STATE.ledger.cashFlow.yesterday;
+        report ??= FINANCE.getReports().cashReport;
         const delta = report.closing - report.opening;
         const signed = amount => `${amount >= 0 ? '+' : '−'}$${formatMoney(Math.abs(amount))}`;
         const movements = [...(report.movements ?? [])];
@@ -3025,7 +3010,7 @@ const UI_DASHBOARD = {
         let assignedTotal = sales + mgr;
         let maxStaff = tpl.staffReq * level;
 
-        let salaryCost = (sales * HR.GRADES.salesman.salary + mgr * HR.GRADES.store_manager.salary) * cityData.salaryMult;
+        let salaryCost = HR.getBusinessSalary(biz);
         let staffEff = (mgr > 0 && sales > 0) ? Math.min(1.0, assignedTotal / maxStaff) : 0;
         let staffEffPct = Math.round(staffEff * 100);
 
@@ -3611,20 +3596,11 @@ const UI_DASHBOARD = {
         if (!biz.stats) biz.stats = {};
         let fullHistory = biz.stats.history || [];
 
-        // Если история пуста (первый день), берем текущие данные lastSold
-        if (fullHistory.length === 0) {
-             let dRev = 0, dCogs = 0, dMissed = 0;
-             if (biz.stats.lastSold) {
-                 Object.values(biz.stats.lastSold).forEach(s => { dRev+=s.revenue||0; dCogs+=s.cogs||0; dMissed+=s.missedRevenue||0; });
-             }
-             fullHistory = [{ day: STATE.time.day, revenue: dRev, cogs: dCogs, missed: dMissed, items: biz.stats.lastSold || {} }];
-        }
-
         let history = fullHistory;
         if (periodDays !== 'all') {
             history = fullHistory.slice(-periodDays);
         }
-        let actualDays = history.length || 1;
+        let actualDays = history.length;
 
         // 2. Агрегация данных по товарам
         let aggRev = 0, aggCogs = 0, aggMissed = 0;
@@ -3660,7 +3636,10 @@ const UI_DASHBOARD = {
         let dailySalaries = (sales * HR.GRADES.salesman.salary + mgr * HR.GRADES.store_manager.salary) * cityData.salaryMult;
 
         let totalOpex = history.reduce((n,h) => n + (h.opex ?? dailyRent + dailySalaries * (1 + TAXES.RATES.payroll)), 0);
-        let totalProfit = aggRev - aggCogs - totalOpex;
+        const storeDepreciation = history.reduce((sum, h) => sum + (h.depreciation ?? 0), 0);
+        const storeRepairs = history.reduce((sum, h) => sum + (h.repair ?? 0), 0);
+        const storeExpenses = totalOpex + storeDepreciation + storeRepairs;
+        let totalProfit = aggRev - aggCogs - storeExpenses;
         let marginPct = aggRev > 0 ? (totalProfit / aggRev) * 100 : 0;
 
         // Расчет Активов
@@ -3742,17 +3721,18 @@ const UI_DASHBOARD = {
                             <div style="font-size:0.75rem; color:var(--red); margin-top:4px;">Потери трафика: $${formatMoney(aggMissed)}</div>
                         </div>
                         <div style="background:var(--surface-2); padding:16px; border-radius:10px; border-left:4px solid var(--orange);">
-                            <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:4px;">Расходы (COGS + OPEX)</div>
-                            <div style="font-size:1.4rem; font-weight:800; color:var(--text);">-$${formatMoney(aggCogs + totalOpex)}</div>
-                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:4px;">Себест-ть: $${formatMoney(aggCogs)} | OPEX: $${formatMoney(totalOpex)}</div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:4px;">Расходы магазина</div>
+                            <div style="font-size:1.4rem; font-weight:800; color:var(--text);">-$${formatMoney(aggCogs + storeExpenses)}</div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:4px;">Себест-ть: $${formatMoney(aggCogs)} | OPEX: $${formatMoney(totalOpex)} | Износ: $${formatMoney(storeDepreciation)} | Ремонт: $${formatMoney(storeRepairs)}</div>
                         </div>
                         <div style="background:var(--surface-2); padding:16px; border-radius:10px; border-left:4px solid ${totalProfit >= 0 ? 'var(--green)' : 'var(--red)'};">
-                            <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:4px;">Фин. Результат (Прибыль)</div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-bottom:4px;">Операционная прибыль магазина</div>
                             <div style="font-size:1.4rem; font-weight:800; color:${totalProfit >= 0 ? 'var(--green)' : 'var(--red)'};">$${formatMoney(totalProfit)}</div>
                             <div style="font-size:0.75rem; color:var(--text-dim); margin-top:4px;">ROS (Маржа): ${marginPct.toFixed(1)}% | ROA: ${roa.toFixed(1)}%</div>
                         </div>
                     </div>
 
+                    <p style="margin-bottom:16px; color:var(--text-dim); font-size:.85rem;">Учтены себестоимость проданных товаров, аренда магазина, зарплаты с налогом, износ и ремонт. Общие расходы компании и налог на прибыль учитываются в отчётности компании. В прежних записях истории износ и ремонт могли отсутствовать.</p>
                     <h4 style="margin:0 0 16px 0; color:var(--text);">📈 Динамика продаж</h4>
                     <div style="height:250px; position:relative; margin-bottom:24px; background:var(--surface-2); border-radius:12px; padding:12px; border:1px solid var(--border);">
                         <canvas id="storeAnalyticsChart"></canvas>
@@ -4117,21 +4097,9 @@ const UI_DASHBOARD = {
             let deposit = STATE.finances.deposits.find(d => d.id === id);
             if (!deposit) return;
 
-            let schedule = [];
-            let currentAccrued = deposit.accrued;
-            let dailyInt = (deposit.amount * deposit.rate) / 365;
-
-            for (let i = 0; i < deposit.daysLeft; i++) {
-                if (deposit.payoutType !== 'daily') currentAccrued += dailyInt;
-                schedule.push({
-                    day: i + 1,
-                    interest: dailyInt,
-                    accrued: currentAccrued
-                });
-            }
-
-            let labels = schedule.map(s => 'День ' + s.day);
-            let accruedData = schedule.map(s => deposit.amount + s.accrued);
+            const schedule = FINANCE.generateDepositSchedule(deposit);
+            const labels = schedule.map(s => 'День ' + s.day);
+            const accruedData = schedule.map(s => s.total);
 
             content.innerHTML = `
                 <div style="padding:24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface-2);">
@@ -4155,7 +4123,7 @@ const UI_DASHBOARD = {
                     labels: labels,
                     datasets: [
                         {
-                            label: 'Общая сумма с процентами',
+                            label: 'Сумма вклада и процентов (включая выплаты)',
                             data: accruedData,
                             borderColor: 'rgba(52, 199, 89, 1)',
                             backgroundColor: 'rgba(52, 199, 89, 0.1)',

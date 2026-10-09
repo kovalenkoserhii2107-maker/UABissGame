@@ -178,6 +178,7 @@ const PRODUCTION = {
         if (STATE.finances.balance >= repairCost) {
             LEDGER.cash(-repairCost, 'operating', 'Ремонт');
             if (typeof LEDGER !== 'undefined') LEDGER.record('exp_repair', repairCost);
+            biz.stats.pendingRepair = (biz.stats.pendingRepair ?? 0) + repairCost;
             biz.equipment.condition = 100;
             NOTIFY.success('Успех', `ТО завершено! Списано: $${formatMoney(repairCost)}`);
             if (typeof UI_DASHBOARD !== 'undefined') UI_DASHBOARD.update();
@@ -207,6 +208,7 @@ const PRODUCTION = {
         // Recover legacy in-flight routes once. Never clear stock without transferring it.
         for (const biz of STATE.company.businesses) {
             biz.localInventory ??= {};
+            biz.stats.lastDepreciation = 0;
             for (const [key, inv] of Object.entries(biz.dailyIncoming ?? {})) {
                 if (inv.qty > 0) OPERATIONS.add(biz.localInventory, key, inv.qty, inv.qty * inv.avgCost, inv.quality, inv.brand ?? 0);
             }
@@ -284,12 +286,12 @@ const PRODUCTION = {
                 const inventory = a.dest ? a.dest.localInventory : target.inventory;
                 OPERATIONS.add(inventory, tpl.output, a.count, a.count * biz.lastCogs + a.shipping, quality);
             }
-            OPERATIONS.wear(biz.equipment, 1.5 * output / maximum, tpl.equipmentType);
+            biz.stats.lastDepreciation = OPERATIONS.wear(biz.equipment, 1.5 * output / maximum, tpl.equipmentType);
             biz.stats.lastOutput = output; biz.stats.total += output;
         }
         for (const biz of STATE.company.businesses) {
             const tpl = RECIPES.BUSINESSES[biz.type];
-            if ((tpl.isRetail || tpl.isMarketing) && biz.equipment.count) OPERATIONS.wear(biz.equipment, 0.5, tpl.equipmentType);
+            if ((tpl.isRetail || tpl.isMarketing) && biz.equipment.count) biz.stats.lastDepreciation = OPERATIONS.wear(biz.equipment, 0.5, tpl.equipmentType);
         }
     }
 

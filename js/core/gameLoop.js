@@ -3,6 +3,7 @@ const GAME = {
     prepare() {
         LEDGER.init(); WAREHOUSE.init(); HR.init(); RND.init(); PRODUCTION.init();
         MARKET.init(); STOCK_MARKET.init(); QUESTS.init(); TAXES.init();
+        LOGISTICS.init(); FINANCE.initAccounting();
     },
     init() {
         PERSISTENCE.load(); this.prepare(); QUESTS.checkProgress();

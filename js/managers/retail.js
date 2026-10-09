@@ -212,12 +212,16 @@ const RETAIL = {
 
             biz.stats.history.push({
                 day: STATE.time.day,
-                opex: tpl.area * 2 * biz.level * biz.locMult + Object.entries(biz.assigned).reduce((n,[grade,count]) => n + count * HR.GRADES[grade].salary * cityData.salaryMult * (1 + TAXES.RATES.payroll), 0),
+                opex: tpl.area * 2 * biz.level * biz.locMult + HR.getBusinessSalary(biz) * (1 + TAXES.RATES.payroll),
+                depreciation: biz.stats.lastDepreciation ?? 0,
+                repair: biz.stats.pendingRepair ?? 0,
                 revenue: dRev,
                 cogs: dCogs,
                 missed: dMissed,
                 items: JSON.parse(JSON.stringify(biz.stats.lastSold || {}))
             });
+
+            biz.stats.pendingRepair = 0;
 
             // Храним историю максимум 3 года, чтобы не перегружать память
             if (biz.stats.history.length > 1000) biz.stats.history.shift();

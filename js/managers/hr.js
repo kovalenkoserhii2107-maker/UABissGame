@@ -203,6 +203,11 @@ const HR = {
         return total;
     },
 
+    getBusinessSalary(biz) {
+        const cityMult = GEO.getCity(biz.city || 'odesa').salaryMult;
+        return Object.entries(biz.assigned ?? {}).reduce((sum, [grade, count]) => sum + count * (this.GRADES[grade]?.salary ?? 0) * cityMult, 0);
+    },
+
     getDailySalaryFund() {
         this.init();
         let total = 0;

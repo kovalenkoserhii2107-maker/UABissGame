@@ -42,11 +42,31 @@ const LEDGER = {
         day.closing = STATE.finances.balance;
     },
     result(data) {
+        data = { ...this.categories, ...data };
         const revenue = data.rev_b2b + data.rev_b2g + data.rev_b2c + data.rev_other;
         const opex = data.exp_salary + data.exp_admin + data.exp_hr + data.exp_fines + data.exp_repair + data.exp_taxes_payroll + data.exp_marketing + data.exp_logistics;
-        const ebitda = revenue - data.exp_materials - opex;
+        const cogs = data.exp_materials;
+        const gross = revenue - cogs;
+        const ebitda = gross - opex;
+        const depreciation = data.exp_depreciation;
+        const ebit = ebitda - depreciation;
         const financial = data.fin_income - data.fin_expense - data.fin_fees;
-        return { revenue, opex, ebitda, financial, net: ebitda - data.exp_depreciation + financial - data.exp_taxes_corp };
+        const ebt = ebit + financial;
+        const corporateTax = data.exp_taxes_corp;
+        const expenses = cogs + opex + depreciation + data.fin_expense + data.fin_fees + corporateTax;
+        return { revenue, cogs, gross, opex, depreciation, ebitda, ebit, financial, ebt, corporateTax, expenses, net: ebt - corporateTax };
+    },
+    hasCurrentActivity() {
+        const day = STATE.ledger.cashFlow.today;
+        return day.operations > 0 || day.inflow > 0 || day.outflow > 0 || day.closing !== day.opening || Object.values(STATE.ledger.today).some(value => value !== 0);
+    },
+    cashHistory(days = 7) {
+        return STATE.ledger.cashFlow.history.slice(0, days).map((entry, index) => ({
+            ...entry,
+            day: entry.day ?? STATE.time.day - index,
+            inflow: entry.inflow ?? null,
+            outflow: entry.outflow ?? null
+        })).reverse();
     },
     endOfDay() {
         this.init();

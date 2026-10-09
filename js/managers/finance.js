@@ -55,10 +55,43 @@ const FINANCE = {
         return this.getAssetsBreakdown().netWorth;
     },
 
+    getReports() {
+        LEDGER.init();
+        const assets = this.getAssetsBreakdown();
+        const totalProfit = LEDGER.result(STATE.ledger.total);
+        const currentActivity = LEDGER.hasCurrentActivity();
+        const periodLedger = currentActivity ? STATE.ledger.today : STATE.ledger.yesterday;
+        const cashReport = currentActivity ? STATE.ledger.cashFlow.today : STATE.ledger.cashFlow.yesterday;
+        const basis = Object.entries(STATE.stockMarket?.portfolio ?? {}).reduce((sum, [id, shares]) => sum + (STATE.stockMarket.costBasis?.[id] ?? shares * STATE.stockMarket.companies[id].sharePrice), 0);
+        const startCapital = STATE.finances.startCapital ?? 25000;
+        const retainedEarnings = totalProfit.net;
+        const revaluation = assets.portfolioValue - basis;
+        const openingAdjustment = STATE.finances.openingAdjustment ?? 0;
+        const totalEquity = startCapital + retainedEarnings + revaluation + openingAdjustment;
+        const currentAssets = assets.cash + assets.inventoryValue + assets.logisticsValue + assets.receivablesValue + assets.depositValue + assets.portfolioValue;
+        const reconciliation = assets.netWorth - totalEquity;
+        const debtEquity = assets.netWorth > 0 ? assets.totalLiabilities / assets.netWorth : assets.totalLiabilities > 0 ? Infinity : null;
+        const currentRatio = assets.totalLiabilities > 0 ? currentAssets / assets.totalLiabilities : currentAssets > 0 ? Infinity : null;
+        return { assets, totalProfit, dailyProfit: LEDGER.result(STATE.ledger.yesterday), periodProfit: LEDGER.result(periodLedger), periodLedger, cashReport, currentActivity, currentAssets, startCapital, retainedEarnings, revaluation, openingAdjustment, totalEquity, reconciliation, debtEquity, currentRatio };
+    },
+
+    initAccounting() {
+        // Old saves may predate the current bookkeeping rules. Preserve their opening
+        // difference once, rather than presenting it as new profit on every render.
+        if (STATE.finances.openingAdjustment === undefined) {
+            STATE.finances.openingAdjustment = this.getReports().reconciliation;
+        }
+    },
+
     getAvailableLimit() {
         // Банк 2.0: Залоговый лимит (70% недвижка/оборудование + 50% товары + 90% депозиты + 50% кэш)
         let assets = this.getAssetsBreakdown();
         return (assets.fixedAssets * 0.70) + (assets.inventoryValue * 0.50) + (assets.depositValue * 0.90) + (assets.cash * 0.50);
+    },
+
+    getRemainingCredit() {
+        const debt = STATE.finances.loans.reduce((sum, loan) => sum + loan.remainingPrincipal, 0);
+        return Math.max(0, this.getAvailableLimit() - debt);
     },
 
     // (Остальная логика уже перенесена в getAssetsBreakdown)
@@ -73,8 +106,8 @@ const FINANCE = {
         }
 
         let originationFee = amount * 0.03;
-        if (STATE.finances.balance < originationFee) {
-            NOTIFY.error('Ошибка', 'Недостаточно средств для оплаты комиссии за выдачу (3%).');
+        if (STATE.finances.balance + amount < originationFee) {
+            NOTIFY.error('Ошибка', 'Суммы кредита недостаточно для покрытия дефицита денег и комиссии выдачи (3%).');
             return;
         }
 
@@ -146,16 +179,28 @@ const FINANCE = {
 
         for (let i = 0; i < termDays; i++) {
             let dailyInterest = (remainingPrincipal * rate) / 365;
+            const principal = i === termDays - 1 ? remainingPrincipal : Math.min(dailyPrincipal, remainingPrincipal);
             schedule.push({
                 day: i + 1,
-                principal: dailyPrincipal,
+                principal,
                 interest: dailyInterest,
-                total: dailyPrincipal + dailyInterest,
-                remaining: Math.max(0, remainingPrincipal - dailyPrincipal)
+                total: principal + dailyInterest,
+                remaining: Math.max(0, remainingPrincipal - principal)
             });
-            remainingPrincipal -= dailyPrincipal;
+            remainingPrincipal = Math.max(0, remainingPrincipal - principal);
         }
         return schedule;
+    },
+
+    generateDepositSchedule(deposit) {
+        const interest = deposit.amount * deposit.rate / 365;
+        let earned = deposit.accrued;
+        return Array.from({ length: deposit.daysLeft }, (_, index) => {
+            earned += interest;
+            const last = index === deposit.daysLeft - 1;
+            const payout = deposit.payoutType === 'daily' ? interest + (last ? deposit.amount : 0) : last ? deposit.amount + earned : 0;
+            return { day: index + 1, interest, accrued: earned, total: deposit.amount + earned, payout };
+        });
     },
 
     getDepositRate(termDays, payoutType) {
@@ -196,7 +241,7 @@ const FINANCE = {
 
             // НОВОЕ: Проценты динамически считаются на остаток тела
             let dailyInterest = (loan.remainingPrincipal * loan.rate) / 365;
-            let principal = Math.min(loan.dailyPrincipal, loan.remainingPrincipal);
+            let principal = loan.remainingDays === 1 ? loan.remainingPrincipal : Math.min(loan.dailyPrincipal, loan.remainingPrincipal);
             let paymentToday = principal + dailyInterest;
 
             if (typeof LEDGER !== 'undefined') LEDGER.record('fin_expense', dailyInterest);

@@ -23,6 +23,11 @@ const PERSISTENCE = {
     };
     walk(state);
     if (
+      state?.finances?.openingAdjustment !== undefined &&
+      !number(state.finances.openingAdjustment, -Number.MAX_VALUE)
+    )
+      fail();
+    if (
       !object(state) ||
       !integer(state.time?.day, 1) ||
       !object(state.finances) ||
@@ -439,6 +444,8 @@ const PERSISTENCE = {
         )
           fail();
         if (h.opex !== undefined && !number(h.opex)) fail();
+        for (const key of ["depreciation", "repair"])
+          if (h[key] !== undefined && !number(h[key])) fail();
         for (const [key, sold] of Object.entries(h.items))
           if (
             !RECIPES.RESOURCES[key] ||

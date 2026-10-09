@@ -139,5 +139,6 @@ const OPERATIONS = {
     equipment.bookValue = Math.max(0, equipment.bookValue - depreciation);
     equipment.condition = after;
     LEDGER.record("exp_depreciation", depreciation);
+    return depreciation;
   },
 };

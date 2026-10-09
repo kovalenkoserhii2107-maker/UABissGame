@@ -1,5 +1,16 @@
 // Goods arriving at the beginning of a day can be used that same day.
 const LOGISTICS = {
+    init() {
+        // Historical saves already include these receivables in assets. Recognise
+        // their profit before establishing the migrated opening equity.
+        for (const r of STATE.logistics?.receivables ?? []) {
+            if (!r.recognized) {
+                LEDGER.record('rev_b2b', r.amount);
+                LEDGER.record('exp_materials', r.cogs ?? 0);
+                r.recognized = true;
+            }
+        }
+    },
     processDaily() {
         WAREHOUSE.init();
         if (!STATE.logistics) return;

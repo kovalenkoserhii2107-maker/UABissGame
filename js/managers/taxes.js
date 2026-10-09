@@ -29,13 +29,7 @@ const TAXES = {
         }
 
         if (typeof LEDGER !== 'undefined' && STATE.ledger && STATE.ledger.today) {
-            let t = STATE.ledger.today;
-            let todayRev = (t.rev_b2b||0) + (t.rev_b2g||0) + (t.rev_other||0) + (t.fin_income||0) + (t.rev_b2c||0);
-            let todayExp = (t.exp_materials||0) + (t.exp_salary||0) + (t.exp_admin||0) +
-                           (t.exp_hr||0) + (t.exp_fines||0) + (t.exp_repair||0) +
-                           (t.exp_depreciation||0) + (t.exp_taxes_payroll||0) + (t.exp_marketing||0) + (t.fin_expense||0) + (t.fin_fees||0) + (t.exp_logistics||0);
-
-            STATE.taxes.taxableBase += (todayRev - todayExp);
+            STATE.taxes.taxableBase += LEDGER.result(STATE.ledger.today).ebt;
         }
 
         STATE.taxes.daysToReport--;
